@@ -1143,6 +1143,13 @@ public:
 			}
 
 			AddButtons( hwndToolbar );
+			// CCS_NORESIZE prevents TB_AUTOSIZE from resizing the window, so size it explicitly;
+			// EmEditor measures the client at ToolbarOpen time and a 0-width window yields a title-only band
+			SIZE size = { 0, 0 };
+			SendMessage( hwndToolbar, TB_GETMAXSIZE, 0, (LPARAM)&size );
+			if( size.cx > 0 ){
+				MoveWindow( hwndToolbar, 0, 0, size.cx, size.cy, TRUE );
+			}
 
 			if( hwndToolbar ){
 				TCHAR szTitle[80];
@@ -1152,14 +1159,14 @@ public:
 				TOOLBAR_INFO cri;
 				ZeroMemory( &cri, sizeof( cri ) );
 				cri.cbSize = sizeof( cri );
-				cri.nMask = TIM_CLIENT | TIM_TITLE | TIM_FLAGS | TIM_STYLE | TIM_MINCHILD | TIM_CX | TIM_CXIDEAL | TIM_BAND | TIM_PLUG_IN_CMD_ID;
+				cri.nMask = TIM_CLIENT | TIM_TITLE | TIM_FLAGS | TIM_STYLE | TIM_MINCHILD | TIM_CXIDEAL | TIM_BAND | TIM_PLUG_IN_CMD_ID;
 				cri.wPlugInCmdID = EEGetCmdID();
 				cri.pszTitle = szTitle;
 				cri.hwndClient = hwndToolbar;
 				cri.cxMinChild = 0;
 				cri.cyMinChild = rcClient.bottom - rcClient.top;
 				cri.cxIdeal = rcClient.right - rcClient.left;
-				cri.cx = m_cx;
+				cri.cx = rcClient.right - rcClient.left;
 				if( bVisible ){
 					m_fStyle &= ~RBBS_HIDDEN;
 				}
