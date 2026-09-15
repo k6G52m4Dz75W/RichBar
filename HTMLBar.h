@@ -146,7 +146,12 @@ WCHAR OctToDec( LPWSTR& p )
 #define CMD_DROPDOWN_HEADER		5
 #define CMD_DROPDOWN_FORM		6
 #define CMD_CUSTOMIZE			7
-#define MAX_CMD					8
+#define CMD_LINE_PREFIX			8
+#define MAX_CMD					9
+
+#define MODE_HTML				0
+#define MODE_MD					1
+#define MODE_COUNT				2
 
 class CCmd
 {
@@ -251,6 +256,43 @@ static struct CDefCmd DefCmd[] =
 
 typedef vector<CCmd> CCmdArray;
 
+// default Markdown button set; icons are indices into the runtime-drawn MD image list
+static struct CDefCmdMd {
+	int m_iIcon;
+	int m_iCmd;
+	LPCWSTR m_pszTitle;
+	LPCWSTR m_pszTagBegin;
+	LPCWSTR m_pszTagEnd;
+	int m_nPickStrID;	// IDS_* title for the file-pick parameter, 0 = none
+	int m_nPickFilterID;
+} MdCmd[] = {
+	{  0, CMD_LINE_PREFIX, L"H1", L"# ", L"", 0, 0 },
+	{  1, CMD_LINE_PREFIX, L"H2", L"## ", L"", 0, 0 },
+	{  2, CMD_LINE_PREFIX, L"H3", L"### ", L"", 0, 0 },
+	{  3, CMD_LINE_PREFIX, L"H4", L"#### ", L"", 0, 0 },
+	{  4, CMD_LINE_PREFIX, L"H5", L"##### ", L"", 0, 0 },
+	{  5, CMD_LINE_PREFIX, L"H6", L"###### ", L"", 0, 0 },
+	{ -1, CMD_SEPARATOR, L"", L"", L"", 0, 0 },
+	{  6, CMD_TAGS, L"Bold", L"**", L"**", 0, 0 },
+	{  7, CMD_TAGS, L"Italic", L"*", L"*", 0, 0 },
+	{  8, CMD_TAGS, L"Strikethrough", L"~~", L"~~", 0, 0 },
+	{  9, CMD_TAGS, L"Inline Code", L"`", L"`", 0, 0 },
+	{ -1, CMD_SEPARATOR, L"", L"", L"", 0, 0 },
+	{ 10, CMD_TAGS, L"Code Block", L"```\n", L"\n```", 0, 0 },
+	{ 11, CMD_LINE_PREFIX, L"Quote", L"> ", L"", 0, 0 },
+	{ -1, CMD_SEPARATOR, L"", L"", L"", 0, 0 },
+	{ 12, CMD_LINE_PREFIX, L"Bullet List", L"- ", L"", 0, 0 },
+	{ 13, CMD_LINE_PREFIX, L"Numbered List", L"1. ", L"", 0, 0 },
+	{ 14, CMD_LINE_PREFIX, L"Task List", L"- [ ] ", L"", 0, 0 },
+	{ -1, CMD_SEPARATOR, L"", L"", L"", 0, 0 },
+	{ 15, CMD_TAGS, L"Horizontal Line", L"---\n", L"", 0, 0 },
+	{ 16, CMD_TAGS, L"Link", L"[", L"](https://)", 0, 0 },
+	{ 17, CMD_TAGS, L"Image", L"![", L"](\\{PickRelativePath,%s,%s})", IDS_PICTURE, IDS_FILTER_IMAGE },
+	{ 18, CMD_INSERT_TABLE, L"Table", L"", L"", 0, 0 },
+	{ -1, CMD_SEPARATOR, L"", L"", L"", 0, 0 },
+	{ 19, CMD_CUSTOMIZE, L"Customize", L"", L"", 0, 0 },
+};
+
 
 class CMyFrame : public CETLFrame<CMyFrame>
 {
@@ -304,8 +346,10 @@ public:
 
 	// user-defined members
 	vector<tstring> m_RecentFontArray;
-	vector<tstring> m_AutoConfigArray;
-	CCmdArray m_CmdArray;
+	vector<tstring> m_AutoConfigArray;		// config names switching to HTML mode
+	vector<tstring> m_MdConfigArray;		// config names switching to Markdown mode
+	CCmdArray m_CmdArray[MODE_COUNT];
+	int m_iMode;
 
 	vector<wstring> m_asUndefinedParam;
 	vector<wstring> m_asUndefinedValue;
@@ -871,15 +915,23 @@ public:
 
 //////// common end
 
-	BOOL LoadCmdArray()
+	BOOL LoadCmdArray( int iMode )
 	{
 		BOOL bResult = FALSE;
-		m_CmdArray.clear();
-		DWORD dwCount = GetProfileBinary( szCmdArrayEntry, NULL, 0 );
+		LPCTSTR pszKey = ( iMode == MODE_MD ) ? _T("CmdArray1") : _T("CmdArray0");
+		LPCTSTR pszLegacyKey = szCmdArrayEntry;
+		m_CmdArray[iMode].clear();
+		DWORD dwCount = GetProfileBinary( pszKey, NULL, 0 );
+		LPCTSTR pszUseKey = pszKey;
+		if( dwCount == 0 && iMode == MODE_HTML ){
+			// migrate the single-array data saved by old versions
+			dwCount = GetProfileBinary( pszLegacyKey, NULL, 0 );
+			pszUseKey = pszLegacyKey;
+		}
 		if( dwCount ){
 			char* pBuf = new char[ dwCount ];
 			if( pBuf ){
-				if( GetProfileBinary( szCmdArrayEntry, (LPBYTE)pBuf, dwCount ) ){
+				if( GetProfileBinary( pszUseKey, (LPBYTE)pBuf, dwCount ) ){
 					int nMax, nLen, iCmd, iIcon;
 					char* p = pBuf;
 					DWORD dwSign = *((DWORD*)p);
@@ -909,7 +961,7 @@ public:
 							p += nLen * sizeof(WCHAR);
 
 							CCmd cmd( iIcon, iCmd, sTitle.c_str(), sTagBegin.c_str(), sTagEnd.c_str() );
-							m_CmdArray.push_back( cmd );
+							m_CmdArray[iMode].push_back( cmd );
 						}
 						_ASSERT( p == pBuf + dwCount );
 						bResult = ( p == pBuf + dwCount );
@@ -924,13 +976,15 @@ public:
 	void SaveCmdArray()
 	{
 		if( m_bCmdArrayModified ){
+			int iMode = m_iMode;
 			int nLen;
 			BOOL bSuccess = FALSE;
 			DWORD_PTR dwCount = sizeof( int );
 			dwCount += sizeof(DWORD);
-			CCmdArray::iterator it = m_CmdArray.begin();
+			CCmdArray& arr = m_CmdArray[iMode];
+			CCmdArray::iterator it = arr.begin();
 			int nMax = 0;
-			while( it != m_CmdArray.end() ){
+			while( it != arr.end() ){
 				dwCount += (it->m_sTagBegin.length() + it->m_sTagEnd.length() + it->m_sTitle.length()) * sizeof(WCHAR) + 5 * sizeof( int );
 				nMax++;
 				it++;
@@ -938,13 +992,15 @@ public:
 			char *pBuf;
 			pBuf = new char[dwCount];
 			if( pBuf != NULL ){
+				TCHAR szKey[40];
+				StringPrintf( szKey, _countof( szKey ), _T("CmdArray%d"), iMode );
 				char* p = pBuf;
 				*((DWORD*)p) = SIGNATURE_CMD_ARRAY;
 				p += sizeof( DWORD );
 				*((int*)p) = nMax;
 				p += sizeof( int );
-				it = m_CmdArray.begin();
-				while( it != m_CmdArray.end() ){
+				it = arr.begin();
+				while( it != arr.end() ){
 					*((int*)p) = it->m_iCmd;
 					p += sizeof( int );
 					*((int*)p) = it->m_iIcon;
@@ -972,44 +1028,69 @@ public:
 				}
 				_ASSERT( p == pBuf + dwCount );
 				bSuccess = ( p == pBuf + dwCount );
-				WriteProfileBinary( szCmdArrayEntry, (LPBYTE)pBuf, (UINT)dwCount, true );
+				WriteProfileBinary( szKey, (LPBYTE)pBuf, (UINT)dwCount, true );
 				delete [] pBuf;
 			}
 		}
-		//else {
-		//	EraseEntry( szCmdArrayEntry );
-		//}
 	}
 
 
-	void InsertCmdAt( int iPos, int iIcon, int iCmd, LPCWSTR pszTitle, LPCWSTR pszTagBegin, LPCWSTR pszTagEnd )
+	void InsertCmdAt( int iMode, int iPos, int iIcon, int iCmd, LPCWSTR pszTitle, LPCWSTR pszTagBegin, LPCWSTR pszTagEnd )
 	{
 		CCmd cmd( iIcon, iCmd, pszTitle, pszTagBegin, pszTagEnd );
-		m_CmdArray.insert( m_CmdArray.begin() + iPos, cmd );
+		m_CmdArray[iMode].insert( m_CmdArray[iMode].begin() + iPos, cmd );
 	}
 
-	void ResetCmdArray()
+	void ResetCmdArray( int iMode )
 	{
-		m_CmdArray.clear();
-		for( int i = 0; i < _countof( DefCmd ); i++ ){
-			WCHAR sz[80];
-			LoadString( EEGetLocaleInstanceHandle(), DefCmd[i].m_nTitleID, sz, _countof( sz ) );
-			TCHAR szTagBegin[300];
-			if( DefCmd[i].m_nTitleID == ID_PICTURE || DefCmd[i].m_nTitleID == ID_HYPERLINK ){
-				bool bHyperlink = DefCmd[i].m_nTitleID == ID_HYPERLINK;
-				TCHAR szDlgTitle[80], szFilter[200];
-				LoadString( EEGetLocaleInstanceHandle(), bHyperlink ? IDS_HYPERLINK : IDS_PICTURE, szDlgTitle, _countof( szDlgTitle ) );
-				LoadString( EEGetLocaleInstanceHandle(), bHyperlink ? IDS_FILTER_HYPERLINK : IDS_FILTER_IMAGE, szFilter, _countof( szFilter ) );
-				StringPrintf( szTagBegin, _countof( szTagBegin ), DefCmd[i].m_pszTagBegin, szDlgTitle, szFilter );
+		m_CmdArray[iMode].clear();
+		if( iMode == MODE_MD ){
+			for( int i = 0; i < _countof( MdCmd ); i++ ){
+				TCHAR szTagBegin[300], szTagEnd[300];
+				if( MdCmd[i].m_nPickStrID != 0 ){
+					// format the file-pick parameter with the localized dialog title and filter
+					TCHAR szDlgTitle[80], szFilter[200];
+					LoadString( EEGetLocaleInstanceHandle(), MdCmd[i].m_nPickStrID, szDlgTitle, _countof( szDlgTitle ) );
+					LoadString( EEGetLocaleInstanceHandle(), MdCmd[i].m_nPickFilterID, szFilter, _countof( szFilter ) );
+					if( wcschr( MdCmd[i].m_pszTagBegin, L'%' ) ){
+						StringPrintf( szTagBegin, _countof( szTagBegin ), MdCmd[i].m_pszTagBegin, szDlgTitle, szFilter );
+						StringCopy( szTagEnd, _countof( szTagEnd ), MdCmd[i].m_pszTagEnd );
+					}
+					else {
+						StringCopy( szTagBegin, _countof( szTagBegin ), MdCmd[i].m_pszTagBegin );
+						StringPrintf( szTagEnd, _countof( szTagEnd ), MdCmd[i].m_pszTagEnd, szDlgTitle, szFilter );
+					}
+				}
+				else {
+					StringCopy( szTagBegin, _countof( szTagBegin ), MdCmd[i].m_pszTagBegin );
+					StringCopy( szTagEnd, _countof( szTagEnd ), MdCmd[i].m_pszTagEnd );
+				}
+				InsertCmdAt( iMode, i, MdCmd[i].m_iIcon, MdCmd[i].m_iCmd, MdCmd[i].m_pszTitle, szTagBegin, szTagEnd );
 			}
-			else {
-				StringCopy( szTagBegin, _countof( szTagBegin ), DefCmd[i].m_pszTagBegin );
-			}
-			InsertCmdAt( i, DefCmd[i].m_iIcon, DefCmd[i].m_iCmd, sz, szTagBegin, DefCmd[i].m_pszTagEnd );
-			if( DefCmd[i].m_iCmd == CMD_CUSTOMIZE )  break;
 		}
-		EraseEntry( szCmdArrayEntry );
-		m_bCmdArrayModified = false;
+		else {
+			for( int i = 0; i < _countof( DefCmd ); i++ ){
+				WCHAR sz[80];
+				LoadString( EEGetLocaleInstanceHandle(), DefCmd[i].m_nTitleID, sz, _countof( sz ) );
+				TCHAR szTagBegin[300];
+				if( DefCmd[i].m_nTitleID == ID_PICTURE || DefCmd[i].m_nTitleID == ID_HYPERLINK ){
+					bool bHyperlink = DefCmd[i].m_nTitleID == ID_HYPERLINK;
+					TCHAR szDlgTitle[80], szFilter[200];
+					LoadString( EEGetLocaleInstanceHandle(), bHyperlink ? IDS_HYPERLINK : IDS_PICTURE, szDlgTitle, _countof( szDlgTitle ) );
+					LoadString( EEGetLocaleInstanceHandle(), bHyperlink ? IDS_FILTER_HYPERLINK : IDS_FILTER_IMAGE, szFilter, _countof( szFilter ) );
+					StringPrintf( szTagBegin, _countof( szTagBegin ), DefCmd[i].m_pszTagBegin, szDlgTitle, szFilter );
+				}
+				else {
+					StringCopy( szTagBegin, _countof( szTagBegin ), DefCmd[i].m_pszTagBegin );
+				}
+				InsertCmdAt( iMode, i, DefCmd[i].m_iIcon, DefCmd[i].m_iCmd, sz, szTagBegin, DefCmd[i].m_pszTagEnd );
+				if( DefCmd[i].m_iCmd == CMD_CUSTOMIZE )  break;
+			}
+		}
+		EraseEntry( ( iMode == MODE_MD ) ? _T("CmdArray1") : _T("CmdArray0") );
+		if( iMode == m_iMode ){
+			m_bCmdArrayModified = false;
+		}
 	}
 
 	void AddButtons( HWND hwndToolbar )
@@ -1020,10 +1101,10 @@ public:
 			}
 		}
 
-		TBBUTTON* atb = new TBBUTTON[ m_CmdArray.size() ];
-		ZeroMemory( atb, sizeof( TBBUTTON ) * m_CmdArray.size() );
+		TBBUTTON* atb = new TBBUTTON[ m_CmdArray[m_iMode].size() ];
+		ZeroMemory( atb, sizeof( TBBUTTON ) * m_CmdArray[m_iMode].size() );
 		int i = 0;
-		for( CCmdArray::iterator it = m_CmdArray.begin(); it != m_CmdArray.end(); it++, i++ ) {
+		for( CCmdArray::iterator it = m_CmdArray[m_iMode].begin(); it != m_CmdArray[m_iMode].end(); it++, i++ ) {
 			atb[i].iBitmap = it->m_iIcon;
 			atb[i].idCommand = i + ID_COMMAND_BASE;
 			atb[i].fsState = TBSTATE_ENABLED;
@@ -1057,7 +1138,7 @@ public:
 		//	atb[i].fsState = TBSTATE_ENABLED;
 		//	i++;
 		//}
-		SendMessage( hwndToolbar, TB_ADDBUTTONSA, m_CmdArray.size(), (LPARAM)atb );
+		SendMessage( hwndToolbar, TB_ADDBUTTONSA, m_CmdArray[m_iMode].size(), (LPARAM)atb );
 		delete [] atb;
 	}
 
@@ -1072,6 +1153,213 @@ public:
 		DWORD dwSize = sizeof(DWORD);
 		Editor_RegQueryValue( m_hWnd, EEREG_COMMON, NULL, szLargeToolbar, REG_DWORD, (BYTE*)&dwValue, &dwSize, 0 );
 		m_bLargeToolbar = !!dwValue;
+	}
+
+	HBITMAP CreateMdIconBitmap( int cx, void** ppvBits )
+	{
+		BITMAPINFO bmi;
+		ZeroMemory( &bmi, sizeof( bmi ) );
+		bmi.bmiHeader.biSize = sizeof( BITMAPINFOHEADER );
+		bmi.bmiHeader.biWidth = cx;
+		bmi.bmiHeader.biHeight = -cx;	// top-down
+		bmi.bmiHeader.biPlanes = 1;
+		bmi.bmiHeader.biBitCount = 32;
+		bmi.bmiHeader.biCompression = BI_RGB;
+		void* pvBits = NULL;
+		HBITMAP hbm = CreateDIBSection( NULL, &bmi, DIB_RGB_COLORS, &pvBits, NULL, 0 );
+		if( hbm && pvBits ){
+			// fill with the transparency key color; converted to alpha 0 after drawing
+			for( int i = 0; i < cx * cx; i++ ){
+				( (DWORD*)pvBits )[i] = 0x00FF00FF;	// magenta key, alpha 0
+			}
+		}
+		*ppvBits = pvBits;
+		return hbm;
+	}
+
+	void MdKeyOutBackground( int cx, void* pvBits )
+	{
+		if( !pvBits )  return;
+		for( int i = 0; i < cx * cx; i++ ){
+			DWORD dw = ( (DWORD*)pvBits )[i];
+			if( ( dw & 0x00FFFFFF ) == 0x00FF00FF ){
+				( (DWORD*)pvBits )[i] = 0x00000000;	// transparent
+			}
+			else {
+				( (DWORD*)pvBits )[i] = dw | 0xFF000000;	// opaque
+			}
+		}
+	}
+
+	void DrawMdText( HDC hdc, int cx, LPCWSTR pszText, int nHeightPct, int nWeight, bool bItalic, COLORREF crFg )
+	{
+		HFONT hfont = CreateFontW( -( cx * nHeightPct / 100 ), 0, 0, 0, nWeight, bItalic, FALSE, FALSE,
+			DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS, ANTIALIASED_QUALITY, FF_DONTCARE, L"Segoe UI" );
+		HFONT hfontOld = (HFONT)SelectObject( hdc, hfont );
+		SetBkMode( hdc, TRANSPARENT );
+		SetTextColor( hdc, crFg );
+		RECT rc = { 0, 0, cx, cx };
+		DrawTextW( hdc, pszText, -1, &rc, DT_CENTER | DT_VCENTER | DT_SINGLELINE | DT_NOPREFIX );
+		SelectObject( hdc, hfontOld );
+		DeleteObject( hfont );
+	}
+
+	void DrawMdTextAt( HDC hdc, int x, int y, LPCWSTR pszText, int nHeight, int nWeight, COLORREF crFg )
+	{
+		HFONT hfont = CreateFontW( -nHeight, 0, 0, 0, nWeight, FALSE, FALSE, FALSE,
+			DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS, ANTIALIASED_QUALITY, FF_DONTCARE, L"Segoe UI" );
+		HFONT hfontOld = (HFONT)SelectObject( hdc, hfont );
+		SetBkMode( hdc, TRANSPARENT );
+		SetTextColor( hdc, crFg );
+		TextOutW( hdc, x, y, pszText, (int)wcslen( pszText ) );
+		SelectObject( hdc, hfontOld );
+		DeleteObject( hfont );
+	}
+
+	void DrawMdIcon( HDC hdc, int cx, int iIcon, COLORREF crFg )
+	{
+		HPEN hpen = CreatePen( PS_SOLID, max( 1, cx / 16 ), crFg );
+		HPEN hpenOld = (HPEN)SelectObject( hdc, hpen );
+		HBRUSH hbrOld = (HBRUSH)SelectObject( hdc, GetStockObject( NULL_BRUSH ) );
+		int y1, y2;
+		switch( iIcon ){
+		case 0: case 1: case 2: case 3: case 4: case 5:		// H1 - H6
+			{
+				WCHAR szText[8];
+				StringPrintf( szText, _countof( szText ), L"H%d", iIcon + 1 );
+				DrawMdText( hdc, cx, szText, 45, FW_BOLD, FALSE, crFg );
+			}
+			break;
+		case 6:		// bold
+			DrawMdText( hdc, cx, L"B", 68, FW_BOLD, FALSE, crFg );
+			break;
+		case 7:		// italic
+			DrawMdText( hdc, cx, L"I", 68, FW_NORMAL, TRUE, crFg );
+			break;
+		case 8:		// strikethrough
+			DrawMdText( hdc, cx, L"S", 68, FW_BOLD, FALSE, crFg );
+			MoveToEx( hdc, cx * 22 / 100, cx / 2, NULL );
+			LineTo( hdc, cx * 78 / 100, cx / 2 );
+			break;
+		case 9:		// inline code
+			DrawMdText( hdc, cx, L"</>", 38, FW_NORMAL, FALSE, crFg );
+			break;
+		case 10:	// code block
+			DrawMdText( hdc, cx, L"{ }", 48, FW_BOLD, FALSE, crFg );
+			break;
+		case 11:	// quote
+			DrawMdText( hdc, cx, L"\x275D", 62, FW_NORMAL, FALSE, crFg );
+			break;
+		case 12:	// bullet list
+		case 13:	// numbered list
+		case 14:	// task list
+			y1 = cx * 28 / 100;
+			y2 = cx * 22 / 100;
+			for( int r = 0; r < 3; r++ ){
+				int y = y1 + r * y2;
+				MoveToEx( hdc, cx * 38 / 100, y, NULL );
+				LineTo( hdc, cx * 84 / 100, y );
+			}
+			if( iIcon == 12 ){
+				HBRUSH hbr = CreateSolidBrush( crFg );
+				HBRUSH hbrOld2 = (HBRUSH)SelectObject( hdc, hbr );
+				for( int r = 0; r < 3; r++ ){
+					int y = y1 + r * y2;
+					Ellipse( hdc, cx * 12 / 100 - cx / 14, y - cx / 14, cx * 12 / 100 + cx / 14, y + cx / 14 );
+				}
+				SelectObject( hdc, hbrOld2 );
+				DeleteObject( hbr );
+			}
+			else if( iIcon == 13 ){
+				for( int r = 0; r < 3; r++ ){
+					WCHAR szDigit[2];
+					StringPrintf( szDigit, _countof( szDigit ), L"%d", r + 1 );
+					DrawMdTextAt( hdc, cx * 8 / 100, y1 + r * y2 - cx * 15 / 100, szDigit, cx * 28 / 100, FW_NORMAL, crFg );
+				}
+			}
+			else {
+				for( int r = 0; r < 3; r++ ){
+					int y = y1 + r * y2;
+					Rectangle( hdc, cx * 8 / 100, y - cx * 9 / 100, cx * 8 / 100 + cx * 18 / 100, y + cx * 9 / 100 );
+				}
+			}
+			break;
+		case 15:	// horizontal line
+			MoveToEx( hdc, cx * 12 / 100, cx / 2, NULL );
+			LineTo( hdc, cx * 88 / 100, cx / 2 );
+			break;
+		case 16:	// link
+			RoundRect( hdc, cx * 8 / 100, cx * 42 / 100, cx * 52 / 100, cx * 70 / 100, cx * 20 / 100, cx * 20 / 100 );
+			RoundRect( hdc, cx * 48 / 100, cx * 30 / 100, cx * 92 / 100, cx * 58 / 100, cx * 20 / 100, cx * 20 / 100 );
+			break;
+		case 17:	// image
+			Rectangle( hdc, cx * 10 / 100, cx * 20 / 100, cx * 90 / 100, cx * 80 / 100 );
+			{
+				HBRUSH hbr = CreateSolidBrush( crFg );
+				HBRUSH hbrOld2 = (HBRUSH)SelectObject( hdc, hbr );
+				POINT aptSun[4] = {
+					{ cx * 34 / 100, cx * 30 / 100 }, { cx * 42 / 100, cx * 38 / 100 },
+					{ cx * 34 / 100, cx * 46 / 100 }, { cx * 26 / 100, cx * 38 / 100 } };
+				Polygon( hdc, aptSun, 4 );
+				POINT aptMountain[3] = {
+					{ cx * 16 / 100, cx * 72 / 100 }, { cx * 42 / 100, cx * 42 / 100 },
+					{ cx * 62 / 100, cx * 72 / 100 } };
+				Polygon( hdc, aptMountain, 3 );
+				POINT aptMountain2[4] = {
+					{ cx * 50 / 100, cx * 72 / 100 }, { cx * 66 / 100, cx * 52 / 100 },
+					{ cx * 84 / 100, cx * 72 / 100 }, { cx * 50 / 100, cx * 72 / 100 } };
+				Polygon( hdc, aptMountain2, 4 );
+				SelectObject( hdc, hbrOld2 );
+				DeleteObject( hbr );
+			}
+			break;
+		case 18:	// table
+			Rectangle( hdc, cx * 10 / 100, cx * 22 / 100, cx * 90 / 100, cx * 78 / 100 );
+			MoveToEx( hdc, cx * 10 / 100, cx / 2, NULL );
+			LineTo( hdc, cx * 90 / 100, cx / 2 );
+			MoveToEx( hdc, cx * 37 / 100, cx * 22 / 100, NULL );
+			LineTo( hdc, cx * 37 / 100, cx * 78 / 100 );
+			MoveToEx( hdc, cx * 63 / 100, cx * 22 / 100, NULL );
+			LineTo( hdc, cx * 63 / 100, cx * 78 / 100 );
+			break;
+		case 19:	// customize (gear)
+			DrawMdText( hdc, cx, L"\x2699", 66, FW_NORMAL, FALSE, crFg );
+			break;
+		}
+		SelectObject( hdc, hbrOld );
+		SelectObject( hdc, hpenOld );
+		DeleteObject( hpen );
+	}
+
+	HIMAGELIST BuildMdImageList( int cx )
+	{
+		HIMAGELIST himl = ImageList_Create( cx, cx, ILC_COLOR32, 20, 8 );
+		if( !himl ){
+			return NULL;
+		}
+		// glyph color follows the editor's bar text color when available
+		COLORREF crFg = RGB( 190, 190, 190 );
+		COLORREF crText = RGB( 190, 190, 190 );
+		Editor_Info( m_hWnd, EI_GET_BAR_TEXT_COLOR, (LPARAM)&crText );
+		if( crText != 0 && crText != CLR_INVALID ){
+			crFg = crText;
+		}
+		for( int i = 0; i < 20; i++ ){
+			void* pvBits = NULL;
+			HBITMAP hbm = CreateMdIconBitmap( cx, &pvBits );
+			if( !hbm ){
+				break;
+			}
+			HDC hdc = CreateCompatibleDC( NULL );
+			HBITMAP hbmOld = (HBITMAP)SelectObject( hdc, hbm );
+			DrawMdIcon( hdc, cx, i, crFg );
+			SelectObject( hdc, hbmOld );
+			DeleteDC( hdc );
+			MdKeyOutBackground( cx, pvBits );
+			ImageList_Add( himl, hbm, NULL );
+			DeleteObject( hbm );
+		}
+		return himl;
 	}
 
 	void DisplayBar( bool bVisible )
@@ -1122,24 +1410,30 @@ public:
 			SendMessage( hwndToolbar, TB_SETEXTENDEDSTYLE, 0, dwExStyle );
 			_ASSERT( m_himageToolbar == NULL );
 
-			if( bNeedStretch ){
-				m_himageToolbar = ImageList_Create( cxDest, cxDest, ILC_COLOR32 | ILC_MASK, 0, 32 );
-				HBITMAP hbm = MyLoadBitmap( EEGetInstanceHandle(), MAKEINTRESOURCE( bLarge ? IDB_TOOLBAR_LARGE : IDB_TOOLBAR ) );
-				_ASSERT( hbm );
-				int nNumImages = GetBitmapCount( hbm, cxSrc );
-				if( nNumImages != 0 ){
-					VERIFY( StretchBitmap( &hbm, cxDest, cxDest, nNumImages, 1 ) );
-					VERIFY( ImageList_AddMasked( m_himageToolbar, hbm, CLR_NONE ) == 0 );
-				}
+			if( m_iMode == MODE_MD ){
+				// runtime-drawn icons matching the editor's bar color
+				m_himageToolbar = BuildMdImageList( cxButtonSize );
 			}
-			else {
-				m_himageToolbar = ImageList_LoadImage( EEGetInstanceHandle(), MAKEINTRESOURCE( bLarge ? IDB_TOOLBAR_LARGE : IDB_TOOLBAR ), bLarge ? 24 : 16, 0, CLR_NONE, IMAGE_BITMAP, LR_CREATEDIBSECTION );
+			if( m_himageToolbar == NULL ){
+				if( bNeedStretch ){
+					m_himageToolbar = ImageList_Create( cxDest, cxDest, ILC_COLOR32 | ILC_MASK, 0, 32 );
+					HBITMAP hbm = MyLoadBitmap( EEGetInstanceHandle(), MAKEINTRESOURCE( bLarge ? IDB_TOOLBAR_LARGE : IDB_TOOLBAR ) );
+					_ASSERT( hbm );
+					int nNumImages = GetBitmapCount( hbm, cxSrc );
+					if( nNumImages != 0 ){
+						VERIFY( StretchBitmap( &hbm, cxDest, cxDest, nNumImages, 1 ) );
+						VERIFY( ImageList_AddMasked( m_himageToolbar, hbm, CLR_NONE ) == 0 );
+					}
+				}
+				else {
+					m_himageToolbar = ImageList_LoadImage( EEGetInstanceHandle(), MAKEINTRESOURCE( bLarge ? IDB_TOOLBAR_LARGE : IDB_TOOLBAR ), bLarge ? 24 : 16, 0, CLR_NONE, IMAGE_BITMAP, LR_CREATEDIBSECTION );
+				}
 			}
 			_ASSERT( m_himageToolbar );
 			SendMessage( hwndToolbar, TB_SETIMAGELIST, 0, (LPARAM)m_himageToolbar );
 			
-			if( !LoadCmdArray() ){
-				ResetCmdArray();
+			if( !LoadCmdArray( m_iMode ) ){
+				ResetCmdArray( m_iMode );
 			}
 
 			AddButtons( hwndToolbar );
@@ -1154,6 +1448,10 @@ public:
 			if( hwndToolbar ){
 				TCHAR szTitle[80];
 				LoadString( EEGetLocaleInstanceHandle(), IDS_TITLE, szTitle, _countof( szTitle ) );
+				LPCTSTR pszTitle = szTitle;
+				if( m_iMode == MODE_MD ){
+					pszTitle = _T("Markdown");
+				}
 				RECT rcClient = { 0 };
 				GetClientRect( hwndToolbar, &rcClient );
 				TOOLBAR_INFO cri;
@@ -1161,7 +1459,7 @@ public:
 				cri.cbSize = sizeof( cri );
 				cri.nMask = TIM_CLIENT | TIM_TITLE | TIM_FLAGS | TIM_STYLE | TIM_MINCHILD | TIM_CXIDEAL | TIM_BAND | TIM_PLUG_IN_CMD_ID;
 				cri.wPlugInCmdID = EEGetCmdID();
-				cri.pszTitle = szTitle;
+				cri.pszTitle = pszTitle;
 				cri.hwndClient = hwndToolbar;
 				cri.cxMinChild = 0;
 				cri.cyMinChild = rcClient.bottom - rcClient.top;
@@ -1228,6 +1526,7 @@ public:
 			TCHAR szConfigName[ MAX_CONFIG_NAME ] = { 0 };
 			Editor_GetConfigW( m_hWnd, szConfigName );
 			StringCopy( m_szOldConfig, _countof( m_szOldConfig ), szConfigName );
+			m_iMode = DetectMode();
 
 			bool bShow = (!m_bAutoDisplay && m_bOpenStartup) || (m_bAutoDisplay && ConfigExist( szConfigName ) );
 			DisplayBar( bShow );
@@ -1272,7 +1571,17 @@ public:
 				}
 			}
 		}
-		if( nEvent & (EVENT_CONFIG_CHANGED | EVENT_FILE_OPENED ) ) {
+		if( nEvent & (EVENT_CONFIG_CHANGED | EVENT_FILE_OPENED | EVENT_DOC_SEL_CHANGED ) ) {
+			int iNewMode = DetectMode();
+			if( iNewMode != m_iMode ){
+				m_iMode = iNewMode;
+				if( m_hwndToolbar && m_bVisible ){
+					// re-create the custom bar so it shows the other mode's button set
+					Editor_ToolbarClose( m_hWnd, m_nClientID );
+					CustomBarClosed();
+					DisplayBar( true );
+				}
+			}
 			if( m_bAutoDisplay ){
 				TCHAR szConfigName[ MAX_CONFIG_NAME ] = { 0 };
 				Editor_GetConfigW( m_hWnd, szConfigName );
@@ -1377,6 +1686,7 @@ public:
 
 	CMyFrame()
 	{
+		m_iMode = MODE_HTML;
 		ZERO_INIT_FIRST_MEM( CMyFrame, m_hwndToolbar );
 		m_nBand = (UINT)-1;
 	}
@@ -1386,14 +1696,50 @@ public:
 		CustomBarClosed();
 	}
 
-	bool ConfigExist( LPCTSTR pszConfig )
+	CCmdArray& Cmds()
 	{
-		for( vector<tstring>::iterator it = m_AutoConfigArray.begin(); it != m_AutoConfigArray.end(); it++ ){
+		return m_CmdArray[m_iMode];
+	}
+
+	bool ConfigInList( vector<tstring>& arrConfig, LPCTSTR pszConfig )
+	{
+		for( vector<tstring>::iterator it = arrConfig.begin(); it != arrConfig.end(); it++ ){
 			if( !lstrcmpi( it->c_str(), pszConfig ) ){
 				return true;
 			}
 		}
 		return false;
+	}
+
+	bool ConfigExist( LPCTSTR pszConfig )
+	{
+		return ConfigInList( m_AutoConfigArray, pszConfig ) || ConfigInList( m_MdConfigArray, pszConfig );
+	}
+
+	int DetectMode()
+	{
+		TCHAR szConfigName[ MAX_CONFIG_NAME ] = { 0 };
+		Editor_GetConfigW( m_hWnd, szConfigName );
+		if( ConfigInList( m_MdConfigArray, szConfigName ) ){
+			return MODE_MD;
+		}
+		if( ConfigInList( m_AutoConfigArray, szConfigName ) ){
+			return MODE_HTML;
+		}
+		TCHAR szPath[ MAX_PATH ] = { 0 };
+		Editor_Info( m_hWnd, EI_GET_FILE_NAMEW, (LPARAM)szPath );
+		LPCTSTR pszExt = PathFindExtension( PathFindFileName( szPath ) );
+		if( pszExt[0] == '.' ){
+			if( _tcsicmp( pszExt, _T(".md") ) == 0 || _tcsicmp( pszExt, _T(".markdown") ) == 0 ||
+				_tcsicmp( pszExt, _T(".mdown") ) == 0 || _tcsicmp( pszExt, _T(".mkd") ) == 0 ){
+				return MODE_MD;
+			}
+			if( _tcsicmp( pszExt, _T(".htm") ) == 0 || _tcsicmp( pszExt, _T(".html") ) == 0 ||
+				_tcsicmp( pszExt, _T(".xhtml") ) == 0 || _tcsicmp( pszExt, _T(".shtml") ) == 0 ){
+				return MODE_HTML;
+			}
+		}
+		return m_iMode;
 	}
 
 	void OnCustomize( HWND hwnd )
@@ -1485,6 +1831,61 @@ public:
 		}
 	}
 
+	void LoadConfigArray( LPCTSTR pszKey, LPCTSTR pszSizeKey, vector<tstring>& arrConfig, LPCTSTR pszDefault )
+	{
+		bool bSuccess = false;
+		arrConfig.clear();
+
+		int cchSize = GetProfileInt( pszSizeKey, 0 );
+		if( cchSize > 2 ){
+			LPTSTR pBuf = new TCHAR[ cchSize ];
+			if( pBuf ){
+				*pBuf = 0;
+				GetProfileString( pszKey, pBuf, cchSize, _T("") );
+				if( *pBuf ){
+					LPTSTR p = pBuf;
+					for( ;; ){
+						LPTSTR p0 = p;
+						p = _tcschr( p, '\\' );
+						if( !p )  break;
+						*p = 0;
+						if( !*p0 )  break;
+						arrConfig.push_back( p0 );
+						p++;
+					}
+					bSuccess = true;
+				}
+				delete [] pBuf;
+			}
+		}
+		if( !bSuccess && pszDefault && pszDefault[0] ){
+			arrConfig.push_back( pszDefault );
+		}
+	}
+
+	void SaveConfigArray( LPCTSTR pszKey, LPCTSTR pszSizeKey, vector<tstring>& arrConfig )
+	{
+		int cchBuf = 2;
+		for( vector<tstring>::iterator it = arrConfig.begin(); it != arrConfig.end(); it++ ){
+			cchBuf += (int)it->length() + 1;
+		}
+		LPTSTR pBuf = new TCHAR[ cchBuf ];
+		LPTSTR p = pBuf;
+		int cch = cchBuf;
+		for( vector<tstring>::iterator it = arrConfig.begin(); it != arrConfig.end(); it++ ){
+			StringCopy( p, cch, it->c_str() );
+			p += it->length();
+			*p++ = _T('\\');
+			cch -= (int)it->length() + 1;
+		}
+		*p++ = _T('\\');
+		*p = 0;
+		_ASSERT( lstrlen( pBuf ) + 1 == cchBuf );
+		WriteProfileString( pszKey, pBuf );
+		delete [] pBuf;
+		WriteProfileInt( pszSizeKey, cchBuf );
+	}
+
 	void LoadProfile()
 	{
 		if( !m_bProfileLoaded ){
@@ -1496,35 +1897,9 @@ public:
 			m_nBand = GetProfileInt( _T("Band"), -1 );
 			m_wRows = (WORD)GetProfileInt( _T("Rows"), 3 );
 			m_wColumns = (WORD)GetProfileInt( _T("Columns"), 2 );
-			
-			bool bSuccess = false;
-			m_AutoConfigArray.clear();
 
-			int cchSize = GetProfileInt( _T("Configs-Size"), 0 );
-			if( cchSize > 2 ){
-				LPTSTR pBuf = new TCHAR[ cchSize ];
-				if( pBuf ){
-					*pBuf = 0;
-					GetProfileString( _T("Configs"), pBuf, cchSize, _T("") );
-					if( *pBuf ){
-						LPTSTR p = pBuf;
-						for( ; ; ){
-							LPTSTR p0 = p;
-							p = _tcschr( p, '\\' );
-							if( !p )  break;
-							*p = 0;
-							if( !*p0 )  break;
-							m_AutoConfigArray.push_back( p0 );
-							p++;
-						}
-						bSuccess = true;
-					}
-					delete [] pBuf;
-				}
-			}
-			if( !bSuccess ){
-				m_AutoConfigArray.push_back( _T("HTML") );
-			}
+			LoadConfigArray( _T("Configs"), _T("Configs-Size"), m_AutoConfigArray, _T("HTML") );
+			LoadConfigArray( _T("MdConfigs"), _T("MdConfigs-Size"), m_MdConfigArray, _T("Markdown") );
 		}
 	}
 
@@ -1537,25 +1912,8 @@ public:
 		WriteProfileInt( _T("Style"), m_fStyle );
 		WriteProfileInt( _T("Band"), m_nBand );
 
-		int cchBuf = 2;
-		for( vector<tstring>::iterator it = m_AutoConfigArray.begin(); it != m_AutoConfigArray.end(); it++ ){
-			cchBuf += (int)it->length() + 1;
-		}
-		LPTSTR pBuf = new TCHAR[ cchBuf ];
-		LPTSTR p = pBuf;
-		int cch = cchBuf;
-		for( vector<tstring>::iterator it = m_AutoConfigArray.begin(); it != m_AutoConfigArray.end(); it++ ){
-			StringCopy( p, cch, it->c_str() );
-			p += it->length();
-			*p++ = _T('\\');
-			cch -= (int)it->length() + 1;
-		}
-		*p++ = _T('\\');
-		*p = 0;
-		_ASSERT( lstrlen( pBuf ) + 1 == cchBuf );
-		WriteProfileString( _T("Configs"), pBuf );
-		delete [] pBuf;
-		WriteProfileInt( _T("Configs-Size"), cchBuf );
+		SaveConfigArray( _T("Configs"), _T("Configs-Size"), m_AutoConfigArray );
+		SaveConfigArray( _T("MdConfigs"), _T("MdConfigs-Size"), m_MdConfigArray );
 	}
 
 	int PopupMenuSub( UINT nIDCommand, UINT nIDMenu )
@@ -1601,7 +1959,7 @@ public:
 
 
 
-	void InsertTag( LPCTSTR pszTagBegin, LPCTSTR pszTagEnd )
+	void InsertTag( LPCTSTR pszTagBegin, LPCTSTR pszTagEnd, bool bToggle = false )
 	{
 		int nSelType = Editor_GetSelTypeEx( m_hWnd, TRUE );
 		int nTagBeginLen = (int)_tcslen( pszTagBegin );
@@ -1624,8 +1982,34 @@ public:
 					ptSelEnd.x = pt.x;
 					ptSelEnd.y = pt.y;
 				}
+
+				bool bUnwrap = false;
+				LPWSTR pszSel = new WCHAR[ nBufSize ];
+				if( pszSel ){
+					Editor_GetSelTextW( m_hWnd, (UINT)nBufSize, pszSel );
+					int nSelLen = (int)wcslen( pszSel );
+					bUnwrap = bToggle && nTagBeginLen > 0 && nTagEndLen > 0 && nSelLen >= nTagBeginLen + nTagEndLen &&
+						_tcsnicmp( pszSel, pszTagBegin, nTagBeginLen ) == 0 &&
+						_tcsnicmp( pszSel + nSelLen - nTagEndLen, pszTagEnd, nTagEndLen ) == 0;
+					if( bUnwrap ){
+						// the selection is already wrapped: replace it with the inner text only
+						int nInnerLen = nSelLen - nTagBeginLen - nTagEndLen;
+						wmemmove( pszSel, pszSel + nTagBeginLen, nInnerLen );
+						pszSel[nInnerLen] = L'\0';
+						Editor_SetCaretPosEx( m_hWnd, POS_LOGICAL_W, &ptSelStart, FALSE );
+						Editor_SetCaretPosEx( m_hWnd, POS_LOGICAL_W, &ptSelEnd, TRUE );
+						Editor_InsertW( m_hWnd, pszSel, true );
+					}
+					delete [] pszSel;
+				}
+
+				if( bUnwrap ){
+					delete [] pBuf;
+					return;
+				}
+
 				StringCopy( pBuf, nBufSize, pszTagBegin );
-				Editor_GetSelTextW( m_hWnd, nBufSize - nTagBeginLen, pBuf + nTagBeginLen );
+				Editor_GetSelTextW( m_hWnd, (UINT)( nBufSize - nTagBeginLen ), pBuf + nTagBeginLen );
 				StringCat( pBuf, nBufSize, pszTagEnd );
 
 				bool bNL = _tcschr( pBuf, '\r' ) || _tcschr( pBuf, '\n' );
@@ -1651,6 +2035,130 @@ public:
 				Editor_ExecCommand( m_hWnd, EEID_LEFT );
 			}
 		}
+	}
+
+	static int MdPrefixMatch( LPCWSTR pszLine, LPCWSTR pszPrefix )
+	{
+		// length of pszPrefix found at the start of pszLine, 0 if none;
+		// for the numbered list prefix, any "N. " counts as "1. "
+		size_t nLen = wcslen( pszPrefix );
+		if( _wcsnicmp( pszLine, pszPrefix, nLen ) == 0 ){
+			return (int)nLen;
+		}
+		if( wcscmp( pszPrefix, L"1. " ) == 0 ){
+			int i = 0;
+			while( pszLine[i] >= L'0' && pszLine[i] <= L'9' )  i++;
+			if( i > 0 && pszLine[i] == L'.' && pszLine[i+1] == L' ' ){
+				return i + 2;
+			}
+		}
+		return 0;
+	}
+
+	static int MdStripLen( LPCWSTR pszLine )
+	{
+		// length of any existing Markdown line prefix to strip before applying a new one
+		if( pszLine[0] == L'#' ){
+			int i = 0;
+			while( pszLine[i] == L'#' )  i++;
+			if( i >= 1 && i <= 6 && pszLine[i] == L' ' )  return i + 1;
+			return 0;
+		}
+		if( _wcsnicmp( pszLine, L"- [ ] ", 6 ) == 0 || _wcsnicmp( pszLine, L"- [x] ", 6 ) == 0 ||
+			_wcsnicmp( pszLine, L"- [X] ", 6 ) == 0 ){
+			return 6;
+		}
+		if( ( pszLine[0] == L'-' || pszLine[0] == L'*' || pszLine[0] == L'+' ) && pszLine[1] == L' ' ){
+			return 2;
+		}
+		if( pszLine[0] == L'>' && pszLine[1] == L' ' ){
+			return 2;
+		}
+		{
+			int i = 0;
+			while( pszLine[i] >= L'0' && pszLine[i] <= L'9' )  i++;
+			if( i > 0 && pszLine[i] == L'.' && pszLine[i+1] == L' ' ){
+				return i + 2;
+			}
+		}
+		return 0;
+	}
+
+	void InsertLinePrefix( LPCWSTR pszPrefix )
+	{
+		int nSelType = Editor_GetSelTypeEx( m_hWnd, TRUE );
+		POINT_PTR ptStart, ptEnd;
+		if( nSelType & SEL_TYPE_SELECTED ){
+			Editor_GetSelStart( m_hWnd, POS_LOGICAL_W, &ptStart );
+			Editor_GetSelEnd( m_hWnd, POS_LOGICAL_W, &ptEnd );
+			if( ptStart.y > ptEnd.y || ( ptStart.y == ptEnd.y && ptStart.x > ptEnd.x ) ){
+				POINT_PTR pt = ptStart;
+				ptStart = ptEnd;
+				ptEnd = pt;
+			}
+		}
+		else {
+			Editor_GetCaretPos( m_hWnd, POS_LOGICAL_W, &ptStart );
+			ptEnd = ptStart;
+		}
+
+		int nLines = (int)( ptEnd.y - ptStart.y ) + 1;
+		LPWSTR* apszLines = new LPWSTR[ nLines ];
+		bool* abHas = new bool[ nLines ];
+		for( int i = 0; i < nLines; i++ ){
+			GET_LINE_INFO gli;
+			gli.cch = 0;
+			gli.flags = 0;
+			gli.yLine = (UINT)( ptStart.y + i );
+			UINT_PTR cch = Editor_GetLineW( m_hWnd, &gli, NULL );
+			apszLines[i] = new WCHAR[ cch + 1 ];
+			gli.cch = cch + 1;
+			Editor_GetLineW( m_hWnd, &gli, apszLines[i] );
+			abHas[i] = MdPrefixMatch( apszLines[i], pszPrefix ) != 0 || apszLines[i][0] == L'\0';
+		}
+
+		bool bRemove = true;
+		for( int i = 0; i < nLines; i++ ){
+			if( !abHas[i] ){
+				bRemove = false;
+				break;
+			}
+		}
+
+		WCHAR szNum[16];
+		int nNum = 1;
+		for( int i = 0; i < nLines; i++ ){
+			POINT_PTR ptCur;
+			ptCur.x = 0;
+			ptCur.y = ptStart.y + i;
+			int nStrip = 0;
+			if( bRemove ){
+				nStrip = MdPrefixMatch( apszLines[i], pszPrefix );
+			}
+			else {
+				nStrip = MdStripLen( apszLines[i] );
+			}
+			if( nStrip > 0 ){
+				Editor_SetCaretPosEx( m_hWnd, POS_LOGICAL_W, &ptCur, FALSE );
+				POINT_PTR ptTo = ptCur;
+				ptTo.x = nStrip;
+				Editor_SetCaretPosEx( m_hWnd, POS_LOGICAL_W, &ptTo, TRUE );
+				Editor_ExecCommand( m_hWnd, EEID_DELETE );
+			}
+			if( !bRemove && ( apszLines[i][0] != L'\0' || nLines == 1 ) ){
+				LPCWSTR pszUse = pszPrefix;
+				if( wcscmp( pszPrefix, L"1. " ) == 0 ){
+					StringPrintf( szNum, _countof( szNum ), L"%d. ", nNum );
+					pszUse = szNum;
+				}
+				Editor_SetCaretPosEx( m_hWnd, POS_LOGICAL_W, &ptCur, FALSE );
+				Editor_InsertW( m_hWnd, pszUse, false );
+				nNum++;
+			}
+			delete [] apszLines[i];
+		}
+		delete [] apszLines;
+		delete [] abHas;
 	}
 
 	void InsertTagFont( LPCTSTR szFaceName )
@@ -1720,30 +2228,54 @@ public:
 
 	void OnDlgCommand( WPARAM wParam )
 	{
-		if( wParam >= ID_COMMAND_BASE && wParam < ID_COMMAND_BASE + m_CmdArray.size() ) {
-			CCmd& cmd = m_CmdArray[wParam - ID_COMMAND_BASE];
+		if( wParam >= ID_COMMAND_BASE && wParam < ID_COMMAND_BASE + Cmds().size() ) {
+			CCmd& cmd = Cmds()[wParam - ID_COMMAND_BASE];
 			if( cmd.m_iCmd == CMD_TAGS ){
 				BOOL bResult;
 				wstring sTagBegin = UnescapeString( cmd.m_sTagBegin.c_str(), &bResult );
 				if( bResult ){
 					wstring sTagEnd = UnescapeString( cmd.m_sTagEnd.c_str(), &bResult );
 					if( bResult ){
-						InsertTag( sTagBegin.c_str(), sTagEnd.c_str() );
+						InsertTag( sTagBegin.c_str(), sTagEnd.c_str(), true );
 					}
 				}
 			}
 			else if( cmd.m_iCmd == CMD_INSERT_TABLE ){
 				if( DialogBox( EEGetLocaleInstanceHandle(), MAKEINTRESOURCE( IDD_TABLE ), m_hDlg, TableDlg ) == IDOK ){
-					Editor_InsertW( m_hWnd, _T("<table>\n"), true );
-					for( WORD i = 0; i < m_wRows; i++ ){
-						Editor_InsertW( m_hWnd, _T("\t<tr>\n"), true );
+					if( m_iMode == MODE_MD ){
+						wstring sTable = L"|";
 						for( WORD j = 0; j < m_wColumns; j++ ){
-							Editor_InsertW( m_hWnd, _T("\t\t<td></td>\n"), true );
+							sTable += L" |";
 						}
-						Editor_InsertW( m_hWnd, _T("\t</tr>\n"), true );
+						sTable += L"\n|";
+						for( WORD j = 0; j < m_wColumns; j++ ){
+							sTable += L" --- |";
+						}
+						sTable += L"\n";
+						for( WORD i = 0; i < m_wRows; i++ ){
+							sTable += L"|";
+							for( WORD j = 0; j < m_wColumns; j++ ){
+								sTable += L" |";
+							}
+							sTable += L"\n";
+						}
+						Editor_InsertW( m_hWnd, sTable.c_str(), true );
 					}
-					Editor_InsertW( m_hWnd, _T("</table>\n"), true );
+					else {
+						Editor_InsertW( m_hWnd, _T("<table>\n"), true );
+						for( WORD i = 0; i < m_wRows; i++ ){
+							Editor_InsertW( m_hWnd, _T("\t<tr>\n"), true );
+							for( WORD j = 0; j < m_wColumns; j++ ){
+								Editor_InsertW( m_hWnd, _T("\t\t<td></td>\n"), true );
+							}
+							Editor_InsertW( m_hWnd, _T("\t</tr>\n"), true );
+						}
+						Editor_InsertW( m_hWnd, _T("</table>\n"), true );
+					}
 				}
+			}
+			else if( cmd.m_iCmd == CMD_LINE_PREFIX ){
+				InsertLinePrefix( cmd.m_sTagBegin.c_str() );
 			}
 			else if( cmd.m_iCmd == CMD_FONT ){
 				OnFont();
@@ -1914,8 +2446,8 @@ public:
 		case TTN_GETDISPINFO:
 			{
 				NMTTDISPINFO* pDispInfo = (NMTTDISPINFO*)pnmh;
-				if( pDispInfo->hdr.idFrom >= ID_COMMAND_BASE && pDispInfo->hdr.idFrom < ID_COMMAND_BASE + m_CmdArray.size() ) {
-					CCmd& cmd = m_CmdArray[ pDispInfo->hdr.idFrom - ID_COMMAND_BASE];
+				if( pDispInfo->hdr.idFrom >= ID_COMMAND_BASE && pDispInfo->hdr.idFrom < ID_COMMAND_BASE + Cmds().size() ) {
+					CCmd& cmd = Cmds()[ pDispInfo->hdr.idFrom - ID_COMMAND_BASE];
 					StringCopyN( pDispInfo->szText, _countof( pDispInfo->szText ), cmd.m_sTitle.c_str(), _countof( pDispInfo->szText ) - 1 );
 				}
 			}
@@ -1923,8 +2455,8 @@ public:
 		case TBN_DROPDOWN:
 			{
 				NMTOOLBAR* pToolbar = (NMTOOLBAR*)pnmh;
-				if( pToolbar->iItem >= ID_COMMAND_BASE && pToolbar->iItem < ID_COMMAND_BASE + (int)m_CmdArray.size() ) {
-					CCmd& cmd = m_CmdArray[pToolbar->iItem - ID_COMMAND_BASE];
+				if( pToolbar->iItem >= ID_COMMAND_BASE && pToolbar->iItem < ID_COMMAND_BASE + (int)Cmds().size() ) {
+					CCmd& cmd = Cmds()[pToolbar->iItem - ID_COMMAND_BASE];
 					switch( cmd.m_iCmd ){
 					case CMD_FONT:
 						{
@@ -2045,7 +2577,7 @@ public:
 		HWND hwndList = GetDlgItem( hDlg, IDC_LIST );
 		if( !hwndList )  return;
 		ListView_DeleteAllItems( hwndList );
-		for( int i = 0; i < (int)m_CmdArray.size(); i++ ) {
+		for( int i = 0; i < (int)Cmds().size(); i++ ) {
 			LV_ITEM item;
 			ZeroMemory( &item, sizeof(item) );
 			item.mask = LVIF_TEXT | LVIF_IMAGE;
@@ -2064,7 +2596,7 @@ public:
 		if( !hwndList )  return;
 		int iItem = ListView_GetNextItem( hwndList, -1, LVNI_SELECTED );
 		if( iItem >= 0 ){
-			m_pcmdProp = &m_CmdArray[ iItem ];
+			m_pcmdProp = &Cmds()[ iItem ];
 			if( DialogBox( EEGetLocaleInstanceHandle(), MAKEINTRESOURCE( IDD_CUST_PROP ), hDlg, CustPropDlg ) == IDOK ){
 				CustomizeRefreshList( hDlg, iItem );
 				AddButtons( m_hwndToolbar );
@@ -2082,10 +2614,10 @@ public:
 		m_pcmdProp = &cmd;
 		if( DialogBox( EEGetLocaleInstanceHandle(), MAKEINTRESOURCE( IDD_CUST_PROP ), hDlg, CustPropDlg ) == IDOK ){
 			if( iItem >= 0 ){
-				m_CmdArray.insert( m_CmdArray.begin() + iItem, cmd );
+				Cmds().insert( Cmds().begin() + iItem, cmd );
 			}
 			else {
-				m_CmdArray.push_back( cmd );
+				Cmds().push_back( cmd );
 			}
 
 			CustomizeRefreshList( hDlg, iItem );
@@ -2100,8 +2632,8 @@ public:
 		if( !hwndList )  return;
 		int iItem = ListView_GetNextItem( hwndList, -1, LVNI_SELECTED );
 		if( iItem >= 0 ){
-			m_CmdArray.erase( m_CmdArray.begin() + iItem );
-			if( iItem == (int)m_CmdArray.size() ){
+			Cmds().erase( Cmds().begin() + iItem );
+			if( iItem == (int)Cmds().size() ){
 				iItem--;
 			}
 			CustomizeRefreshList( hDlg, iItem );
@@ -2116,15 +2648,15 @@ public:
 		if( !hwndList )  return;
 		int iItem = ListView_GetNextItem( hwndList, -1, LVNI_SELECTED );
 
-		CCmd cmd = m_CmdArray[ iItem ];
+		CCmd cmd = Cmds()[ iItem ];
 
 		m_pcmdProp = &cmd;
 		if( DialogBox( EEGetLocaleInstanceHandle(), MAKEINTRESOURCE( IDD_CUST_PROP ), hDlg, CustPropDlg ) == IDOK ){
 			if( iItem >= 0 ){
-				m_CmdArray.insert( m_CmdArray.begin() + iItem + 1, cmd );
+				Cmds().insert( Cmds().begin() + iItem + 1, cmd );
 			}
 			else {
-				m_CmdArray.push_back( cmd );
+				Cmds().push_back( cmd );
 			}
 
 			CustomizeRefreshList( hDlg, iItem + 1 );
@@ -2141,12 +2673,12 @@ public:
 		int iItem = ListView_GetNextItem( hwndList, -1, LVNI_SELECTED );
 
 		int iNextItem = iItem + nDir;
-		if( iNextItem < 0 || iNextItem >= (int)m_CmdArray.size() ){
+		if( iNextItem < 0 || iNextItem >= (int)Cmds().size() ){
 			return;
 		}
-		CCmd cmd = m_CmdArray[ iItem ];
-		m_CmdArray[ iItem ] = m_CmdArray[ iNextItem ];
-		m_CmdArray[ iNextItem ] = cmd;
+		CCmd cmd = Cmds()[ iItem ];
+		Cmds()[ iItem ] = Cmds()[ iNextItem ];
+		Cmds()[ iNextItem ] = cmd;
 		CustomizeRefreshList( hDlg, iNextItem );
 		AddButtons( m_hwndToolbar );
 		m_bCmdArrayModified = true;
@@ -2204,7 +2736,7 @@ public:
 			LoadString( EEGetLocaleInstanceHandle(), IDS_SURE_RESET, sz, _countof( sz ) );
 			LoadString( EEGetLocaleInstanceHandle(), IDS_MENU_TEXT, szAppName, sizeof( szAppName ) / sizeof( TCHAR ) );
 			if( MessageBox( hDlg, sz, szAppName, MB_YESNO | MB_ICONEXCLAMATION ) == IDYES ){
-				ResetCmdArray();
+				ResetCmdArray( m_iMode );
 				CustomizeRefreshList( hDlg, 0 );
 				AddButtons( m_hwndToolbar );
 			}
@@ -2219,9 +2751,9 @@ public:
 			case LVN_GETDISPINFO:
 				{
 					LV_DISPINFO* pDispInfo = (LV_DISPINFO*)pnmh;
-					if( pDispInfo->item.iItem < (int)m_CmdArray.size() ) {
-						_ASSERT( pDispInfo->item.iItem >= 0 && pDispInfo->item.iItem < (int)m_CmdArray.size() );
-						CCmd& cmd = m_CmdArray[pDispInfo->item.iItem];
+					if( pDispInfo->item.iItem < (int)Cmds().size() ) {
+						_ASSERT( pDispInfo->item.iItem >= 0 && pDispInfo->item.iItem < (int)Cmds().size() );
+						CCmd& cmd = Cmds()[pDispInfo->item.iItem];
 						if( pDispInfo->item.mask & LVIF_TEXT ){
 							if( cmd.m_iCmd == CMD_SEPARATOR ){
 								StringCopy( pDispInfo->item.pszText, pDispInfo->item.cchTextMax, L"----------" );
@@ -2262,7 +2794,7 @@ public:
 
 		HWND hwndComboSpecial = GetDlgItem( hDlg, IDC_COMBO_SPECIAL );
 		if( !hwndComboSpecial )  return;
-		for( int i = 0; i < MAX_CMD - CMD_INSERT_TABLE; i++ ) {
+		for( int i = 0; i < (int)_countof( SpecialStringID ); i++ ) {
 			COMBOBOXEXITEM item = { 0 };
 			item.mask = CBEIF_TEXT;
 			item.iItem = -1;
