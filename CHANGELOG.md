@@ -14,6 +14,20 @@ this code base:
 | `0.4.x`       | Compatibility fixes that make the original plug-in build and load correctly on modern EmEditor (v26). |
 | `0.9.0` – `0.11.x` | The HTML + Markdown dual-mode toolbar, heading towards `1.0.0`. |
 
+## [0.12.0] - 2026-09-16
+
+### Added
+
+- **Very Dark mode adaptation.** EmEditor's Very Dark theme paints the whole
+  bar area black, but its own toolbar icons do not flip to a contrasting
+  color there. RichBar now uses the official Very Dark plug-in API (constants
+  from the v20.5 SDK): `EI_IS_VERY_DARK` switches the runtime-drawn glyphs to
+  light while Very Dark is active, `EI_WM_CTLCOLOR` blends the bar's dialog
+  background into the black band using EmEditor's own brush, and
+  `EI_WM_THEMECHANGED` re-renders the icons when the theme switches. Older
+  EmEditor versions without these messages fall back to the 0.11.2
+  background-luminance logic.
+
 ## [0.11.3] - 2026-09-16
 
 ### Fixed

@@ -3682,8 +3682,16 @@ inline HRESULT Editor_Numbering( HWND hwnd, LPCWSTR pszFirst, LPCWSTR pszInc, IN
 // v19.1
 #define EI_GET_CHAR_TYPE                    372
 
+// v20.5 (Very Dark mode support; constants from the official emeditor-plugin-library)
+#define NOT_SUPPORTED						2
+#define EI_IS_VERY_DARK						377  // returns NOT_SUPPORTED if dark mode not supported, TRUE if supported and very dark, FALSE if supported but not very dark
+#define EI_WM_INITDIALOG					378  // lParam : hWnd
+#define EI_WM_CTLCOLOR						379  // lParam : wParam from WM_CTLCOLORxxx messages
+#define EI_WM_THEMECHANGED					380  // lParam : hWnd
+#define EI_INIT_LISTVIEW					381
 
-#define SYNC_FLAG_FORCE				1				
+
+#define SYNC_FLAG_FORCE				1
 #define SYNC_FLAG_SEND				2
 #define SYNC_FLAG_RECEIVE			4
 #define SYNC_FLAG_REFRESH_UI		8

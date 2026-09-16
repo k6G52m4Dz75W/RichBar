@@ -1343,6 +1343,12 @@ public:
 
 	COLORREF GetBarGlyphColor()
 	{
+		// Very Dark mode paints the whole bar area black (officially supported
+		// via the v20.5 SDK), so the signal comes straight from the theme —
+		// more authoritative than measuring colors
+		if( IsVeryDark() ){
+			return RGB( 224, 224, 224 );
+		}
 		// Pick a glyph color that contrasts with the bar area's real background.
 		// EmEditor's reported bar text color is designed for dark bars, but its
 		// dark themes may leave the bar background light, so measuring the
@@ -1357,6 +1363,11 @@ public:
 			return RGB( 48, 48, 48 );   // light background -> dark glyphs
 		}
 		return RGB( 224, 224, 224 );    // dark background -> light glyphs
+	}
+
+	BOOL IsVeryDark()
+	{
+		return Editor_Info( m_hWnd, EI_IS_VERY_DARK, 0 ) == TRUE;
 	}
 
 	void AddModeSwitchIcons( HIMAGELIST himl, int cx, COLORREF crFg )
@@ -2300,6 +2311,30 @@ public:
 		}
 	}
 
+	HBRUSH GetVeryDarkBrush( HWND hwnd, HDC hdc )
+	{
+		// official Very Dark adaptation: EmEditor hands out its dark background
+		// brush so the plug-in's dialog blends into the black band area
+		if( IsVeryDark() ){
+			return (HBRUSH)Editor_Info( hwnd, EI_WM_CTLCOLOR, (LPARAM)hdc );
+		}
+		return NULL;
+	}
+
+	void OnThemeChanged( HWND hwnd )
+	{
+		Editor_Info( hwnd, EI_WM_THEMECHANGED, (LPARAM)hwnd );
+		// re-create the bar when the glyph color flipped with the theme
+		if( m_hwndToolbar && m_bVisible ){
+			COLORREF crFg = GetBarGlyphColor();
+			if( crFg != m_crGlyphFg ){
+				Editor_ToolbarClose( m_hWnd, m_nClientID );
+				CustomBarClosed();
+				DisplayBar( true );
+			}
+		}
+	}
+
 	void OnDlgCommand( WPARAM wParam )
 	{
 		if( wParam == ID_MODE_HTML || wParam == ID_MODE_MD ){
@@ -3063,6 +3098,28 @@ INT_PTR CALLBACK NewProc( HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam )
 {
 	LRESULT nResult = 0;
 	switch( msg ){
+	case WM_CTLCOLORDLG:
+	case WM_CTLCOLORSTATIC:
+	case WM_CTLCOLORBTN:
+		{
+			// official Very Dark adaptation: return EmEditor's dark brush
+			CMyFrame* pFrame = static_cast<CMyFrame*>(GetFrame( hwnd ));
+			HBRUSH hbr = pFrame ? pFrame->GetVeryDarkBrush( hwnd, (HDC)wParam ) : NULL;
+			if( hbr ){
+				return (INT_PTR)hbr;
+			}
+		}
+		break;
+
+	case WM_THEMECHANGED:
+		{
+			CMyFrame* pFrame = static_cast<CMyFrame*>(GetFrame( hwnd ));
+			if( pFrame ){
+				pFrame->OnThemeChanged( hwnd );
+			}
+		}
+		break;
+
 	case WM_COMMAND:
 		{
 			TRACE( _T("WM_COMMAND: wParam = %x, lParam = %x.\n"), wParam, lParam );
