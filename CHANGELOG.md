@@ -14,6 +14,16 @@ this code base:
 | `0.4.x`       | Compatibility fixes that make the original plug-in build and load correctly on modern EmEditor (v26). |
 | `0.9.0` – `0.11.x` | The HTML + Markdown dual-mode toolbar, heading towards `1.0.0`. |
 
+## [0.11.1] - 2026-09-16
+
+### Changed
+
+- **Removed the "HTML"/"Markdown" text from the bar.** The `[H][M]` switch on
+  the toolbar already shows the active mode, so the band title text was
+  redundant; the whole bar width now goes to the buttons. (The title was
+  reintroduced as a mode indicator in 0.10.3 and is superseded by the switch
+  added in 0.11.0.)
+
 ## [0.11.0] - 2026-09-16
 
 ### Added

@@ -1483,14 +1483,8 @@ public:
 			}
 
 			if( hwndToolbar ){
-				TCHAR szTitle[80];
-				TCHAR szTitleMd[80];
-				HINSTANCE hinstLoc = EEGetLocaleInstanceHandle();
-				LoadString( hinstLoc, IDS_TITLE, szTitle, _countof( szTitle ) );
-				LPCTSTR pszTitle = szTitle;
-				if( m_iMode == MODE_MD && LoadString( hinstLoc, IDS_TITLE_MD, szTitleMd, _countof( szTitleMd ) ) > 0 ){
-					pszTitle = szTitleMd;
-				}
+				// the [H][M] switch on the toolbar shows the active mode; keep the
+				// band title empty so the buttons get the whole width
 				RECT rcClient = { 0 };
 				GetClientRect( hwndToolbar, &rcClient );
 				TOOLBAR_INFO cri;
@@ -1498,7 +1492,7 @@ public:
 				cri.cbSize = sizeof( cri );
 				cri.nMask = TIM_CLIENT | TIM_TITLE | TIM_FLAGS | TIM_STYLE | TIM_MINCHILD | TIM_CXIDEAL | TIM_BAND | TIM_PLUG_IN_CMD_ID;
 				cri.wPlugInCmdID = EEGetCmdID();
-				cri.pszTitle = pszTitle;
+				cri.pszTitle = _T("");
 				cri.hwndClient = hwndToolbar;
 				cri.cxMinChild = 0;
 				cri.cyMinChild = rcClient.bottom - rcClient.top;
