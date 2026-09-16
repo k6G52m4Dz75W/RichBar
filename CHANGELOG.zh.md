@@ -10,6 +10,30 @@
 | `0.4.x`  | 兼容性修复，使原插件能够在现代 EmEditor（v26）上正确编译和加载。 |
 | `0.9.x`  | HTML + Markdown 双模式工具栏，向 `1.0.0` 迈进。 |
 
+## [0.9.1] - 2026-09-16
+
+### 变更
+
+- **插件全面更名为 RichBar。** 所有工程文件（`RichBar.sln`、`RichBar.vcxproj`、
+  `RichBar.cpp/.h/.rc/.def`）、多语言资源工程（`mui/RichBar_loce`，产出 `RichBar_loc.dll`）、
+  EmEditor 中显示的插件名与状态栏文本、自定义栏标题、属性对话框标题，
+  全部由 HTMLBar 更名为 RichBar。
+- **设置存储完全独立。** 插件 Profile 键名派生自插件 DLL 文件名，因此更名后
+  设置存储从 `EmEditorPlugIns\HTMLBar` 迁移到全新的 `EmEditorPlugIns\RichBar` 键。
+  新键不会与原版 HTMLBar 插件或任何同名插件发生冲突，同时仍然走官方的
+  `EE_REG_SET_VALUE`/`EE_REG_QUERY_VALUE` 通道（注册表；INI 模式下自动改用 `eePlugins.ini`）。
+- 版本资源更新为 0.9.1。
+- 自定义栏标题在两种模式下统一显示为 "RichBar"（当前按钮集本身即可表明所处模式）；
+  之前显示 "HTML"/"Markdown"。
+
+### 移除
+
+- 移除了将旧 HTMLBar 布局保存的单数组按钮数据（`CmdArray`）自动迁移的逻辑——
+  RichBar 是全新插件，从零开始。
+- 移除了从原版 HTMLBar 安装器继承的 MSI 卸载集成
+  （读取 `HKLM\...\EmEditorPlugIns\HTMLBar` 中 ProductCode 的逻辑）；
+  卸载现在使用标准的"确认后删除插件设置"流程。
+
 ## [0.9.0] - 2026-09-16
 
 ### 新增

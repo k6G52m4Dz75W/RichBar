@@ -3,9 +3,9 @@ Microsoft Visual Studio Solution File, Format Version 12.00
 # Visual Studio 15
 VisualStudioVersion = 15.0.27130.2027
 MinimumVisualStudioVersion = 10.0.40219.1
-Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "HTMLBar", "HTMLBar.vcxproj", "{F64DB24A-4592-4FB1-BC57-8BB54481DE18}"
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "RichBar", "RichBar.vcxproj", "{F64DB24A-4592-4FB1-BC57-8BB54481DE18}"
 EndProject
-Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "HTMLBar_loce", "mui\HTMLBar_loce\HTMLBar_loce.vcxproj", "{9B080FCE-E564-4DF3-8D20-9B7F8BB609CE}"
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "RichBar_loce", "mui\RichBar_loce\RichBar_loce.vcxproj", "{9B080FCE-E564-4DF3-8D20-9B7F8BB609CE}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution

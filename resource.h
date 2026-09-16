@@ -1,6 +1,6 @@
 //{{NO_DEPENDENCIES}}
 // Microsoft Visual C++ generated include file.
-// Used by HTMLBar.rc
+// Used by RichBar.rc
 //
 #define IDB_BITMAP                      101
 #define IDB_TRUE_16_BW                  109

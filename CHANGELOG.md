@@ -14,6 +14,34 @@ this code base:
 | `0.4.x`       | Compatibility fixes that make the original plug-in build and load correctly on modern EmEditor (v26). |
 | `0.9.x`       | The HTML + Markdown dual-mode toolbar, heading towards `1.0.0`. |
 
+## [0.9.1] - 2026-09-16
+
+### Changed
+
+- **The plug-in is now called RichBar everywhere.** All project files
+  (`RichBar.sln`, `RichBar.vcxproj`, `RichBar.cpp/.h/.rc/.def`), the satellite
+  resource project (`mui/RichBar_loce`, producing `RichBar_loc.dll`), the
+  plug-in name and status text shown in EmEditor, the custom bar title, and
+  the properties dialog caption were renamed from HTMLBar to RichBar.
+- **Settings storage is fully independent.** The plug-in profile key is
+  derived from the plug-in DLL file name, so the rename moves the settings
+  from `EmEditorPlugIns\HTMLBar` to a fresh `EmEditorPlugIns\RichBar` key.
+  The new key cannot collide with the original HTMLBar plug-in or any other
+  same-named plug-in, while still going through the official
+  `EE_REG_SET_VALUE`/`EE_REG_QUERY_VALUE` channel (registry, or `eePlugins.ini`
+  automatically in INI mode).
+- Version resource updated to 0.9.1.
+- The custom bar title is now "RichBar" in both modes (the active button set
+  itself shows which mode is in effect); previously it read "HTML"/"Markdown".
+
+### Removed
+
+- The migration that imported single-array button data saved by the old
+  HTMLBar layout (`CmdArray`) — RichBar is a new plug-in and starts fresh.
+- The legacy MSI uninstall integration inherited from the original HTMLBar
+  installer (the `HKLM\...\EmEditorPlugIns\HTMLBar` ProductCode lookup);
+  uninstalling now uses the standard confirm-and-delete-profile flow.
+
 ## [0.9.0] - 2026-09-16
 
 ### Added

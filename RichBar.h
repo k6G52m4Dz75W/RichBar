@@ -22,7 +22,6 @@ INT_PTR CALLBACK CustPropDlg( HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam 
 
 //extern CDPI g_metrics;
 
-LPCTSTR szCmdArrayEntry = _T("CmdArray");
 LPCTSTR const szLargeToolbar = _T("LargeToolbar");
 
 #define MAX_SNIPPET_LENGTH 260
@@ -919,19 +918,12 @@ public:
 	{
 		BOOL bResult = FALSE;
 		LPCTSTR pszKey = ( iMode == MODE_MD ) ? _T("CmdArray1") : _T("CmdArray0");
-		LPCTSTR pszLegacyKey = szCmdArrayEntry;
 		m_CmdArray[iMode].clear();
 		DWORD dwCount = GetProfileBinary( pszKey, NULL, 0 );
-		LPCTSTR pszUseKey = pszKey;
-		if( dwCount == 0 && iMode == MODE_HTML ){
-			// migrate the single-array data saved by old versions
-			dwCount = GetProfileBinary( pszLegacyKey, NULL, 0 );
-			pszUseKey = pszLegacyKey;
-		}
 		if( dwCount ){
 			char* pBuf = new char[ dwCount ];
 			if( pBuf ){
-				if( GetProfileBinary( pszUseKey, (LPBYTE)pBuf, dwCount ) ){
+				if( GetProfileBinary( pszKey, (LPBYTE)pBuf, dwCount ) ){
 					int nMax, nLen, iCmd, iIcon;
 					char* p = pBuf;
 					DWORD dwSign = *((DWORD*)p);
@@ -1449,9 +1441,6 @@ public:
 				TCHAR szTitle[80];
 				LoadString( EEGetLocaleInstanceHandle(), IDS_TITLE, szTitle, _countof( szTitle ) );
 				LPCTSTR pszTitle = szTitle;
-				if( m_iMode == MODE_MD ){
-					pszTitle = _T("Markdown");
-				}
 				RECT rcClient = { 0 };
 				GetClientRect( hwndToolbar, &rcClient );
 				TOOLBAR_INFO cri;
@@ -1619,22 +1608,8 @@ public:
 		return TRUE;
 	}
 
-	BOOL SetUninstall( HWND hDlg, LPTSTR pszUninstallCommand, LPTSTR pszUninstallParam )
+	BOOL SetUninstall( HWND hDlg, LPTSTR /*pszUninstallCommand*/, LPTSTR /*pszUninstallParam*/ )
 	{
-		TCHAR szProductCode[80] = { 0 };
-		HKEY hKey = NULL;
-		if( RegOpenKeyEx( HKEY_LOCAL_MACHINE, _T("Software\\EmSoft\\EmEditorPlugIns\\HTMLBar"), 0, KEY_READ, &hKey ) == ERROR_SUCCESS && hKey ){
-			GetProfileStringReg( hKey, _T("ProductCode"), szProductCode, _countof( szProductCode ), _T("") );
-			if( szProductCode[0] ){
-				GetSystemDirectory( pszUninstallCommand, MAX_PATH );
-				PathAppend( pszUninstallCommand, _T("msiexec.exe") );
-
-				StringPrintf( pszUninstallParam, MAX_PATH, _T("/X%s"), szProductCode );
-				RegCloseKey( hKey );
-				m_bUninstalling = true;
-				return UNINSTALL_RUN_COMMAND;
-			}
-		}
 		TCHAR sz[80];
 		TCHAR szAppName[80];
 		LoadString( EEGetLocaleInstanceHandle(), IDS_SURE_TO_UNINSTALL, sz, sizeof( sz ) / sizeof( TCHAR ) );
