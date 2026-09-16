@@ -22,29 +22,6 @@
 
 ## [0.10.1] - 2026-09-16
 
-### 变更
-
-- **插件全面更名为 RichBar。** 所有工程文件（`RichBar.sln`、`RichBar.vcxproj`、
-  `RichBar.cpp/.h/.rc/.def`）、多语言资源工程（`mui/RichBar_loce`，产出 `RichBar_loc.dll`）、
-  EmEditor 中显示的插件名与状态栏文本、自定义栏标题、属性对话框标题，
-  全部由 HTMLBar 更名为 RichBar。
-- **设置存储完全独立。** 插件 Profile 键名派生自插件 DLL 文件名，因此更名后
-  设置存储从 `EmEditorPlugIns\HTMLBar` 迁移到全新的 `EmEditorPlugIns\RichBar` 键。
-  新键不会与原版 HTMLBar 插件或任何同名插件发生冲突，同时仍然走官方的
-  `EE_REG_SET_VALUE`/`EE_REG_QUERY_VALUE` 通道（注册表；INI 模式下自动改用 `eePlugins.ini`）。
-- 版本号定为 0.10.1（插件更名与插件名称修复合并为本版本发布；
-  之前拟用的 0.9.1/0.10.0 编号作废）。
-- 自定义栏标题在两种模式下统一显示为 "RichBar"（当前按钮集本身即可表明所处模式）；
-  之前显示 "HTML"/"Markdown"。
-
-### 移除
-
-- 移除了将旧 HTMLBar 布局保存的单数组按钮数据（`CmdArray`）自动迁移的逻辑——
-  RichBar 是全新插件，从零开始。
-- 移除了从原版 HTMLBar 安装器继承的 MSI 卸载集成
-  （读取 `HKLM\...\EmEditorPlugIns\HTMLBar` 中 ProductCode 的逻辑）；
-  卸载现在使用标准的"确认后删除插件设置"流程。
-
 ### 修复
 
 - **插件列表中的名称显示为空白。** 两个独立原因，均已修复：
@@ -57,6 +34,30 @@
     `LANG_CHINESE`（0x804）标签，而不能是英文标签（0x409）二进制的原样拷贝。
     卫星资源脚本现在通过 `LOC_LANG_2052` 预处理宏选择资源语言，
     `tools/build-loc-2052.ps1` 负责构建 `mui\2052` 版本。
+
+## [0.10.0] - 2026-09-16
+
+### 变更
+
+- **插件全面更名为 RichBar。** 所有工程文件（`RichBar.sln`、`RichBar.vcxproj`、
+  `RichBar.cpp/.h/.rc/.def`）、多语言资源工程（`mui/RichBar_loce`，产出 `RichBar_loc.dll`）、
+  EmEditor 中显示的插件名与状态栏文本、自定义栏标题、属性对话框标题，
+  全部由 HTMLBar 更名为 RichBar。
+- **设置存储完全独立。** 插件 Profile 键名派生自插件 DLL 文件名，因此更名后
+  设置存储从 `EmEditorPlugIns\HTMLBar` 迁移到全新的 `EmEditorPlugIns\RichBar` 键。
+  新键不会与原版 HTMLBar 插件或任何同名插件发生冲突，同时仍然走官方的
+  `EE_REG_SET_VALUE`/`EE_REG_QUERY_VALUE` 通道（注册表；INI 模式下自动改用 `eePlugins.ini`）。
+- 自定义栏标题在两种模式下统一显示为 "RichBar"（当前按钮集本身即可表明所处模式）；
+  之前显示 "HTML"/"Markdown"。
+- 版本编号从最初拟用的 0.9.1 改为 0.10.0——更名的改动规模超出了一个补丁版本的范畴。
+
+### 移除
+
+- 移除了将旧 HTMLBar 布局保存的单数组按钮数据（`CmdArray`）自动迁移的逻辑——
+  RichBar 是全新插件，从零开始。
+- 移除了从原版 HTMLBar 安装器继承的 MSI 卸载集成
+  （读取 `HKLM\...\EmEditorPlugIns\HTMLBar` 中 ProductCode 的逻辑）；
+  卸载现在使用标准的"确认后删除插件设置"流程。
 
 ## [0.9.0] - 2026-09-16
 
