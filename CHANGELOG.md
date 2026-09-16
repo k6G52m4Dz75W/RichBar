@@ -12,7 +12,20 @@ this code base:
 |---------------|---------|
 | `0.1.0`       | The original upstream HTMLBar source as forked (Emurasoft `19.5.0`), unmodified. |
 | `0.4.x`       | Compatibility fixes that make the original plug-in build and load correctly on modern EmEditor (v26). |
-| `0.9.0` – `0.10.x` | The HTML + Markdown dual-mode toolbar, heading towards `1.0.0`. |
+| `0.9.0` – `0.11.x` | The HTML + Markdown dual-mode toolbar, heading towards `1.0.0`. |
+
+## [0.11.0] - 2026-09-16
+
+### Added
+
+- **Manual mode switch: `[H][M]` segments at the left edge of the toolbar.**
+  The leftmost two buttons form a standard grouped toggle — the pressed side
+  is the active mode (H = HTML, M = Markdown). Clicking a side switches the
+  button set, the bar title and the checked state immediately. This covers
+  new, unsaved documents where auto detection has neither a file name nor a
+  matching configuration to go by. The manual override lasts while the
+  document state stays unchanged; any document or configuration change
+  returns the bar to auto detection, which remains the default behavior.
 
 ## [0.10.3] - 2026-09-16
 

@@ -148,6 +148,13 @@ WCHAR OctToDec( LPWSTR& p )
 #define CMD_LINE_PREFIX			8
 #define MAX_CMD					9
 
+// toolbar mode-switch buttons (command IDs below ID_COMMAND_BASE)
+#define ID_MODE_HTML			90
+#define ID_MODE_MD				91
+// runtime-drawn glyphs appended to every toolbar image list
+#define MD_ICON_MODE_H			20
+#define MD_ICON_MODE_M			21
+
 #define MODE_HTML				0
 #define MODE_MD					1
 #define MODE_COUNT				2
@@ -349,6 +356,7 @@ public:
 	vector<tstring> m_MdConfigArray;		// config names switching to Markdown mode
 	CCmdArray m_CmdArray[MODE_COUNT];
 	int m_iMode;
+	int m_iModeOverride;	// manual mode for the current document (MODE_HTML/MODE_MD), -1 = auto
 
 	vector<wstring> m_asUndefinedParam;
 	vector<wstring> m_asUndefinedValue;
@@ -1093,44 +1101,47 @@ public:
 			}
 		}
 
-		TBBUTTON* atb = new TBBUTTON[ m_CmdArray[m_iMode].size() ];
-		ZeroMemory( atb, sizeof( TBBUTTON ) * m_CmdArray[m_iMode].size() );
+		size_t nCmd = m_CmdArray[m_iMode].size();
+		TBBUTTON* atb = new TBBUTTON[ nCmd + 3 ];
+		ZeroMemory( atb, sizeof( TBBUTTON ) * ( nCmd + 3 ) );
+
+		// manual mode switch: [H][M] | separator | command buttons;
+		// the checked side shows the effective mode and doubles as its indicator
+		int nIcons = 0;
+		if( m_himageToolbar ){
+			nIcons = ImageList_GetImageCount( m_himageToolbar );
+		}
+		atb[0].iBitmap = max( 0, nIcons - 2 );
+		atb[0].idCommand = ID_MODE_HTML;
+		atb[0].fsState = TBSTATE_ENABLED | ( ( m_iMode == MODE_HTML ) ? TBSTATE_CHECKED : 0 );
+		atb[0].fsStyle = BTNS_CHECK | BTNS_GROUP;
+		atb[1].iBitmap = max( 0, nIcons - 1 );
+		atb[1].idCommand = ID_MODE_MD;
+		atb[1].fsState = TBSTATE_ENABLED | ( ( m_iMode == MODE_MD ) ? TBSTATE_CHECKED : 0 );
+		atb[1].fsStyle = BTNS_CHECK | BTNS_GROUP;
+		atb[2].iBitmap = 4;
+		atb[2].fsState = TBSTATE_ENABLED;
+		atb[2].fsStyle = TBSTYLE_SEP;
+
 		int i = 0;
 		for( CCmdArray::iterator it = m_CmdArray[m_iMode].begin(); it != m_CmdArray[m_iMode].end(); it++, i++ ) {
-			atb[i].iBitmap = it->m_iIcon;
-			atb[i].idCommand = i + ID_COMMAND_BASE;
-			atb[i].fsState = TBSTATE_ENABLED;
-			atb[i].fsStyle = 0;
+			atb[i + 3].iBitmap = it->m_iIcon;
+			atb[i + 3].idCommand = i + ID_COMMAND_BASE;
+			atb[i + 3].fsState = TBSTATE_ENABLED;
+			atb[i + 3].fsStyle = 0;
 			if( it->m_iCmd == CMD_SEPARATOR ){
-				atb[i].fsStyle = TBSTYLE_SEP;
+				atb[i + 3].fsStyle = TBSTYLE_SEP;
 			}
 			if( it->m_iCmd == CMD_FONT ){
-				atb[i].fsStyle = BTNS_DROPDOWN;
+				atb[i + 3].fsStyle = BTNS_DROPDOWN;
 			}
 			if( it->m_iCmd == CMD_DROPDOWN_HEADER || it->m_iCmd == CMD_DROPDOWN_FORM ){
-				atb[i].fsStyle = BTNS_WHOLEDROPDOWN;
+				atb[i + 3].fsStyle = BTNS_WHOLEDROPDOWN;
 			}
 
 		}
 
-		//TBBUTTON atb[_countof( anDefToolbarIndex )];
-		//ZeroMemory( atb, sizeof( atb ) );
-		//BYTE* pnIndex = anDefToolbarIndex;
-		//int i = 0;
-		//while( *pnIndex != (BYTE)-2 ){
-		//	BYTE nIndex = *pnIndex++;
-		//	if( nIndex != (BYTE)-1 ){
-		//		atb[i].iBitmap = buttons[nIndex].iBitmap;
-		//		atb[i].idCommand = buttons[nIndex].nID;
-		//		atb[i].fsStyle = buttons[nIndex].fStyle;
-		//	}
-		//	else {  // separator
-		//		atb[i].fsStyle = TBSTYLE_SEP;
-		//	}
-		//	atb[i].fsState = TBSTATE_ENABLED;
-		//	i++;
-		//}
-		SendMessage( hwndToolbar, TB_ADDBUTTONSA, m_CmdArray[m_iMode].size(), (LPARAM)atb );
+		SendMessage( hwndToolbar, TB_ADDBUTTONSA, (WPARAM)( nCmd + 3 ), (LPARAM)atb );
 		delete [] atb;
 	}
 
@@ -1317,10 +1328,49 @@ public:
 		case 19:	// customize (gear)
 			DrawMdText( hdc, cx, L"\x2699", 66, FW_NORMAL, FALSE, crFg );
 			break;
+		case MD_ICON_MODE_H:	// mode switch: HTML
+			DrawMdText( hdc, cx, L"H", 68, FW_BOLD, FALSE, crFg );
+			break;
+		case MD_ICON_MODE_M:	// mode switch: Markdown
+			DrawMdText( hdc, cx, L"M", 68, FW_BOLD, FALSE, crFg );
+			break;
 		}
 		SelectObject( hdc, hbrOld );
 		SelectObject( hdc, hpenOld );
 		DeleteObject( hpen );
+	}
+
+	COLORREF GetBarGlyphColor()
+	{
+		// glyph color follows the editor's bar text color when available
+		COLORREF crFg = RGB( 190, 190, 190 );
+		COLORREF crText = RGB( 190, 190, 190 );
+		Editor_Info( m_hWnd, EI_GET_BAR_TEXT_COLOR, (LPARAM)&crText );
+		if( crText != 0 && crText != CLR_INVALID ){
+			crFg = crText;
+		}
+		return crFg;
+	}
+
+	void AddModeSwitchIcons( HIMAGELIST himl, int cx )
+	{
+		// appends the [H][M] mode-switch glyphs to whichever image list is active
+		COLORREF crFg = GetBarGlyphColor();
+		for( int i = 0; i < 2; i++ ){
+			void* pvBits = NULL;
+			HBITMAP hbm = CreateMdIconBitmap( cx, &pvBits );
+			if( !hbm ){
+				break;
+			}
+			HDC hdc = CreateCompatibleDC( NULL );
+			HBITMAP hbmOld = (HBITMAP)SelectObject( hdc, hbm );
+			DrawMdIcon( hdc, cx, MD_ICON_MODE_H + i, crFg );
+			SelectObject( hdc, hbmOld );
+			DeleteDC( hdc );
+			MdKeyOutBackground( cx, pvBits );
+			ImageList_Add( himl, hbm, NULL );
+			DeleteObject( hbm );
+		}
 	}
 
 	HIMAGELIST BuildMdImageList( int cx )
@@ -1329,13 +1379,7 @@ public:
 		if( !himl ){
 			return NULL;
 		}
-		// glyph color follows the editor's bar text color when available
-		COLORREF crFg = RGB( 190, 190, 190 );
-		COLORREF crText = RGB( 190, 190, 190 );
-		Editor_Info( m_hWnd, EI_GET_BAR_TEXT_COLOR, (LPARAM)&crText );
-		if( crText != 0 && crText != CLR_INVALID ){
-			crFg = crText;
-		}
+		COLORREF crFg = GetBarGlyphColor();
 		for( int i = 0; i < 20; i++ ){
 			void* pvBits = NULL;
 			HBITMAP hbm = CreateMdIconBitmap( cx, &pvBits );
@@ -1422,6 +1466,7 @@ public:
 				}
 			}
 			_ASSERT( m_himageToolbar );
+			AddModeSwitchIcons( m_himageToolbar, cxButtonSize );
 			SendMessage( hwndToolbar, TB_SETIMAGELIST, 0, (LPARAM)m_himageToolbar );
 			
 			if( !LoadCmdArray( m_iMode ) ){
@@ -1566,6 +1611,9 @@ public:
 			}
 		}
 		if( nEvent & (EVENT_CONFIG_CHANGED | EVENT_FILE_OPENED | EVENT_DOC_SEL_CHANGED ) ) {
+			// the manual mode override only lasts while the same document state remains;
+			// any document or configuration change returns the bar to auto detection
+			m_iModeOverride = -1;
 			int iNewMode = DetectMode();
 			if( iNewMode != m_iMode ){
 				m_iMode = iNewMode;
@@ -1667,6 +1715,7 @@ public:
 	CMyFrame()
 	{
 		m_iMode = MODE_HTML;
+		m_iModeOverride = -1;
 		ZERO_INIT_FIRST_MEM( CMyFrame, m_hwndToolbar );
 		m_nBand = (UINT)-1;
 	}
@@ -1698,6 +1747,9 @@ public:
 
 	int DetectMode()
 	{
+		if( m_iModeOverride >= 0 ){
+			return m_iModeOverride;
+		}
 		TCHAR szConfigName[ MAX_CONFIG_NAME ] = { 0 };
 		Editor_GetConfigW( m_hWnd, szConfigName );
 		if( ConfigInList( m_MdConfigArray, szConfigName ) ){
@@ -2206,8 +2258,38 @@ public:
 	}
 
 
+	void OnModeSwitch( int iMode )
+	{
+		// manual override: sticks until the document or configuration changes
+		m_iModeOverride = iMode;
+		if( m_iMode != iMode ){
+			m_iMode = iMode;
+			if( m_hwndToolbar && m_bVisible ){
+				// re-create the custom bar so it shows the other mode's button set
+				Editor_ToolbarClose( m_hWnd, m_nClientID );
+				CustomBarClosed();
+				DisplayBar( true );
+			}
+		}
+		else {
+			SyncModeSwitchCheck();
+		}
+	}
+
+	void SyncModeSwitchCheck()
+	{
+		if( m_hwndToolbar && IsWindow( m_hwndToolbar ) ){
+			SendMessage( m_hwndToolbar, TB_CHECKBUTTON, ID_MODE_HTML, MAKELPARAM( m_iMode == MODE_HTML, 0 ) );
+			SendMessage( m_hwndToolbar, TB_CHECKBUTTON, ID_MODE_MD, MAKELPARAM( m_iMode == MODE_MD, 0 ) );
+		}
+	}
+
 	void OnDlgCommand( WPARAM wParam )
 	{
+		if( wParam == ID_MODE_HTML || wParam == ID_MODE_MD ){
+			OnModeSwitch( ( wParam == ID_MODE_MD ) ? MODE_MD : MODE_HTML );
+			return;
+		}
 		if( wParam >= ID_COMMAND_BASE && wParam < ID_COMMAND_BASE + Cmds().size() ) {
 			CCmd& cmd = Cmds()[wParam - ID_COMMAND_BASE];
 			if( cmd.m_iCmd == CMD_TAGS ){
