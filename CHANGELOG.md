@@ -45,14 +45,21 @@ this code base:
 
 ### Fixed
 
-- **The plug-in name showed up blank in the Customize Plug-ins list** on
-  systems whose UI language is not English. EmEditor resolves plug-in
-  strings from the `mui\<LCID>` satellite DLL using an exact UI-language
-  resource-tag match, and the file shipped in `mui\2052` was a byte-for-byte
-  copy of the English-tagged (0x409) satellite. The satellite resource
-  script now selects its resource language through a `LOC_LANG_2052`
-  preprocessor define, and `tools/build-loc-2052.ps1` builds the `mui\2052`
-  copy with Simplified Chinese (0x804) resource tags.
+- **The plug-in name showed up blank in the Customize Plug-ins list.**
+  Two independent causes, both fixed:
+  - etlframe resolved plug-in strings through a satellite instance that was
+    only initialized when the first frame was created (`EVENT_CREATE_FRAME`),
+    so name queries issued during the plug-in scan — before any frame exists —
+    fell back to the main DLL, which carries no strings.
+    `EEGetLocaleInstanceHandle` now loads the satellite on demand (the loaded
+    instance is cached in `m_hinstLoc` and freed by the normal close flow),
+    so the plug-in name resolves at scan time.
+  - EmEditor matches satellite resources by exact UI-language resource tag:
+    the file in `mui\2052` must be tagged `LANG_CHINESE` (0x804) rather than
+    being a byte-for-byte copy of the English-tagged (0x409) binary. The
+    satellite resource script now selects its resource language through a
+    `LOC_LANG_2052` preprocessor define, and `tools/build-loc-2052.ps1`
+    builds the `mui\2052` copy.
 
 ## [0.9.0] - 2026-09-16
 

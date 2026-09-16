@@ -637,10 +637,22 @@ public:
 
 
 #ifndef EE_EXTERN_ONLY
+HINSTANCE GetInstancePath( LPCTSTR szPath, bool bResourceOnly );
+static HINSTANCE LoadLocDllInstanceLazy();
+
 HINSTANCE EEGetLocaleInstanceHandle()
 {
 	CETLLock lock;
 	{
+		if( _ETLData.m_hinstLoc != NULL ){
+			return _ETLData.m_hinstLoc;
+		}
+		// EmEditor queries plug-in strings (EP_GET_NAME etc.) while building the
+		// plug-in list, which happens before the first EVENT_CREATE_FRAME has
+		// initialized m_hinstLoc.  Fall back to loading the satellite on demand
+		// so the plug-in name resolves at scan time.  The instance stays cached
+		// in m_hinstLoc and is freed by the normal EVENT_CLOSE_FRAME flow.
+		_ETLData.m_hinstLoc = LoadLocDllInstanceLazy();
 		if( _ETLData.m_hinstLoc != NULL ){
 			return _ETLData.m_hinstLoc;
 		}
@@ -698,6 +710,51 @@ HINSTANCE GetInstancePath( LPCTSTR szPath, bool bResourceOnly )
 		StringCchPrintf( sz, _countof( sz ), _T("Cannot load %s."), szPath );
 		MessageBox( NULL, sz, _T("EmEditor"), MB_OK | MB_ICONSTOP );
 		return NULL;
+	}
+	return hinstRes;
+}
+
+// Loads <module>_loc.dll from <module dir>\mui\<language> without requiring an
+// initialized frame.  Mirrors the LOC_USE_LOC_DLL branch of GetEmedLocInstance
+// but never touches EmEditor (no view handle exists yet during plug-in scan)
+// and never shows UI on failure.
+static HINSTANCE LoadLocDllInstanceLazy()
+{
+	TCHAR szFileName[MAX_PATH];
+	if( !GetModuleFile( szFileName ) ){
+		return NULL;
+	}
+	StringCchCat( szFileName, _countof( szFileName ), _T("_loc.dll") );
+
+	TCHAR szPath[MAX_PATH];
+	GetModuleFilePath( _T("mui"), szPath );
+	TCHAR szFolder[MAX_PATH];
+	StringCchPrintf( szFolder, _countof( szFolder ), _T("%u"), GetUserDefaultUILanguage() );
+	PathAppend( szPath, szFolder );
+	PathAppend( szPath, szFileName );
+	if( IsFileExist( szPath ) ){
+		return GetInstancePath( szPath, true );
+	}
+
+	// UI language folder has no satellite: use any language folder available.
+	GetModuleFilePath( _T("mui\\*"), szPath );
+	WIN32_FIND_DATA find;
+	HANDLE hFind = INVALID_HANDLE_VALUE;
+	HINSTANCE hinstRes = NULL;
+	hFind = FindFirstFile( szPath, &find );
+	if( hFind != INVALID_HANDLE_VALUE ){
+		do {
+			if( find.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY && find.cFileName[0] != _T('.') ){
+				GetModuleFilePath( _T("mui"), szPath );
+				PathAppend( szPath, find.cFileName );
+				PathAppend( szPath, szFileName );
+				if( IsFileExist( szPath ) ){
+					hinstRes = GetInstancePath( szPath, true );
+					break;
+				}
+			}
+		} while( FindNextFile( hFind, &find ) );
+		FindClose( hFind );
 	}
 	return hinstRes;
 }
