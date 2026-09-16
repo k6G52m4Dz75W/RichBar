@@ -12,7 +12,22 @@ this code base:
 |---------------|---------|
 | `0.1.0`       | The original upstream HTMLBar source as forked (Emurasoft `19.5.0`), unmodified. |
 | `0.4.x`       | Compatibility fixes that make the original plug-in build and load correctly on modern EmEditor (v26). |
-| `0.9.0` – `0.11.x` | The HTML + Markdown dual-mode toolbar, heading towards `1.0.0`. |
+| `0.9.0` – `0.13.x` | The HTML + Markdown dual-mode toolbar, heading towards `1.0.0`. |
+
+## [0.13.0] - 2026-09-16
+
+### Added
+
+- **The Markdown pictogram icons now draw from the system icon font**
+  (Segoe Fluent Icons on Windows 11, Segoe MDL2 Assets on Windows 10):
+  bold, italic, strikethrough, inline code, quote, bulleted/numbered/task
+  lists, link, image, table and the gear are real icon designs instead of
+  letter/shape approximations. Each glyph is availability-checked per
+  machine once; icons without a font glyph keep the previous letter/shape
+  drawings (headings H1–H6, the code block, the horizontal rule and the
+  `[H][M]` switch are letter/shape-based by design), and machines without
+  these system fonts fall back entirely. No font files ship with the
+  plug-in.
 
 ## [0.12.2] - 2026-09-16
 
