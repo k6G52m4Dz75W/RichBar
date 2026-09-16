@@ -14,6 +14,17 @@ this code base:
 | `0.4.x`       | Compatibility fixes that make the original plug-in build and load correctly on modern EmEditor (v26). |
 | `0.9.0` – `0.11.x` | The HTML + Markdown dual-mode toolbar, heading towards `1.0.0`. |
 
+## [0.12.1] - 2026-09-16
+
+### Fixed
+
+- **Hovering a toolbar button in dark-band modes washed the glyph out.**
+  On hover the toolbar control fills the button with the light system
+  highlight but keeps drawing the same image, so light-on-dark glyphs turned
+  into light-on-light. While the band is dark the toolbar now also receives
+  a hot image list (`TB_SETHOTIMAGELIST`) — a mirror of the normal list with
+  dark glyphs — so hovered buttons render dark-on-light.
+
 ## [0.12.0] - 2026-09-16
 
 ### Added

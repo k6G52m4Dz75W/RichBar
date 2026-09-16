@@ -155,6 +155,11 @@ WCHAR OctToDec( LPWSTR& p )
 #define MD_ICON_MODE_H			20
 #define MD_ICON_MODE_M			21
 
+// glyph colors: light glyphs sit on dark bands, dark glyphs on light ones
+// (including the toolbar's light hover/checked fill)
+#define GLYPH_COLOR_DARK		RGB( 48, 48, 48 )
+#define GLYPH_COLOR_LIGHT		RGB( 224, 224, 224 )
+
 #define MODE_HTML				0
 #define MODE_MD					1
 #define MODE_COUNT				2
@@ -369,6 +374,7 @@ public:
 	CCmd* m_pcmdProp;
 	HWND m_hwndToolbar;
 	HIMAGELIST m_himageToolbar;
+	HIMAGELIST m_himageToolbarHot;
 	HWND m_hDlg;
 	TCHAR m_szOldConfig[MAX_CONFIG_NAME];
 	DWORD m_dwFindFlags;
@@ -1347,7 +1353,7 @@ public:
 		// via the v20.5 SDK), so the signal comes straight from the theme —
 		// more authoritative than measuring colors
 		if( IsVeryDark() ){
-			return RGB( 224, 224, 224 );
+			return GLYPH_COLOR_LIGHT;
 		}
 		// Pick a glyph color that contrasts with the bar area's real background.
 		// EmEditor's reported bar text color is designed for dark bars, but its
@@ -1360,9 +1366,9 @@ public:
 		}
 		int nLum = ( 299 * GetRValue( crBack ) + 587 * GetGValue( crBack ) + 114 * GetBValue( crBack ) ) / 1000;
 		if( nLum >= 128 ){
-			return RGB( 48, 48, 48 );   // light background -> dark glyphs
+			return GLYPH_COLOR_DARK;   // light background -> dark glyphs
 		}
-		return RGB( 224, 224, 224 );    // dark background -> light glyphs
+		return GLYPH_COLOR_LIGHT;      // dark background -> light glyphs
 	}
 
 	BOOL IsVeryDark()
@@ -1410,6 +1416,31 @@ public:
 			MdKeyOutBackground( cx, pvBits );
 			ImageList_Add( himl, hbm, NULL );
 			DeleteObject( hbm );
+		}
+		return himl;
+	}
+
+	HIMAGELIST BuildHotImageList( int cx )
+	{
+		// hover fills buttons with the light system highlight, so the hot list
+		// mirrors the normal list with dark glyphs to stay readable on it
+		COLORREF crHotFg = GLYPH_COLOR_DARK;
+		HIMAGELIST himl = NULL;
+		if( m_iMode == MODE_MD ){
+			himl = BuildMdImageList( cx, crHotFg );
+			if( himl ){
+				AddModeSwitchIcons( himl, cx, crHotFg );
+			}
+			return himl;
+		}
+		// HTML mode: the colored BMP icons read fine on the light fill, so
+		// duplicate the normal list and replace only the two switch glyphs
+		himl = ImageList_Duplicate( m_himageToolbar );
+		if( himl ){
+			int nCount = ImageList_GetImageCount( himl );
+			ImageList_Remove( himl, nCount - 1 );
+			ImageList_Remove( himl, nCount - 2 );
+			AddModeSwitchIcons( himl, cx, crHotFg );
 		}
 		return himl;
 	}
@@ -1486,6 +1517,14 @@ public:
 			_ASSERT( m_himageToolbar );
 			AddModeSwitchIcons( m_himageToolbar, cxButtonSize, crGlyphFg );
 			SendMessage( hwndToolbar, TB_SETIMAGELIST, 0, (LPARAM)m_himageToolbar );
+
+			// on hover the toolbar fills buttons with the light system highlight;
+			// when the band is dark (light glyphs) supply a hot image list with
+			// dark glyphs so hovered buttons stay readable
+			if( m_crGlyphFg == GLYPH_COLOR_LIGHT ){
+				m_himageToolbarHot = BuildHotImageList( cxButtonSize );
+				SendMessage( hwndToolbar, TB_SETHOTIMAGELIST, 0, (LPARAM)m_himageToolbarHot );
+			}
 			
 			if( !LoadCmdArray( m_iMode ) ){
 				ResetCmdArray( m_iMode );
@@ -1555,6 +1594,10 @@ public:
 			if( m_himageToolbar ){
 				VERIFY( ImageList_Destroy( m_himageToolbar ) );
 				m_himageToolbar = NULL;
+			}
+			if( m_himageToolbarHot ){
+				VERIFY( ImageList_Destroy( m_himageToolbarHot ) );
+				m_himageToolbarHot = NULL;
 			}
 			_ASSERT( !IsWindow( m_hwndToolbar ) );
 			m_hwndToolbar = NULL;
@@ -1743,6 +1786,7 @@ public:
 		m_iMode = MODE_HTML;
 		m_iModeOverride = -1;
 		m_crGlyphFg = 0xFFFFFFFF;
+		m_himageToolbarHot = NULL;
 		ZERO_INIT_FIRST_MEM( CMyFrame, m_hwndToolbar );
 		m_nBand = (UINT)-1;
 	}
