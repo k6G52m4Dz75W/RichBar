@@ -14,6 +14,13 @@ this code base:
 | `0.4.x`       | Compatibility fixes that make the original plug-in build and load correctly on modern EmEditor (v26). |
 | `0.9.0` – `0.11.x` | The HTML + Markdown dual-mode toolbar, heading towards `1.0.0`. |
 
+## [0.12.2] - 2026-09-16
+
+### Changed
+
+- **Runtime-drawn glyphs are 15% larger** (uniform `GLYPH_SIZE_SCALE` knob,
+  tunable) to better match the official toolbar's icon size.
+
 ## [0.12.1] - 2026-09-16
 
 ### Fixed

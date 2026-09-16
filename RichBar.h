@@ -160,6 +160,9 @@ WCHAR OctToDec( LPWSTR& p )
 #define GLYPH_COLOR_DARK		RGB( 48, 48, 48 )
 #define GLYPH_COLOR_LIGHT		RGB( 224, 224, 224 )
 
+// uniform size knob for all runtime-drawn glyphs (100 = as drawn before)
+#define GLYPH_SIZE_SCALE		115
+
 #define MODE_HTML				0
 #define MODE_MD					1
 #define MODE_COUNT				2
@@ -1203,7 +1206,7 @@ public:
 
 	void DrawMdText( HDC hdc, int cx, LPCWSTR pszText, int nHeightPct, int nWeight, bool bItalic, COLORREF crFg )
 	{
-		HFONT hfont = CreateFontW( -( cx * nHeightPct / 100 ), 0, 0, 0, nWeight, bItalic, FALSE, FALSE,
+		HFONT hfont = CreateFontW( -( cx * nHeightPct * GLYPH_SIZE_SCALE / 100 / 100 ), 0, 0, 0, nWeight, bItalic, FALSE, FALSE,
 			DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS, ANTIALIASED_QUALITY, FF_DONTCARE, L"Segoe UI" );
 		HFONT hfontOld = (HFONT)SelectObject( hdc, hfont );
 		SetBkMode( hdc, TRANSPARENT );
@@ -1216,7 +1219,7 @@ public:
 
 	void DrawMdTextAt( HDC hdc, int x, int y, LPCWSTR pszText, int nHeight, int nWeight, COLORREF crFg )
 	{
-		HFONT hfont = CreateFontW( -nHeight, 0, 0, 0, nWeight, FALSE, FALSE, FALSE,
+		HFONT hfont = CreateFontW( -( nHeight * GLYPH_SIZE_SCALE / 100 ), 0, 0, 0, nWeight, FALSE, FALSE, FALSE,
 			DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS, ANTIALIASED_QUALITY, FF_DONTCARE, L"Segoe UI" );
 		HFONT hfontOld = (HFONT)SelectObject( hdc, hfont );
 		SetBkMode( hdc, TRANSPARENT );
