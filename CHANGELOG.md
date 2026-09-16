@@ -14,6 +14,18 @@ this code base:
 | `0.4.x`       | Compatibility fixes that make the original plug-in build and load correctly on modern EmEditor (v26). |
 | `0.9.0` – `0.10.x` | The HTML + Markdown dual-mode toolbar, heading towards `1.0.0`. |
 
+## [0.10.2] - 2026-09-16
+
+### Fixed
+
+- **The plug-in version column showed the stale string "14".** EmEditor's
+  version column comes from the plug-in's `EP_GET_VERSION` string
+  (`IDS_VERSION` in the satellite), not from the file's VERSIONINFO resource,
+  and the string had been carried over untouched from the original HTMLBar
+  fork. It now tracks the release version. While the satellite could not be
+  loaded (see 0.10.1) this was masked, because EmEditor silently fell back to
+  reading the VERSIONINFO resource.
+
 ## [0.10.1] - 2026-09-16
 
 ### Changed
@@ -60,13 +72,6 @@ this code base:
     satellite resource script now selects its resource language through a
     `LOC_LANG_2052` preprocessor define, and `tools/build-loc-2052.ps1`
     builds the `mui\2052` copy.
-- **The plug-in version showed the stale string "14"** instead of 0.10.1:
-  EmEditor's version column comes from the plug-in's `EP_GET_VERSION`
-  string (`IDS_VERSION` in the satellite), not from the file's VERSIONINFO
-  resource. The string had been carried over untouched from the original
-  HTMLBar fork; it now reads 0.10.1. Before the satellite loading fix above,
-  the version query failed and EmEditor silently fell back to the VERSIONINFO
-  resource, which masked this.
 
 ## [0.9.0] - 2026-09-16
 
