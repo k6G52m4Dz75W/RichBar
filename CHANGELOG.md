@@ -14,6 +14,16 @@ this code base:
 | `0.4.x`       | Compatibility fixes that make the original plug-in build and load correctly on modern EmEditor (v26). |
 | `0.9.0` – `0.11.x` | The HTML + Markdown dual-mode toolbar, heading towards `1.0.0`. |
 
+## [0.11.3] - 2026-09-16
+
+### Fixed
+
+- **The toolbar had no name in View > Toolbars.** That menu entry reuses the
+  custom bar's band title, which 0.11.1 had emptied to save space. The band
+  title is now the constant "RichBar" — it no longer changes with the mode
+  (the `[H][M]` switch shows that), so the toolbar is identifiable in the
+  menu while the on-screen label stays non-redundant.
+
 ## [0.11.2] - 2026-09-16
 
 ### Fixed
