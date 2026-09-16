@@ -12,9 +12,9 @@ this code base:
 |---------------|---------|
 | `0.1.0`       | The original upstream HTMLBar source as forked (Emurasoft `19.5.0`), unmodified. |
 | `0.4.x`       | Compatibility fixes that make the original plug-in build and load correctly on modern EmEditor (v26). |
-| `0.9.x`       | The HTML + Markdown dual-mode toolbar, heading towards `1.0.0`. |
+| `0.9.0` – `0.10.x` | The HTML + Markdown dual-mode toolbar, heading towards `1.0.0`. |
 
-## [0.9.1] - 2026-09-16
+## [0.10.0] - 2026-09-16
 
 ### Changed
 
@@ -30,7 +30,8 @@ this code base:
   same-named plug-in, while still going through the official
   `EE_REG_SET_VALUE`/`EE_REG_QUERY_VALUE` channel (registry, or `eePlugins.ini`
   automatically in INI mode).
-- Version resource updated to 0.9.1.
+- Version bumped to 0.10.0 (instead of 0.9.1) — the rename and the settings
+  storage split are a larger change than a patch release implies.
 - The custom bar title is now "RichBar" in both modes (the active button set
   itself shows which mode is in effect); previously it read "HTML"/"Markdown".
 
