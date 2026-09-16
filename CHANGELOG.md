@@ -60,6 +60,13 @@ this code base:
     satellite resource script now selects its resource language through a
     `LOC_LANG_2052` preprocessor define, and `tools/build-loc-2052.ps1`
     builds the `mui\2052` copy.
+- **The plug-in version showed the stale string "14"** instead of 0.10.1:
+  EmEditor's version column comes from the plug-in's `EP_GET_VERSION`
+  string (`IDS_VERSION` in the satellite), not from the file's VERSIONINFO
+  resource. The string had been carried over untouched from the original
+  HTMLBar fork; it now reads 0.10.1. Before the satellite loading fix above,
+  the version query failed and EmEditor silently fell back to the VERSIONINFO
+  resource, which masked this.
 
 ## [0.9.0] - 2026-09-16
 
