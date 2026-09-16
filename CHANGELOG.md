@@ -14,6 +14,18 @@ this code base:
 | `0.4.x`       | Compatibility fixes that make the original plug-in build and load correctly on modern EmEditor (v26). |
 | `0.9.0` – `0.10.x` | The HTML + Markdown dual-mode toolbar, heading towards `1.0.0`. |
 
+## [0.10.3] - 2026-09-16
+
+### Fixed
+
+- **Restored the mode indicator in the custom bar title.** The bar title once
+  again shows "HTML" or "Markdown" depending on the active mode (switching
+  documents or configurations updates it together with the button set), which
+  had been lost when the bar title was unified to "RichBar" during the rename.
+  The title strings now come from the satellite (`IDS_TITLE` / new
+  `IDS_TITLE_MD`) instead of a hard-coded literal. RichBar branding remains in
+  the plug-in name.
+
 ## [0.10.2] - 2026-09-16
 
 ### Fixed

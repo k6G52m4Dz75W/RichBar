@@ -1439,8 +1439,13 @@ public:
 
 			if( hwndToolbar ){
 				TCHAR szTitle[80];
-				LoadString( EEGetLocaleInstanceHandle(), IDS_TITLE, szTitle, _countof( szTitle ) );
+				TCHAR szTitleMd[80];
+				HINSTANCE hinstLoc = EEGetLocaleInstanceHandle();
+				LoadString( hinstLoc, IDS_TITLE, szTitle, _countof( szTitle ) );
 				LPCTSTR pszTitle = szTitle;
+				if( m_iMode == MODE_MD && LoadString( hinstLoc, IDS_TITLE_MD, szTitleMd, _countof( szTitleMd ) ) > 0 ){
+					pszTitle = szTitleMd;
+				}
 				RECT rcClient = { 0 };
 				GetClientRect( hwndToolbar, &rcClient );
 				TOOLBAR_INFO cri;
