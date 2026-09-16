@@ -357,6 +357,7 @@ public:
 	CCmdArray m_CmdArray[MODE_COUNT];
 	int m_iMode;
 	int m_iModeOverride;	// manual mode for the current document (MODE_HTML/MODE_MD), -1 = auto
+	COLORREF m_crGlyphFg;	// glyph color the current toolbar image list was drawn with
 
 	vector<wstring> m_asUndefinedParam;
 	vector<wstring> m_asUndefinedValue;
@@ -1342,20 +1343,25 @@ public:
 
 	COLORREF GetBarGlyphColor()
 	{
-		// glyph color follows the editor's bar text color when available
-		COLORREF crFg = RGB( 190, 190, 190 );
-		COLORREF crText = RGB( 190, 190, 190 );
-		Editor_Info( m_hWnd, EI_GET_BAR_TEXT_COLOR, (LPARAM)&crText );
-		if( crText != 0 && crText != CLR_INVALID ){
-			crFg = crText;
+		// Pick a glyph color that contrasts with the bar area's real background.
+		// EmEditor's reported bar text color is designed for dark bars, but its
+		// dark themes may leave the bar background light, so measuring the
+		// background and flipping the glyph color is the only reliable way.
+		COLORREF crBack = CLR_INVALID;
+		Editor_Info( m_hWnd, EI_GET_BAR_BACK_COLOR, (LPARAM)&crBack );
+		if( crBack == CLR_INVALID ){
+			crBack = RGB( 255, 255, 255 );  // unknown: assume light, as dark themes currently leave the bars light
 		}
-		return crFg;
+		int nLum = ( 299 * GetRValue( crBack ) + 587 * GetGValue( crBack ) + 114 * GetBValue( crBack ) ) / 1000;
+		if( nLum >= 128 ){
+			return RGB( 48, 48, 48 );   // light background -> dark glyphs
+		}
+		return RGB( 224, 224, 224 );    // dark background -> light glyphs
 	}
 
-	void AddModeSwitchIcons( HIMAGELIST himl, int cx )
+	void AddModeSwitchIcons( HIMAGELIST himl, int cx, COLORREF crFg )
 	{
 		// appends the [H][M] mode-switch glyphs to whichever image list is active
-		COLORREF crFg = GetBarGlyphColor();
 		for( int i = 0; i < 2; i++ ){
 			void* pvBits = NULL;
 			HBITMAP hbm = CreateMdIconBitmap( cx, &pvBits );
@@ -1373,13 +1379,12 @@ public:
 		}
 	}
 
-	HIMAGELIST BuildMdImageList( int cx )
+	HIMAGELIST BuildMdImageList( int cx, COLORREF crFg )
 	{
 		HIMAGELIST himl = ImageList_Create( cx, cx, ILC_COLOR32, 20, 8 );
 		if( !himl ){
 			return NULL;
 		}
-		COLORREF crFg = GetBarGlyphColor();
 		for( int i = 0; i < 20; i++ ){
 			void* pvBits = NULL;
 			HBITMAP hbm = CreateMdIconBitmap( cx, &pvBits );
@@ -1446,9 +1451,11 @@ public:
 			SendMessage( hwndToolbar, TB_SETEXTENDEDSTYLE, 0, dwExStyle );
 			_ASSERT( m_himageToolbar == NULL );
 
+			COLORREF crGlyphFg = GetBarGlyphColor();
+			m_crGlyphFg = crGlyphFg;
 			if( m_iMode == MODE_MD ){
-				// runtime-drawn icons matching the editor's bar color
-				m_himageToolbar = BuildMdImageList( cxButtonSize );
+				// runtime-drawn icons contrasting with the bar's real background
+				m_himageToolbar = BuildMdImageList( cxButtonSize, crGlyphFg );
 			}
 			if( m_himageToolbar == NULL ){
 				if( bNeedStretch ){
@@ -1466,7 +1473,7 @@ public:
 				}
 			}
 			_ASSERT( m_himageToolbar );
-			AddModeSwitchIcons( m_himageToolbar, cxButtonSize );
+			AddModeSwitchIcons( m_himageToolbar, cxButtonSize, crGlyphFg );
 			SendMessage( hwndToolbar, TB_SETIMAGELIST, 0, (LPARAM)m_himageToolbar );
 			
 			if( !LoadCmdArray( m_iMode ) ){
@@ -1648,6 +1655,18 @@ public:
 				}
 			}
 		}
+		if( nEvent & ( EVENT_UI_CHANGED | EVENT_CONFIG_CHANGED ) ){
+			// re-create the bar when the color environment changed, so the
+			// runtime-drawn glyphs follow light/dark scheme switches
+			if( m_hwndToolbar && m_bVisible ){
+				COLORREF crFg = GetBarGlyphColor();
+				if( crFg != m_crGlyphFg ){
+					Editor_ToolbarClose( m_hWnd, m_nClientID );
+					CustomBarClosed();
+					DisplayBar( true );
+				}
+			}
+		}
 	}
 
 	BOOL QueryUninstall( HWND /*hDlg*/ )
@@ -1710,6 +1729,7 @@ public:
 	{
 		m_iMode = MODE_HTML;
 		m_iModeOverride = -1;
+		m_crGlyphFg = 0xFFFFFFFF;
 		ZERO_INIT_FIRST_MEM( CMyFrame, m_hwndToolbar );
 		m_nBand = (UINT)-1;
 	}

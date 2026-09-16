@@ -14,6 +14,22 @@ this code base:
 | `0.4.x`       | Compatibility fixes that make the original plug-in build and load correctly on modern EmEditor (v26). |
 | `0.9.0` – `0.11.x` | The HTML + Markdown dual-mode toolbar, heading towards `1.0.0`. |
 
+## [0.11.2] - 2026-09-16
+
+### Fixed
+
+- **Toolbar glyphs (the Markdown icon set and the `[H][M]` switch) were too
+  faint.** Glyph colors now follow the bar area's real background: EmEditor
+  is queried for the bar background color and its luminance decides between
+  dark glyphs on a light bar (`#303030`) and light glyphs on a dark one
+  (`#E0E0E0`); an unknown color falls back to the light assumption, since
+  EmEditor's dark themes currently leave the bar area light. Previously the
+  glyphs followed the reported bar *text* color, which is designed for dark
+  bars and washed out on the light bar area.
+- The toolbar is re-created when the detected glyph color changes (theme or
+  configuration switch), so the drawn icons follow color scheme changes
+  without a restart.
+
 ## [0.11.1] - 2026-09-16
 
 ### Changed
