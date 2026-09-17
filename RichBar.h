@@ -161,7 +161,7 @@ WCHAR OctToDec( LPWSTR& p )
 #define GLYPH_COLOR_LIGHT		RGB( 224, 224, 224 )
 
 // uniform size knob for all runtime-drawn glyphs (100 = as drawn before)
-#define GLYPH_SIZE_SCALE		115
+#define GLYPH_SIZE_SCALE		135
 
 #define MODE_HTML				0
 #define MODE_MD					1

@@ -14,6 +14,14 @@ this code base:
 | `0.4.x`       | Compatibility fixes that make the original plug-in build and load correctly on modern EmEditor (v26). |
 | `0.9.0` – `0.13.x` | The HTML + Markdown dual-mode toolbar, heading towards `1.0.0`. |
 
+## [0.13.1] - 2026-09-17
+
+### Changed
+
+- **Glyph size knob raised from 115% to 135%** — the letter-based icons
+  (H1–H6, B/I/S, the `[H][M]` switch) still read too small next to the
+  official toolbar.
+
 ## [0.13.0] - 2026-09-16
 
 ### Added
