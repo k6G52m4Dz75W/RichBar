@@ -56,7 +56,7 @@ images are hot-linked from the official Microsoft Learn glyph tables.
 | Customize (gear) | U+E713 | <img src="https://learn.microsoft.com/en-us/windows/apps/design/iconography/images/segoe-fluent-icons/e713.png" width="20" alt="Settings (Fluent)"> | <img src="https://learn.microsoft.com/en-us/windows/apps/design/iconography/images/segoe-mdl/e713.png" width="20" alt="Settings (MDL2)"> |
 | Headings H1–H6 | — | letter-drawn | letter-drawn |
 | Numbered list | — | shape-drawn (no official glyph) | shape-drawn (no official glyph) |
-| Table | — | shape-drawn (no official glyph) | shape-drawn (no official glyph) |
+| Table | U+F232 | <img src="https://learn.microsoft.com/en-us/windows/apps/design/iconography/images/segoe-fluent-icons/f232.png" width="20" alt="GridViewSmall (Fluent)"> | shape-drawn (glyph absent from MDL2) |
 | Code block | — | letter-drawn `{ }` | letter-drawn `{ }` |
 | Horizontal rule | — | line-drawn | line-drawn |
 | Mode switch H / M | — | letter-drawn | letter-drawn |

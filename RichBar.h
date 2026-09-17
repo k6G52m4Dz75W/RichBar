@@ -1253,6 +1253,7 @@ public:
 			{ 14, 0xE9D5 },		// task list
 			{ 16, 0xE71B },		// link
 			{ 17, 0xE8B9 },		// image
+			{ 18, 0xF232 },		// table (GridViewSmall; not in MDL2 -> shape fallback on Win10)
 			{ 19, 0xE713 },		// customize (gear)
 		};
 		static int s_iFont = -1;			// -1 unknown, 0 none, 1 Fluent, 2 MDL2

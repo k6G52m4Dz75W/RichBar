@@ -49,7 +49,7 @@ Markdown 按钮集的图形类图标取自系统图标字体——**Segoe Fluent
 | 自定义（齿轮） | U+E713 | <img src="https://learn.microsoft.com/en-us/windows/apps/design/iconography/images/segoe-fluent-icons/e713.png" width="20" alt="Settings (Fluent)"> | <img src="https://learn.microsoft.com/en-us/windows/apps/design/iconography/images/segoe-mdl/e713.png" width="20" alt="Settings (MDL2)"> |
 | 标题 H1–H6 | — | 字母绘制 | 字母绘制 |
 | 有序列表 | — | 形状绘制（官方无此字形） | 形状绘制（官方无此字形） |
-| 表格 | — | 形状绘制（官方无此字形） | 形状绘制（官方无此字形） |
+| 表格 | U+F232 | <img src="https://learn.microsoft.com/en-us/windows/apps/design/iconography/images/segoe-fluent-icons/f232.png" width="20" alt="GridViewSmall (Fluent)"> | 形状绘制（MDL2 无此字形） |
 | 代码块 | — | 字母绘制 `{ }` | 字母绘制 `{ }` |
 | 水平线 | — | 线条绘制 | 线条绘制 |
 | 模式开关 H / M | — | 字母绘制 | 字母绘制 |

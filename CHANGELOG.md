@@ -14,6 +14,18 @@ this code base:
 | `0.4.x`       | Compatibility fixes that make the original plug-in build and load correctly on modern EmEditor (v26). |
 | `0.9.0` – `0.13.x` | The HTML + Markdown dual-mode toolbar, heading towards `1.0.0`. |
 
+## [0.13.3] - 2026-09-17
+
+### Fixed
+
+- **The Table button now draws a real grid** (U+F232 GridViewSmall from
+  Segoe Fluent Icons) instead of a CircleRing. Found by enumerating the
+  fonts locally — parsing the cmap tables of SegoeIcons.ttf (1213 mapped
+  codepoints) and SegMDL2.ttf (1103) revealed the full glyph set including
+  undocumented entries; EA3A is officially CircleRing (not Table) and EA1C
+  does not exist. U+F232 is absent from Windows 10's MDL2 Assets, where the
+  button automatically falls back to the shape-drawn grid.
+
 ## [0.13.2] - 2026-09-17
 
 ### Fixed
