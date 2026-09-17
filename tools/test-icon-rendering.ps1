@@ -6,7 +6,7 @@ $start = $header.IndexOf('void DrawMdText(')
 $end = $header.IndexOf('COLORREF GetBarGlyphColor()', $start)
 if ($start -lt 0 -or $end -lt 0) { throw 'Drawing methods not found' }
 $methods = $header.Substring($start, $end - $start)
-$defines = ([regex]::Matches($header, '(?m)^#define (?:GLYPH_SIZE_SCALE|MD_ICON_MODE_H|MD_ICON_MODE_M)\s+\d+')).Value -join "`n"
+$defines = ([regex]::Matches($header, '(?m)^#define (?:MD_TEXT_HEIGHT|MD_CODE_HEIGHT|MD_SUBSCRIPT_HEIGHT|MD_ICON_MODE_H|MD_ICON_MODE_M)\s+\d+')).Value -join "`n"
 $prefix = @'
 #include <windows.h>
 #include <strsafe.h>
@@ -28,6 +28,24 @@ static int Draw(HDC dc, LPCWSTR s, int n, LPRECT r, UINT flags) {
     }
     return DrawTextW(dc, s, n, r, flags);
 }
+struct TextCall { wchar_t ch; int height; RECT ink; };
+static std::vector<TextCall> textCalls;
+static BOOL Text(HDC dc, int x, int y, LPCWSTR s, int n) {
+    LOGFONTW font = {};
+    GetObjectW(GetCurrentObject(dc, OBJ_FONT), sizeof(font), &font);
+    if (n == 1 && (s[0] == L'H' || (s[0] >= L'1' && s[0] <= L'6'))) {
+        if (lstrcmpiW(font.lfFaceName, L"Segoe UI") || font.lfWeight != FW_BOLD) std::exit(6);
+        MAT2 matrix = {}; matrix.eM11.value = matrix.eM22.value = 1;
+        GLYPHMETRICS gm = {};
+        if (GetGlyphOutlineW(dc, s[0], GGO_METRICS, &gm, 0, NULL, &matrix) == GDI_ERROR) std::exit(7);
+        RECT ink = {x + gm.gmptGlyphOrigin.x, y - gm.gmptGlyphOrigin.y, 0, 0};
+        ink.right = ink.left + gm.gmBlackBoxX;
+        ink.bottom = ink.top + gm.gmBlackBoxY;
+        textCalls.push_back({s[0], -font.lfHeight, ink});
+    }
+    return TextOutW(dc, x, y, s, n);
+}
+#define TextOutW Text
 #define GetGlyphIndicesW Probe
 #define DrawTextW Draw
 struct Renderer {
@@ -36,7 +54,8 @@ $suffix = @'
 };
 #undef GetGlyphIndicesW
 #undef DrawTextW
-static std::vector<DWORD> Render(int size, COLORREF fg, int mode) {
+#undef TextOutW
+static std::vector<DWORD> Render(int size, COLORREF fg, int mode, int icon = 16) {
     HDC dc = CreateCompatibleDC(NULL);
     BITMAPINFO info = {};
     info.bmiHeader.biSize = sizeof(BITMAPINFOHEADER);
@@ -53,9 +72,9 @@ static std::vector<DWORD> Render(int size, COLORREF fg, int mode) {
     FillRect(dc, &rc, bg);
     DeleteObject(bg);
     if (mode == 0) {
-        Renderer().DrawMdIcon(dc, size, 16, fg);
+        Renderer().DrawMdIcon(dc, size, icon, fg);
     } else if (mode == 1) {
-        HFONT font = CreateFontW(-(size * GLYPH_SIZE_SCALE / 100), 0, 0, 0,
+        HFONT font = CreateFontW(-size, 0, 0, 0,
             FW_NORMAL, FALSE, FALSE, FALSE, DEFAULT_CHARSET, OUT_DEFAULT_PRECIS,
             CLIP_DEFAULT_PRECIS, ANTIALIASED_QUALITY, FF_DONTCARE, L"Segoe Fluent Icons");
         HGDIOBJ oldFont = SelectObject(dc, font);
@@ -98,6 +117,34 @@ int main(int argc, char**) {
     }
     printf("probe calls=%d E71B draw calls=%d\n", probes, glyphDraws);
     if (legacy ? (probes != 0 || glyphDraws != 0) : (probes == 0 || glyphDraws != 6)) return 2;
+    if (!legacy) {
+        int cases = 0;
+        for (int size : {16, 20, 24, 28, 30, 32, 36, 40, 42, 48, 60, 72}) {
+            for (COLORREF fg : {RGB(48,48,48), RGB(224,224,224)}) {
+                std::vector<DWORD> previous;
+                for (int level = 1; level <= 6; ++level) {
+                    textCalls.clear();
+                    auto pixels = Render(size, fg, 0, level - 1);
+                    if (textCalls.size() != 2) return 10;
+                    auto h = textCalls[0]; auto d = textCalls[1];
+                    if (h.ch != L'H' || d.ch != L'0' + level || h.height != MulDiv(14,size,16) || d.height != MulDiv(8,size,16)) return 11;
+                    if (d.ink.left <= h.ink.right || d.ink.top <= h.ink.top || d.ink.bottom - h.ink.bottom != MulDiv(2,size,16)) return 12;
+                    if (h.ink.left < 0 || h.ink.top < 0 || d.ink.right > size || d.ink.bottom > size) {
+                        printf("clipped heading size=%d level=%d bounds=%ld,%ld,%ld,%ld\n", size,level,h.ink.left,h.ink.top,d.ink.right,d.ink.bottom);
+                        return 13;
+                    }
+                    if (abs(h.ink.left - (size-d.ink.right)) > 1 || abs(h.ink.top - (size-d.ink.bottom)) > 1) return 14;
+                    bool ink = false;
+                    for (auto p : pixels) if (p != 0xFF00FF) ink = true;
+                    if (!ink || pixels == previous) return 15;
+                    previous = pixels;
+                    ++cases;
+                }
+            }
+            printf("H1-H6 size=%d: fonts, heights, subscript position, bounds, centering and distinct pixels PASS\n", size);
+        }
+        printf("Heading cases passed: %d\n", cases);
+    }
     puts("PASS");
 }
 '@

@@ -82,10 +82,22 @@ ground truth the plug-in renders with).
   before use. Icons whose glyph is missing on a given machine fall back to
   the letter/shape drawings — never a missing-character box.
 - Glyphs in the deprecated `E0xx`–`E5xx` range are not used.
-- The fonts recommend sizes 16/20/24/32/40/48/64 for hinted rendering;
-  RichBar renders anti-aliased at arbitrary sizes (tunable via
-  `GLYPH_SIZE_SCALE` in `RichBar.h`) so the icons scale freely with the
-  button size.
+- Microsoft recommends icon-font sizes 16/20/24/32/40/48/64. RichBar uses
+  16 px for normal icons and 24 px for large icons at 96 DPI, scaled with
+  display DPI (for example, 24/36 px at 150%). No extra 135% enlargement or
+  snapping to the recommended size list is applied.
+- Text buttons use Segoe UI Bold. H/M and the H in heading buttons use
+  14/21 px at 96 DPI (normal/large); heading digits use 8/12 px and sit at
+  the lower right. H and the ordinary digit are drawn separately, with their
+  combined ink bounds centered; Unicode subscript characters are not used.
+  Code-block text uses 12/18 px. These are pixel character heights, not points.
+  Text heights and layout offsets scale with the icon canvas; constants
+  `MD_TEXT_HEIGHT`, `MD_SUBSCRIPT_HEIGHT`, and `MD_CODE_HEIGHT` in `RichBar.h`
+  are referenced to a 16-pixel canvas. EmEditor's own toolbar title is unchanged.
+- Run `powershell -File tools/test-icon-rendering.ps1` on Windows with the
+  Visual C++ build tools and Segoe Fluent Icons installed for offscreen Link
+  pixel comparisons and heading layout checks across multiple DPI sizes.
+  This does not replace an in-editor visual check.
 - No font files are redistributed — the fonts are part of Windows and are
   referenced by family name only.
 

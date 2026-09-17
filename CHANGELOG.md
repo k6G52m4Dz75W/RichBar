@@ -16,6 +16,16 @@ this code base:
 
 ## [Unreleased]
 
+### Changed
+
+- Runtime-drawn Markdown icons no longer apply the 135% enlargement. At
+  96 DPI they render at the icon canvas size: 16 px normal, 24 px large,
+  scaled with display DPI. Text buttons use Segoe UI Bold at fixed pixel
+  heights referenced to a 16-pixel canvas: H/M letters 14/21 px (normal/
+  large), heading digits 8/12 px in the lower right of the H, code-block
+  text 12/18 px. Heading buttons draw H and the digit separately and center
+  the combined ink bounds; they no longer use one uniform font for "H1".
+
 ### Fixed
 
 - Initialize the Markdown icon font selector to its actual "none" state so

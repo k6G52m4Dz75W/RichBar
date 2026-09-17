@@ -73,9 +73,19 @@ Markdown 按钮集的图形类图标取自系统图标字体——**Segoe Fluent
   `GetGlyphIndices`（`GGI_MARK_NONEXISTING_GLYPHS`）探测存在性。
   某台机器上缺失的字形回退到字母/形状绘制——绝不出现"缺字方框"。
 - 不使用已废弃的 `E0xx`–`E5xx` 码位段。
-- 官方推荐字体尺寸 16/20/24/32/40/48/64（针对hinted渲染）；RichBar 以
-  抗锯齿方式按任意尺寸渲染（可通过 `RichBar.h` 的 `GLYPH_SIZE_SCALE`
-  调整），图标随按钮尺寸自由缩放。
+- 微软推荐图标字体尺寸 16/20/24/32/40/48/64。RichBar 在 96 DPI 下采用
+  普通图标 16 px、大图标 24 px，随显示 DPI 缩放（例如 150% 缩放下为
+  24/36 px）。不额外叠加 135% 放大，也不强制对齐推荐尺寸列表。
+- 文字按钮使用 Segoe UI Bold。H/M 及标题按钮的 H 在 96 DPI 下为
+  14/21 px（普通/大图标）；标题数字为 8/12 px，位于右下角。H 与普通数字
+  分开绘制并按组合墨迹范围整体居中，不使用 Unicode 下标字符。
+  代码块文字为 12/18 px。这些数值是像素字符高度，不是磅值。
+  文字高度与布局偏移随图标画布缩放；`RichBar.h` 中的
+  `MD_TEXT_HEIGHT`、`MD_SUBSCRIPT_HEIGHT`、`MD_CODE_HEIGHT` 常量
+  以 16 像素画布为基准。EmEditor 自身的工具栏标题不受影响。
+- 在安装了 Visual C++ 生成工具和 Segoe Fluent Icons 的 Windows 上运行
+  `powershell -File tools/test-icon-rendering.ps1`，可进行链接图标像素对照
+  及多种 DPI 尺寸下的标题布局检查。它不能替代编辑器内的实际目视检查。
 - 不重分发任何字体文件——字体属于 Windows 的一部分，仅按家族名引用。
 
 ## 构建与安装

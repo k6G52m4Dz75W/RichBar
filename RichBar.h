@@ -160,8 +160,10 @@ WCHAR OctToDec( LPWSTR& p )
 #define GLYPH_COLOR_DARK		RGB( 48, 48, 48 )
 #define GLYPH_COLOR_LIGHT		RGB( 224, 224, 224 )
 
-// uniform size knob for all runtime-drawn glyphs (100 = as drawn before)
-#define GLYPH_SIZE_SCALE		135
+// Pixel heights relative to a 16-pixel icon canvas; large icons use 24.
+#define MD_TEXT_HEIGHT		14
+#define MD_CODE_HEIGHT		12
+#define MD_SUBSCRIPT_HEIGHT	8
 
 #define MODE_HTML				0
 #define MODE_MD					1
@@ -1204,9 +1206,9 @@ public:
 		}
 	}
 
-	void DrawMdText( HDC hdc, int cx, LPCWSTR pszText, int nHeightPct, int nWeight, bool bItalic, COLORREF crFg )
+	void DrawMdText( HDC hdc, int cx, LPCWSTR pszText, int nBaseHeight, int nWeight, bool bItalic, COLORREF crFg )
 	{
-		HFONT hfont = CreateFontW( -( cx * nHeightPct * GLYPH_SIZE_SCALE / 100 / 100 ), 0, 0, 0, nWeight, bItalic, FALSE, FALSE,
+		HFONT hfont = CreateFontW( -MulDiv( nBaseHeight, cx, 16 ), 0, 0, 0, nWeight, bItalic, FALSE, FALSE,
 			DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS, ANTIALIASED_QUALITY, FF_DONTCARE, L"Segoe UI" );
 		HFONT hfontOld = (HFONT)SelectObject( hdc, hfont );
 		SetBkMode( hdc, TRANSPARENT );
@@ -1219,7 +1221,7 @@ public:
 
 	void DrawMdTextAt( HDC hdc, int x, int y, LPCWSTR pszText, int nHeight, int nWeight, COLORREF crFg )
 	{
-		HFONT hfont = CreateFontW( -( nHeight * GLYPH_SIZE_SCALE / 100 ), 0, 0, 0, nWeight, FALSE, FALSE, FALSE,
+		HFONT hfont = CreateFontW( -nHeight, 0, 0, 0, nWeight, FALSE, FALSE, FALSE,
 			DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS, ANTIALIASED_QUALITY, FF_DONTCARE, L"Segoe UI" );
 		HFONT hfontOld = (HFONT)SelectObject( hdc, hfont );
 		SetBkMode( hdc, TRANSPARENT );
@@ -1227,6 +1229,53 @@ public:
 		TextOutW( hdc, x, y, pszText, (int)wcslen( pszText ) );
 		SelectObject( hdc, hfontOld );
 		DeleteObject( hfont );
+	}
+
+	void DrawMdHeading( HDC hdc, int cx, int nLevel, COLORREF crFg )
+	{
+		HFONT fonts[2] = {
+			CreateFontW( -MulDiv( MD_TEXT_HEIGHT, cx, 16 ), 0, 0, 0, FW_BOLD, FALSE, FALSE, FALSE,
+				DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS, ANTIALIASED_QUALITY, FF_DONTCARE, L"Segoe UI" ),
+			CreateFontW( -MulDiv( MD_SUBSCRIPT_HEIGHT, cx, 16 ), 0, 0, 0, FW_BOLD, FALSE, FALSE, FALSE,
+				DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS, ANTIALIASED_QUALITY, FF_DONTCARE, L"Segoe UI" )
+		};
+		WCHAR chars[2] = { L'H', (WCHAR)( L'0' + nLevel ) };
+		GLYPHMETRICS metrics[2] = {};
+		MAT2 transform = {};
+		transform.eM11.value = transform.eM22.value = 1;
+		BOOL measured = fonts[0] && fonts[1];
+		for( int i = 0; i < 2 && measured; i++ ){
+			HFONT old = (HFONT)SelectObject( hdc, fonts[i] );
+			measured = GetGlyphOutlineW( hdc, chars[i], GGO_METRICS, &metrics[i], 0, NULL, &transform ) != GDI_ERROR;
+			SelectObject( hdc, old );
+		}
+		if( measured ){
+			int gap = max( 1, MulDiv( 1, cx, 16 ) );
+			int drop = MulDiv( 2, cx, 16 );
+			int width = metrics[0].gmBlackBoxX + gap + metrics[1].gmBlackBoxX;
+			int height = metrics[0].gmBlackBoxY + drop;
+			int x = ( cx - width ) / 2;
+			int y = ( cx - height ) / 2;
+			UINT oldAlign = SetTextAlign( hdc, TA_LEFT | TA_BASELINE | TA_NOUPDATECP );
+			SetBkMode( hdc, TRANSPARENT );
+			SetTextColor( hdc, crFg );
+			// Center the combined ink bounds, not the fonts' different line boxes.
+			for( int i = 0; i < 2; i++ ){
+				HFONT old = (HFONT)SelectObject( hdc, fonts[i] );
+				int top = i ? y + height - metrics[i].gmBlackBoxY : y;
+				TextOutW( hdc, x - metrics[i].gmptGlyphOrigin.x, top + metrics[i].gmptGlyphOrigin.y, &chars[i], 1 );
+				SelectObject( hdc, old );
+				x += metrics[i].gmBlackBoxX + gap;
+			}
+			SetTextAlign( hdc, oldAlign );
+		}
+		else {
+			WCHAR text[] = { chars[0], chars[1], 0 };
+			DrawMdText( hdc, cx, text, MD_CODE_HEIGHT, FW_BOLD, FALSE, crFg );
+		}
+		for( int i = 0; i < 2; i++ ){
+			if( fonts[i] ) DeleteObject( fonts[i] );
+		}
 	}
 
 	void DrawMdIcon( HDC hdc, int cx, int iIcon, COLORREF crFg )
@@ -1293,7 +1342,7 @@ public:
 				if( c_aIconGlyphs[g].iIcon != iIcon || !s_abGlyph[g] ){
 					continue;
 				}
-				HFONT hfontIcon = CreateFontW( -( cx * GLYPH_SIZE_SCALE / 100 ), 0, 0, 0, FW_NORMAL, FALSE, FALSE, FALSE,
+				HFONT hfontIcon = CreateFontW( -cx, 0, 0, 0, FW_NORMAL, FALSE, FALSE, FALSE,
 					DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS, ANTIALIASED_QUALITY, FF_DONTCARE,
 					( s_iFont == 1 ) ? L"Segoe Fluent Icons" : L"Segoe MDL2 Assets" );
 				HFONT hfontIconOld = (HFONT)SelectObject( hdc, hfontIcon );
@@ -1311,31 +1360,27 @@ public:
 		switch( iIcon ){
 		int y1, y2;
 		case 0: case 1: case 2: case 3: case 4: case 5:		// H1 - H6
-			{
-				WCHAR szText[8];
-				StringPrintf( szText, _countof( szText ), L"H%d", iIcon + 1 );
-				DrawMdText( hdc, cx, szText, 45, FW_BOLD, FALSE, crFg );
-			}
+			DrawMdHeading( hdc, cx, iIcon + 1, crFg );
 			break;
 		case 6:		// bold
-			DrawMdText( hdc, cx, L"B", 68, FW_BOLD, FALSE, crFg );
+			DrawMdText( hdc, cx, L"B", MD_TEXT_HEIGHT, FW_BOLD, FALSE, crFg );
 			break;
 		case 7:		// italic
-			DrawMdText( hdc, cx, L"I", 68, FW_NORMAL, TRUE, crFg );
+			DrawMdText( hdc, cx, L"I", MD_TEXT_HEIGHT, FW_NORMAL, TRUE, crFg );
 			break;
 		case 8:		// strikethrough
-			DrawMdText( hdc, cx, L"S", 68, FW_BOLD, FALSE, crFg );
+			DrawMdText( hdc, cx, L"S", MD_TEXT_HEIGHT, FW_BOLD, FALSE, crFg );
 			MoveToEx( hdc, cx * 22 / 100, cx / 2, NULL );
 			LineTo( hdc, cx * 78 / 100, cx / 2 );
 			break;
 		case 9:		// inline code
-			DrawMdText( hdc, cx, L"</>", 38, FW_NORMAL, FALSE, crFg );
+			DrawMdText( hdc, cx, L"</>", 10, FW_NORMAL, FALSE, crFg );
 			break;
 		case 10:	// code block
-			DrawMdText( hdc, cx, L"{ }", 48, FW_BOLD, FALSE, crFg );
+			DrawMdText( hdc, cx, L"{ }", MD_CODE_HEIGHT, FW_BOLD, FALSE, crFg );
 			break;
 		case 11:	// quote
-			DrawMdText( hdc, cx, L"\x275D", 62, FW_NORMAL, FALSE, crFg );
+			DrawMdText( hdc, cx, L"\x275D", MD_TEXT_HEIGHT, FW_NORMAL, FALSE, crFg );
 			break;
 		case 12:	// bullet list
 		case 13:	// numbered list
@@ -1361,7 +1406,7 @@ public:
 				for( int r = 0; r < 3; r++ ){
 					WCHAR szDigit[2];
 					StringPrintf( szDigit, _countof( szDigit ), L"%d", r + 1 );
-					DrawMdTextAt( hdc, cx * 8 / 100, y1 + r * y2 - cx * 15 / 100, szDigit, cx * 28 / 100, FW_NORMAL, crFg );
+					DrawMdTextAt( hdc, cx * 8 / 100, y1 + r * y2 - cx * 15 / 100, szDigit, MulDiv( 6, cx, 16 ), FW_NORMAL, crFg );
 				}
 			}
 			else {
@@ -1410,13 +1455,13 @@ public:
 			LineTo( hdc, cx * 63 / 100, cx * 78 / 100 );
 			break;
 		case 19:	// customize (gear)
-			DrawMdText( hdc, cx, L"\x2699", 66, FW_NORMAL, FALSE, crFg );
+			DrawMdText( hdc, cx, L"\x2699", MD_TEXT_HEIGHT, FW_NORMAL, FALSE, crFg );
 			break;
 		case MD_ICON_MODE_H:	// mode switch: HTML
-			DrawMdText( hdc, cx, L"H", 68, FW_BOLD, FALSE, crFg );
+			DrawMdText( hdc, cx, L"H", MD_TEXT_HEIGHT, FW_BOLD, FALSE, crFg );
 			break;
 		case MD_ICON_MODE_M:	// mode switch: Markdown
-			DrawMdText( hdc, cx, L"M", 68, FW_BOLD, FALSE, crFg );
+			DrawMdText( hdc, cx, L"M", MD_TEXT_HEIGHT, FW_BOLD, FALSE, crFg );
 			break;
 		}
 		}
