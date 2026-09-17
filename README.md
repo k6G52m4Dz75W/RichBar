@@ -7,6 +7,8 @@ toolbar, forked from the official Emurasoft HTMLBar plug-in source
 (`19.5.0`). It is meant to replace the HTML/Markdown toolbar built into
 EmEditor v26 (closed source, with most tags hidden inside dropdown menus).
 
+Current release: **0.14.0 — 2026-09-17**.
+
 ## Features
 
 - **Dual-mode auto switching**: the button set follows the current
@@ -17,16 +19,16 @@ EmEditor v26 (closed source, with most tags hidden inside dropdown menus).
   the pressed side is the active mode. Covers new, unsaved documents where
   auto detection has nothing to go by; any document or configuration change
   returns the bar to auto detection.
-- **Markdown button set** (25): H1–H6, bold, italic, strikethrough, inline
-  code, fenced code block, block quote, bullet / numbered (auto numbering) /
-  task lists, horizontal rule, link, image (file picker), table, customize.
-  Wrapping commands toggle off when applied twice.
-- **Runtime-drawn, theme-adaptive icons**: rendered directly at the current
-  button size (crisp at any DPI), colored by the bar background luminance
-  (dark glyphs on light bars, light glyphs on dark bars), with a hot image
-  list so hovered buttons stay readable in dark-band modes. Pictograms draw
-  from the system icon font (see below); light/dark theme and configuration
-  changes re-render automatically.
+- **Markdown button set**: 20 command icons plus five separators — H1–H6,
+  bold, italic, strikethrough, inline code, fenced code block, block quote,
+  bullet / numbered (auto numbering) / task lists, horizontal rule, link,
+  image (file picker), table, customize. Wrapping commands toggle off when
+  applied twice.
+- **Runtime-drawn, theme-adaptive icons**: the bundled Lucide font subset
+  supplies all 20 Markdown icons, rendered directly at the current button
+  size and DPI. Background luminance selects dark glyphs on light bars or
+  light glyphs on dark bars; a hot image list keeps hovered buttons readable
+  in dark-band modes. Theme and configuration changes re-render automatically.
 - **MUI**: satellite resource DLLs (`mui\1033` English, `mui\2052` Simplified
   Chinese).
 - **Settings via the official channel**: `EE_REG_SET_VALUE` /
@@ -36,72 +38,79 @@ EmEditor v26 (closed source, with most tags hidden inside dropdown menus).
 
 ## Toolbar icon reference
 
-The Markdown set's pictograms draw from the system icon fonts —
-**Segoe Fluent Icons** (Windows 11) and **Segoe MDL2 Assets** (Windows 10).
-The two fonts share the same codepoints but the artwork differs slightly
-(most visibly on Strikethrough), hence the two preview columns. Preview
-images are hot-linked from the official Microsoft Learn glyph tables.
+Since 0.14.0, all 20 Markdown command icons use the bundled **Lucide** subset
+from `lucide-static` **1.47.0**, rather than Segoe Fluent Icons / Segoe MDL2
+Assets. These are the exact indices, subset names and codepoints mapped in
+`RichBar.h`.
 
-| Toolbar button | Codepoint | Segoe Fluent Icons (Win 11) | Segoe MDL2 Assets (Win 10) |
+| Icon index | Toolbar button | Lucide subset name | Codepoint |
 |---|---|---|---|
-| Bold | U+E8DD | <img src="https://learn.microsoft.com/en-us/windows/apps/design/iconography/images/segoe-fluent-icons/e8dd.png" width="20" alt="Bold (Fluent)"> | <img src="https://learn.microsoft.com/en-us/windows/apps/design/iconography/images/segoe-mdl/e8dd.png" width="20" alt="Bold (MDL2)"> |
-| Italic | U+E8DB | <img src="https://learn.microsoft.com/en-us/windows/apps/design/iconography/images/segoe-fluent-icons/e8db.png" width="20" alt="Italic (Fluent)"> | <img src="https://learn.microsoft.com/en-us/windows/apps/design/iconography/images/segoe-mdl/e8db.png" width="20" alt="Italic (MDL2)"> |
-| Strikethrough | U+EDE0 | <img src="https://learn.microsoft.com/en-us/windows/apps/design/iconography/images/segoe-fluent-icons/ede0.png" width="20" alt="Strikethrough (Fluent)"> | <img src="https://learn.microsoft.com/en-us/windows/apps/design/iconography/images/segoe-mdl/ede0.png" width="20" alt="Strikethrough (MDL2)"> |
-| Inline code | U+E943 | <img src="https://learn.microsoft.com/en-us/windows/apps/design/iconography/images/segoe-fluent-icons/e943.png" width="20" alt="Code (Fluent)"> | <img src="https://learn.microsoft.com/en-us/windows/apps/design/iconography/images/segoe-mdl/e943.png" width="20" alt="Code (MDL2)"> |
-| Block quote | U+E848 | <img src="https://learn.microsoft.com/en-us/windows/apps/design/iconography/images/segoe-fluent-icons/e848.png" width="20" alt="LeftQuote (Fluent)"> | <img src="https://learn.microsoft.com/en-us/windows/apps/design/iconography/images/segoe-mdl/e848.png" width="20" alt="LeftQuote (MDL2)"> |
-| Bullet list | U+E8FD | <img src="https://learn.microsoft.com/en-us/windows/apps/design/iconography/images/segoe-fluent-icons/e8fd.png" width="20" alt="BulletedList (Fluent)"> | <img src="https://learn.microsoft.com/en-us/windows/apps/design/iconography/images/segoe-mdl/e8fd.png" width="20" alt="BulletedList (MDL2)"> |
-| Task list | U+E9D5 | <img src="https://learn.microsoft.com/en-us/windows/apps/design/iconography/images/segoe-fluent-icons/e9d5.png" width="20" alt="CheckList (Fluent)"> | <img src="https://learn.microsoft.com/en-us/windows/apps/design/iconography/images/segoe-mdl/e9d5.png" width="20" alt="CheckList (MDL2)"> |
-| Link | U+E71B | <img src="https://learn.microsoft.com/en-us/windows/apps/design/iconography/images/segoe-fluent-icons/e71b.png" width="20" alt="Link (Fluent)"> | <img src="https://learn.microsoft.com/en-us/windows/apps/design/iconography/images/segoe-mdl/e71b.png" width="20" alt="Link (MDL2)"> |
-| Image | U+E8B9 | <img src="https://learn.microsoft.com/en-us/windows/apps/design/iconography/images/segoe-fluent-icons/e8b9.png" width="20" alt="Picture (Fluent)"> | <img src="https://learn.microsoft.com/en-us/windows/apps/design/iconography/images/segoe-mdl/e8b9.png" width="20" alt="Picture (MDL2)"> |
-| Customize (gear) | U+E713 | <img src="https://learn.microsoft.com/en-us/windows/apps/design/iconography/images/segoe-fluent-icons/e713.png" width="20" alt="Settings (Fluent)"> | <img src="https://learn.microsoft.com/en-us/windows/apps/design/iconography/images/segoe-mdl/e713.png" width="20" alt="Settings (MDL2)"> |
-| Headings H1–H6 | — | letter-drawn | letter-drawn |
-| Numbered list | — | shape-drawn (no official glyph) | shape-drawn (no official glyph) |
-| Table | U+F232 | <img src="https://learn.microsoft.com/en-us/windows/apps/design/iconography/images/segoe-fluent-icons/f232.png" width="20" alt="GridViewSmall (Fluent)"> | shape-drawn (glyph absent from MDL2) |
-| Code block | — | letter-drawn `{ }` | letter-drawn `{ }` |
-| Horizontal rule | — | line-drawn | line-drawn |
-| Mode switch H / M | — | letter-drawn | letter-drawn |
+| 0 | Heading H1 | `heading-1` | U+E385 |
+| 1 | Heading H2 | `heading-2` | U+E386 |
+| 2 | Heading H3 | `heading-3` | U+E387 |
+| 3 | Heading H4 | `heading-4` | U+E388 |
+| 4 | Heading H5 | `heading-5` | U+E389 |
+| 5 | Heading H6 | `heading-6` | U+E38A |
+| 6 | Bold | `bold` | U+E05D |
+| 7 | Italic | `italic` | U+E0FB |
+| 8 | Strikethrough | `strikethrough` | U+E177 |
+| 9 | Inline code | `code` | U+E093 |
+| 10 | Fenced code block | `code-xml` | U+E206 |
+| 11 | Block quote | `quote` | U+E239 |
+| 12 | Bullet list | `list` | U+E106 |
+| 13 | Numbered list | `list-ordered` | U+E1D1 |
+| 14 | Task list | `list-todo` | U+E4C3 |
+| 15 | Horizontal rule | `minus` | U+E11C |
+| 16 | Link | `link` | U+E102 |
+| 17 | Image | `image` | U+E0F6 |
+| 18 | Table | `table` | U+E17D |
+| 19 | Customize | `settings` | U+E154 |
 
-**Full interactive reference:** [docs/glyph-reference.html](docs/glyph-reference.html)
-lists *every* glyph both fonts expose (more than Microsoft's pages show — many
-are undocumented), rendered live from the installed fonts with a Light/Dark
-scheme toggle, a font toggle, a name/codepoint filter, and blue borders on the
-glyphs RichBar currently maps. Regenerate it with
-`tools/generate-glyph-reference.ps1` (GDI `GetGlyphIndices` probing, the same
-ground truth the plug-in renders with).
+### Rendering and font packaging
 
-> GitHub serves HTML files as plain source, so for an instant rendered view
-> open it through [htmlpreview.github.io](https://htmlpreview.github.io/?https://github.com/k6G52m4Dz75W/RichBar/blob/master/docs/glyph-reference.html)
-> — or download the file and open it in any browser.
+- `lucide_subset.ttf` is **7,780 bytes**, embedded in `RichBar.dll` as an
+  `RCDATA` resource. It is loaded directly into process-private memory with
+  `AddFontMemResourceEx`: **no system font installation and no temporary font
+  files**. Users do not need Lucide or the Segoe icon fonts installed.
+- Normal/large icon canvases are **16/24 px at 96 DPI**, scaled with display
+  DPI (for example, 24/36 px at 150%). There is no extra 135% enlargement.
+- The **H/M mode switch is unchanged**: Segoe UI Bold text, **14/21 px at
+  96 DPI** for normal/large icons, scaled with the canvas. These are pixel
+  character heights, not points. H/M is not part of the Lucide subset;
+  headings H1–H6 and the code block now use Lucide in normal operation.
+- Legacy letter/shape drawing remains the fallback when the bundled font
+  cannot be loaded. HTML command icons retain the **original colored BMP
+  assets**, unchanged and not theme-adaptive. EmEditor's toolbar title is
+  unchanged.
+- Font provenance, SHA256, the complete subset mapping and license details
+  are recorded in [docs/lucide-font.md](docs/lucide-font.md).
 
-### Best-practice notes (per the official guidance)
+### Icon regression tests
 
-- Icon-font glyphs live in the Unicode Private Use Area, so the family name
-  is always set explicitly — Fluent Icons on Windows 11, MDL2 Assets on
-  Windows 10 (the equivalent of XAML's `SymbolThemeFontFamily`), and every
-  glyph is probed with `GetGlyphIndices` (`GGI_MARK_NONEXISTING_GLYPHS`)
-  before use. Icons whose glyph is missing on a given machine fall back to
-  the letter/shape drawings — never a missing-character box.
-- Glyphs in the deprecated `E0xx`–`E5xx` range are not used.
-- Microsoft recommends icon-font sizes 16/20/24/32/40/48/64. RichBar uses
-  16 px for normal icons and 24 px for large icons at 96 DPI, scaled with
-  display DPI (for example, 24/36 px at 150%). No extra 135% enlargement or
-  snapping to the recommended size list is applied.
-- Text buttons use Segoe UI Bold. H/M and the H in heading buttons use
-  14/21 px at 96 DPI (normal/large); heading digits use 8/12 px and sit at
-  the lower right. H and the ordinary digit are drawn separately, with their
-  combined ink bounds centered; Unicode subscript characters are not used.
-  Code-block text uses 12/18 px. These are pixel character heights, not points.
-  Text heights and layout offsets scale with the icon canvas; constants
-  `MD_TEXT_HEIGHT`, `MD_SUBSCRIPT_HEIGHT`, and `MD_CODE_HEIGHT` in `RichBar.h`
-  are referenced to a 16-pixel canvas. EmEditor's own toolbar title is unchanged.
-- Run `powershell -File tools/test-icon-rendering.ps1` on Windows with the
-  Visual C++ build tools and Segoe Fluent Icons installed for offscreen Link
-  pixel comparisons and heading layout checks across multiple DPI sizes.
-  This does not replace an in-editor visual check.
-- No font files are redistributed — the fonts are part of Windows and are
-  referenced by family name only.
+On Windows with the Visual C++ build tools, the test command is:
+
+```powershell
+powershell -File tools/test-icon-rendering.ps1
+```
+
+The 0.14.0 test script covers **all 20 Lucide icons across multiple sizes
+and foreground colors** (pixel-compared against direct Lucide drawing), plus
+**simulated unavailable-font and missing-glyph fallback** subprocesses, and
+font registration/release/reinitialization checks. This is offscreen
+regression coverage, not a claim that an EmEditor visual check has passed.
+
+### Historical Segoe reference only
+
+[docs/glyph-reference.html](docs/glyph-reference.html) is retained as a
+**historical** interactive catalog of Segoe Fluent Icons / Segoe MDL2 Assets.
+Its highlighted mappings describe the pre-0.14.0 implementation, **not the
+current toolbar**. It renders from installed Windows fonts and is not a
+Lucide preview or a source for the current mapping. Download and open the
+HTML file locally; GitHub displays its source by default.
 
 ## Build & install
+
+Run the build commands from the repository root.
 
 - Visual Studio (project toolset v142; override with
   `-p:PlatformToolset=v145` on newer Build Tools):
@@ -110,16 +119,34 @@ ground truth the plug-in renders with).
   MSBuild RichBar.sln -p:Configuration=Release -p:Platform=x64 -p:PlatformToolset=v145
   ```
 
-- The Simplified Chinese satellite needs its own build step (only this
-  script produces it):
+  This builds the main DLL and English (`1033`) satellite under
+  `x64\Release\PlugIns\`.
 
-  ```
+- The Simplified Chinese (`2052`) satellite needs a separate build step.
+  `tools/build-loc-2052.ps1` lives **inside this repository**; it is
+  **build-only**, not a deployment script:
+
+  ```powershell
   powershell -File tools\build-loc-2052.ps1
   ```
 
-- Deploy the `dist\` folder (`RichBar.dll` + `mui\1033\RichBar_loc.dll` +
-  `mui\2052\RichBar_loc.dll`), add `dist\RichBar.dll` via Customize
-  Plug-ins, or point EmEditor's plug-ins folder at `dist\`.
+- **Deploy manually** to the sibling **`../dist/`** directory, not a `dist/`
+  directory inside this repository. Copy the newly built main DLL and both
+  satellites, preserving the following layout, and copy `LICENSE.third-party`
+  from the repository root alongside the main DLL:
+
+  ```text
+  ../dist/
+    RichBar.dll
+    LICENSE.third-party
+    mui/
+      1033/RichBar_loc.dll
+      2052/RichBar_loc.dll
+  ```
+
+  Add `..\dist\RichBar.dll` via Customize Plug-ins, or point EmEditor's
+  plug-ins folder at `..\dist\`. The font is already embedded in the main
+  DLL; no separate font installation or loose TTF deployment is needed.
 
 ## Usage tips (tested)
 
@@ -151,7 +178,7 @@ ground truth the plug-in renders with).
 |-------|---------|
 | `0.1.0` | The original upstream HTMLBar source as forked, unmodified. |
 | `0.4.x` | Compatibility fixes to build and load on modern EmEditor (v26). |
-| `0.9.0` – `0.13.x` | The HTML + Markdown dual-mode toolbar, heading towards `1.0.0`. |
+| `0.9.0` – `0.14.x` | The HTML + Markdown dual-mode toolbar, heading towards `1.0.0`. |
 
 See [CHANGELOG.md](CHANGELOG.md) (English) /
 [CHANGELOG.zh.md](CHANGELOG.zh.md) (Chinese) for details.
@@ -159,3 +186,8 @@ See [CHANGELOG.md](CHANGELOG.md) (English) /
 ## License
 
 See [LICENSE](LICENSE). Original code copyright Emurasoft.
+The bundled Lucide subset has separate third-party notices in
+[LICENSE.third-party](LICENSE.third-party): the complete upstream ISC license
+(Copyright 2026 Lucide Icons and Contributors), including Feather-derived icon
+attribution and the MIT license (Copyright 2013-present Cole Bemis).
+Redistributions must retain these notices.

@@ -7,6 +7,8 @@
 它旨在替代 EmEditor v26 内置的 HTML/Markdown 工具栏（闭源、大部分标签
 藏在下拉菜单里）。
 
+当前版本：**0.14.0 — 2026-09-17**。
+
 ## 功能
 
 - **双模式自动切换**：按钮集跟随当前配置（HTML / Markdown 名称列表相互独立、
@@ -15,14 +17,13 @@
 - **手动模式切换 `[H][M]`**：工具栏最左侧两个成组按钮——按下的一侧是当前
   模式。覆盖新建未保存文档（无文件名、无配置信号）的场景；任何文档或配置
   变化都会回到自动检测。
-- **Markdown 按钮集**（25 个）：H1–H6、粗体、斜体、删除线、行内代码、
-  围栏代码块、引用、无序/有序（自动编号）/任务列表、水平线、链接、
-  图片（文件选择器）、表格、自定义按钮。包裹类命令对已包裹文本再点击
-  一次即取消。
-- **运行时绘制、主题自适应图标**：按当前按钮尺寸直接绘制（任意 DPI 清晰），
-  颜色按栏背景亮度自动取反（浅底深字 / 深底浅字），并带热态图像列表保证
-  深色带区下悬停可读。图形图标取自系统图标字体（见下文）；主题/配置变化
-  自动重绘。
+- **Markdown 按钮集**：20 个命令图标加 5 个分隔符——H1–H6、粗体、斜体、
+  删除线、行内代码、围栏代码块、引用、无序/有序（自动编号）/任务列表、
+  水平线、链接、图片（文件选择器）、表格、自定义按钮。包裹类命令对已包裹
+  文本再点击一次即取消。
+- **运行时绘制、主题自适应图标**：全部 20 个 Markdown 图标使用内嵌的 Lucide
+  字体子集，按当前按钮尺寸与 DPI 直接绘制。颜色按栏背景亮度选择浅底深字或
+  深底浅字，并带热态图像列表保证深色带区下悬停可读。主题/配置变化自动重绘。
 - **多语言**：卫星资源 DLL（`mui\1033` 英文、`mui\2052` 简体中文）。
 - **设置走官方通道**：`EE_REG_SET_VALUE` / `EE_REG_QUERY_VALUE`
   （`EmEditorPlugIns\RichBar` 键；INI 模式自动改用 `eePlugins.ini`），
@@ -30,65 +31,74 @@
 
 ## 工具栏图标对照
 
-Markdown 按钮集的图形类图标取自系统图标字体——**Segoe Fluent Icons**
-（Windows 11）与 **Segoe MDL2 Assets**（Windows 10）。两套字体码位相同，
-但美术细节略有差异（删除线最明显），因此对照表分为两列预览。
-预览图片直接引用微软官方 Learn 字形表。
+自 0.14.0 起，全部 20 个 Markdown 命令图标使用来自 `lucide-static`
+**1.47.0** 的内嵌 **Lucide** 子集，不再使用 Segoe Fluent Icons /
+Segoe MDL2 Assets。下表的索引、子集名称与码位与 `RichBar.h` 的当前映射一致。
 
-| 工具栏按钮 | 码位 | Segoe Fluent Icons（Win 11） | Segoe MDL2 Assets（Win 10） |
+| 图标索引 | 工具栏按钮 | Lucide 子集名称 | 码位 |
 |---|---|---|---|
-| 粗体 | U+E8DD | <img src="https://learn.microsoft.com/en-us/windows/apps/design/iconography/images/segoe-fluent-icons/e8dd.png" width="20" alt="Bold (Fluent)"> | <img src="https://learn.microsoft.com/en-us/windows/apps/design/iconography/images/segoe-mdl/e8dd.png" width="20" alt="Bold (MDL2)"> |
-| 斜体 | U+E8DB | <img src="https://learn.microsoft.com/en-us/windows/apps/design/iconography/images/segoe-fluent-icons/e8db.png" width="20" alt="Italic (Fluent)"> | <img src="https://learn.microsoft.com/en-us/windows/apps/design/iconography/images/segoe-mdl/e8db.png" width="20" alt="Italic (MDL2)"> |
-| 删除线 | U+EDE0 | <img src="https://learn.microsoft.com/en-us/windows/apps/design/iconography/images/segoe-fluent-icons/ede0.png" width="20" alt="Strikethrough (Fluent)"> | <img src="https://learn.microsoft.com/en-us/windows/apps/design/iconography/images/segoe-mdl/ede0.png" width="20" alt="Strikethrough (MDL2)"> |
-| 行内代码 | U+E943 | <img src="https://learn.microsoft.com/en-us/windows/apps/design/iconography/images/segoe-fluent-icons/e943.png" width="20" alt="Code (Fluent)"> | <img src="https://learn.microsoft.com/en-us/windows/apps/design/iconography/images/segoe-mdl/e943.png" width="20" alt="Code (MDL2)"> |
-| 引用 | U+E848 | <img src="https://learn.microsoft.com/en-us/windows/apps/design/iconography/images/segoe-fluent-icons/e848.png" width="20" alt="LeftQuote (Fluent)"> | <img src="https://learn.microsoft.com/en-us/windows/apps/design/iconography/images/segoe-mdl/e848.png" width="20" alt="LeftQuote (MDL2)"> |
-| 无序列表 | U+E8FD | <img src="https://learn.microsoft.com/en-us/windows/apps/design/iconography/images/segoe-fluent-icons/e8fd.png" width="20" alt="BulletedList (Fluent)"> | <img src="https://learn.microsoft.com/en-us/windows/apps/design/iconography/images/segoe-mdl/e8fd.png" width="20" alt="BulletedList (MDL2)"> |
-| 任务列表 | U+E9D5 | <img src="https://learn.microsoft.com/en-us/windows/apps/design/iconography/images/segoe-fluent-icons/e9d5.png" width="20" alt="CheckList (Fluent)"> | <img src="https://learn.microsoft.com/en-us/windows/apps/design/iconography/images/segoe-mdl/e9d5.png" width="20" alt="CheckList (MDL2)"> |
-| 链接 | U+E71B | <img src="https://learn.microsoft.com/en-us/windows/apps/design/iconography/images/segoe-fluent-icons/e71b.png" width="20" alt="Link (Fluent)"> | <img src="https://learn.microsoft.com/en-us/windows/apps/design/iconography/images/segoe-mdl/e71b.png" width="20" alt="Link (MDL2)"> |
-| 图片 | U+E8B9 | <img src="https://learn.microsoft.com/en-us/windows/apps/design/iconography/images/segoe-fluent-icons/e8b9.png" width="20" alt="Picture (Fluent)"> | <img src="https://learn.microsoft.com/en-us/windows/apps/design/iconography/images/segoe-mdl/e8b9.png" width="20" alt="Picture (MDL2)"> |
-| 自定义（齿轮） | U+E713 | <img src="https://learn.microsoft.com/en-us/windows/apps/design/iconography/images/segoe-fluent-icons/e713.png" width="20" alt="Settings (Fluent)"> | <img src="https://learn.microsoft.com/en-us/windows/apps/design/iconography/images/segoe-mdl/e713.png" width="20" alt="Settings (MDL2)"> |
-| 标题 H1–H6 | — | 字母绘制 | 字母绘制 |
-| 有序列表 | — | 形状绘制（官方无此字形） | 形状绘制（官方无此字形） |
-| 表格 | U+F232 | <img src="https://learn.microsoft.com/en-us/windows/apps/design/iconography/images/segoe-fluent-icons/f232.png" width="20" alt="GridViewSmall (Fluent)"> | 形状绘制（MDL2 无此字形） |
-| 代码块 | — | 字母绘制 `{ }` | 字母绘制 `{ }` |
-| 水平线 | — | 线条绘制 | 线条绘制 |
-| 模式开关 H / M | — | 字母绘制 | 字母绘制 |
+| 0 | 标题 H1 | `heading-1` | U+E385 |
+| 1 | 标题 H2 | `heading-2` | U+E386 |
+| 2 | 标题 H3 | `heading-3` | U+E387 |
+| 3 | 标题 H4 | `heading-4` | U+E388 |
+| 4 | 标题 H5 | `heading-5` | U+E389 |
+| 5 | 标题 H6 | `heading-6` | U+E38A |
+| 6 | 粗体 | `bold` | U+E05D |
+| 7 | 斜体 | `italic` | U+E0FB |
+| 8 | 删除线 | `strikethrough` | U+E177 |
+| 9 | 行内代码 | `code` | U+E093 |
+| 10 | 围栏代码块 | `code-xml` | U+E206 |
+| 11 | 引用 | `quote` | U+E239 |
+| 12 | 无序列表 | `list` | U+E106 |
+| 13 | 有序列表 | `list-ordered` | U+E1D1 |
+| 14 | 任务列表 | `list-todo` | U+E4C3 |
+| 15 | 水平线 | `minus` | U+E11C |
+| 16 | 链接 | `link` | U+E102 |
+| 17 | 图片 | `image` | U+E0F6 |
+| 18 | 表格 | `table` | U+E17D |
+| 19 | 自定义 | `settings` | U+E154 |
 
-**完整交互式参考**：[docs/glyph-reference.html](docs/glyph-reference.html)
-列出了两套字体暴露的*全部*字形（比微软文档页展示的更多——不少是未文档化的），
-基于本机安装的字体实时渲染，带 Light/Dark 配色切换、字体切换、名称/码位过滤，
-并以蓝色边框标出 RichBar 当前映射的字形。可用
-`tools/generate-glyph-reference.ps1` 重新生成（采用 GDI `GetGlyphIndices`
-探测——与插件渲染相同的真值来源）。
+### 渲染与字体打包
 
-> GitHub 会把 HTML 文件当纯文本源码展示。想直接看到渲染效果，可通过
-> [htmlpreview.github.io](https://htmlpreview.github.io/?https://github.com/k6G52m4Dz75W/RichBar/blob/master/docs/glyph-reference.html)
-> 在线打开——或下载该文件后用任意浏览器打开。
+- `lucide_subset.ttf` 大小为 **7,780 字节**，以 `RCDATA` 资源内嵌于
+  `RichBar.dll`。通过 `AddFontMemResourceEx` 直接从内存加载，仅对当前进程
+  可用：**不安装系统字体，不创建临时字体文件**。用户无需预先安装 Lucide
+  或 Segoe 图标字体。
+- 普通/大图标画布在 **96 DPI 下为 16/24 px**，随显示 DPI 缩放（例如
+  150% 缩放下为 24/36 px），不额外叠加 135% 放大。
+- **H/M 模式开关保持不变**：使用 Segoe UI Bold 文字，普通/大图标在
+  **96 DPI 下为 14/21 px**，随画布缩放。这些数值是像素字符高度，不是磅值。
+  H/M 不属于 Lucide 子集；标题 H1–H6 与代码块在正常情况下现使用 Lucide。
+- 内嵌字体无法加载时保留旧版字母/形状绘制作为回退。HTML 命令图标仍使用
+  **原版彩色 BMP 资产**，保持不变，不随主题变色。EmEditor 自身的工具栏
+  标题不受影响。
+- 字体来源、SHA256、完整子集映射及许可说明见
+  [docs/lucide-font.md](docs/lucide-font.md)。
 
-### 最佳实践说明（依据官方指南）
+### 图标回归测试
 
-- 图标字体的字形位于 Unicode 私有区（PUA），因此始终显式指定字体家族——
-  Windows 11 用 Fluent Icons、Windows 10 用 MDL2 Assets（等价于 XAML 的
-  `SymbolThemeFontFamily`），并且每个字形先用
-  `GetGlyphIndices`（`GGI_MARK_NONEXISTING_GLYPHS`）探测存在性。
-  某台机器上缺失的字形回退到字母/形状绘制——绝不出现"缺字方框"。
-- 不使用已废弃的 `E0xx`–`E5xx` 码位段。
-- 微软推荐图标字体尺寸 16/20/24/32/40/48/64。RichBar 在 96 DPI 下采用
-  普通图标 16 px、大图标 24 px，随显示 DPI 缩放（例如 150% 缩放下为
-  24/36 px）。不额外叠加 135% 放大，也不强制对齐推荐尺寸列表。
-- 文字按钮使用 Segoe UI Bold。H/M 及标题按钮的 H 在 96 DPI 下为
-  14/21 px（普通/大图标）；标题数字为 8/12 px，位于右下角。H 与普通数字
-  分开绘制并按组合墨迹范围整体居中，不使用 Unicode 下标字符。
-  代码块文字为 12/18 px。这些数值是像素字符高度，不是磅值。
-  文字高度与布局偏移随图标画布缩放；`RichBar.h` 中的
-  `MD_TEXT_HEIGHT`、`MD_SUBSCRIPT_HEIGHT`、`MD_CODE_HEIGHT` 常量
-  以 16 像素画布为基准。EmEditor 自身的工具栏标题不受影响。
-- 在安装了 Visual C++ 生成工具和 Segoe Fluent Icons 的 Windows 上运行
-  `powershell -File tools/test-icon-rendering.ps1`，可进行链接图标像素对照
-  及多种 DPI 尺寸下的标题布局检查。它不能替代编辑器内的实际目视检查。
-- 不重分发任何字体文件——字体属于 Windows 的一部分，仅按家族名引用。
+在安装了 Visual C++ 生成工具的 Windows 上，测试命令为：
+
+```powershell
+powershell -File tools/test-icon-rendering.ps1
+```
+
+0.14.0 的测试脚本覆盖**全部 20 个 Lucide 图标、多种尺寸及前景色**
+（与直接 Lucide 绘制逐像素比对），并包含**模拟字体不可用和字形缺失时
+的回退**子进程，以及字体注册/释放/重新初始化检查。这是离屏回归测试，
+不表示 EmEditor 内的目视检查已经通过。
+
+### Segoe 字形参考：仅作历史资料
+
+[docs/glyph-reference.html](docs/glyph-reference.html) 保留为 Segoe Fluent
+Icons / Segoe MDL2 Assets 的**历史**交互式字形目录。其中高亮映射对应
+0.14.0 之前的实现，**不代表当前工具栏**。该页面使用本机安装的 Windows
+字体渲染，不是 Lucide 预览，也不是当前映射的依据。可下载 HTML 文件后
+本地打开；GitHub 默认显示源码。
 
 ## 构建与安装
+
+在仓库根目录运行构建命令。
 
 - Visual Studio（项目工具集 v142；新版 Build Tools 可用
   `-p:PlatformToolset=v145` 覆盖）：
@@ -97,15 +107,30 @@ Markdown 按钮集的图形类图标取自系统图标字体——**Segoe Fluent
   MSBuild RichBar.sln -p:Configuration=Release -p:Platform=x64 -p:PlatformToolset=v145
   ```
 
-- 简体中文卫星 DLL 需要单独构建（只有此脚本会生成）：
+  此步骤在 `x64\Release\PlugIns\` 下生成主 DLL 与英文（`1033`）卫星 DLL。
 
-  ```
+- 简体中文（`2052`）卫星 DLL 需要单独构建。
+  `tools/build-loc-2052.ps1` 位于**本仓库内部**；它**只负责构建，不负责部署**：
+
+  ```powershell
   powershell -File tools\build-loc-2052.ps1
   ```
 
-- 部署 `dist\`（`RichBar.dll` + `mui\1033\RichBar_loc.dll` +
-  `mui\2052\RichBar_loc.dll`），在「自定义插件」中添加
-  `dist\RichBar.dll`，或把自定义中的插件文件夹指向 `dist\`。
+- **手动部署**到仓库同级的 **`../dist/`** 目录，而不是仓库内部的 `dist/`。
+  将新构建的主 DLL 与两个卫星 DLL 按以下目录结构复制，并将仓库根目录的
+  `LICENSE.third-party` 复制到主 DLL 旁：
+
+  ```text
+  ../dist/
+    RichBar.dll
+    LICENSE.third-party
+    mui/
+      1033/RichBar_loc.dll
+      2052/RichBar_loc.dll
+  ```
+
+  在「自定义插件」中添加 `..\dist\RichBar.dll`，或把 EmEditor 的插件文件夹
+  指向 `..\dist\`。字体已内嵌于主 DLL，无需另行安装字体或部署独立 TTF 文件。
 
 ## 使用提示（实测有效）
 
@@ -131,9 +156,9 @@ Markdown 按钮集的图形类图标取自系统图标字体——**Segoe Fluent
 
 | 版本区间 | 含义 |
 |---------|------|
-| `0.1.0`  | 原始上游 HTMLBar 源码原样 fork，未做任何修改。 |
-| `0.4.x`  | 兼容性修复，使原插件能在现代 EmEditor（v26）上编译加载。 |
-| `0.9.0` – `0.13.x` | HTML + Markdown 双模式工具栏，向 `1.0.0` 迈进。 |
+| `0.1.0` | 原始上游 HTMLBar 源码原样 fork，未做任何修改。 |
+| `0.4.x` | 兼容性修复，使原插件能在现代 EmEditor（v26）上编译加载。 |
+| `0.9.0` – `0.14.x` | HTML + Markdown 双模式工具栏，向 `1.0.0` 迈进。 |
 
 详细变更见 [CHANGELOG.zh.md](CHANGELOG.zh.md)（中文）/
 [CHANGELOG.md](CHANGELOG.md)（英文）。
@@ -141,3 +166,7 @@ Markdown 按钮集的图形类图标取自系统图标字体——**Segoe Fluent
 ## 许可
 
 见 [LICENSE](LICENSE)。原版代码版权归 Emurasoft 所有。
+内嵌 Lucide 子集的第三方声明见 [LICENSE.third-party](LICENSE.third-party)：
+包含完整上游 ISC 许可（Copyright 2026 Lucide Icons and Contributors），
+以及 Feather 衍生图标的署名与 MIT 许可（Copyright 2013-present Cole Bemis）。
+重新分发时必须保留这些声明。

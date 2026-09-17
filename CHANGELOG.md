@@ -12,7 +12,51 @@ this code base:
 |---------------|---------|
 | `0.1.0`       | The original upstream HTMLBar source as forked (Emurasoft `19.5.0`), unmodified. |
 | `0.4.x`       | Compatibility fixes that make the original plug-in build and load correctly on modern EmEditor (v26). |
-| `0.9.0` – `0.13.x` | The HTML + Markdown dual-mode toolbar, heading towards `1.0.0`. |
+| `0.9.0` – `0.14.x` | The HTML + Markdown dual-mode toolbar, heading towards `1.0.0`. |
+
+## [0.14.0] - 2026-09-17
+
+### Changed
+
+- Replace the current Segoe icon-font mapping with a bundled Lucide subset
+  from `lucide-static` 1.47.0 for all 20 Markdown command icons (indices
+  0–19), including H1–H6, the code block, numbered list and horizontal rule.
+  The complete names/codepoints are listed in the READMEs and
+  `docs/lucide-font.md`.
+- Embed the 7,780-byte `lucide_subset.ttf` as an RCDATA resource and load it
+  directly into process-private memory with `AddFontMemResourceEx`: no system
+  font installation, no temporary font files and no installed Segoe icon-font
+  dependency. Legacy letter/shape rendering remains the font-load fallback.
+- Keep normal/large icon canvases at 16/24 px at 96 DPI, scaled with display
+  DPI, without extra enlargement. H/M remains Segoe UI Bold at 14/21 px at
+  96 DPI; the HTML toolbar's legacy colored BMP assets are unchanged.
+- Retain `docs/glyph-reference.html` only as a historical Segoe reference;
+  its highlighted mappings no longer describe the current toolbar.
+- Clarify build/deployment separation: `tools/build-loc-2052.ps1` now lives
+  inside the repository and builds only. Deployment to sibling `../dist/` is
+  manual and includes the main DLL, both `1033`/`2052` satellites and
+  `LICENSE.third-party` alongside the main DLL.
+
+### Added
+
+- `LICENSE.third-party` preserves the complete verbatim local upstream
+  license: the 2026 Lucide ISC license, the Feather-derived icon list and
+  Cole Bemis MIT attribution/license. `docs/lucide-font.md` records package
+  provenance, subset names/mapping, byte size and SHA256; it does not claim
+  that a reproducible subset-generation script is included.
+- `tools/test-icon-rendering.ps1` now covers all 20 Lucide icons across
+  multiple sizes and colors (280 pixel-exact comparisons against direct
+  Lucide drawing), plus simulated unavailable-font and missing-glyph
+  fallback subprocesses, and font registration/release/reinitialization
+  checks. This is offscreen coverage, not an EmEditor UI verification.
+
+### Fixed
+
+- The per-icon Lucide path validates the resolved face name and glyph index
+  before each draw, falling back to the letter/shape drawings when either
+  fails. A failed font registration is not cached and is retried. The
+  registration is released on the plug-in's normal `EVENT_CLOSE` shutdown
+  (never in `DllMain`), and re-registered lazily if icons are drawn again.
 
 ## [0.13.4] - 2026-09-17
 

@@ -1206,6 +1206,60 @@ public:
 		}
 	}
 
+	// Shared by all frames; release only on normal plug-in shutdown, outside DllMain.
+	static HANDLE& MdIconFontResource()
+	{
+		static HANDLE s_hFontResource = NULL;
+		return s_hFontResource;
+	}
+
+	static bool MdIconFontInstall()
+	{
+		HANDLE& hFontResource = MdIconFontResource();
+		if( hFontResource ){
+			return true;
+		}
+		HINSTANCE hInstance = EEGetInstanceHandle();
+		HRSRC hres = FindResource( hInstance, MAKEINTRESOURCE( IDR_LUCIDE_FONT ), RT_RCDATA );
+		if( !hres ){
+			return false;
+		}
+		HGLOBAL hglobal = LoadResource( hInstance, hres );
+		if( !hglobal ){
+			return false;
+		}
+		const void* pvData = LockResource( hglobal );
+		DWORD dwSize = SizeofResource( hInstance, hres );
+		if( !pvData || !dwSize ){
+			return false;
+		}
+		DWORD dwNumFonts = 0;
+		HANDLE hFont = AddFontMemResourceEx( (PVOID)pvData, dwSize, NULL, &dwNumFonts );
+		if( !hFont || dwNumFonts == 0 ){
+			if( hFont ) RemoveFontMemResourceEx( hFont );
+			return false;
+		}
+		hFontResource = hFont;
+		return true;
+	}
+
+	static void ReleaseMdIconFont()
+	{
+		HANDLE& hFontResource = MdIconFontResource();
+		if( hFontResource ){
+			RemoveFontMemResourceEx( hFontResource );
+			hFontResource = NULL;
+		}
+	}
+
+	static HFONT GetMdIconFont( int cx )
+	{
+		if( !MdIconFontInstall() ) return NULL;
+		return CreateFontW( -cx, 0, 0, 0, FW_NORMAL, FALSE, FALSE, FALSE,
+			DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS, ANTIALIASED_QUALITY,
+			FF_DONTCARE, L"Lucide" );
+	}
+
 	void DrawMdText( HDC hdc, int cx, LPCWSTR pszText, int nBaseHeight, int nWeight, bool bItalic, COLORREF crFg )
 	{
 		HFONT hfont = CreateFontW( -MulDiv( nBaseHeight, cx, 16 ), 0, 0, 0, nWeight, bItalic, FALSE, FALSE,
@@ -1284,77 +1338,51 @@ public:
 		HPEN hpenOld = (HPEN)SelectObject( hdc, hpen );
 		HBRUSH hbrOld = (HBRUSH)SelectObject( hdc, GetStockObject( NULL_BRUSH ) );
 
-		// Prefer the system icon font for the pictogram icons (Segoe Fluent
-		// Icons on Win11, Segoe MDL2 Assets on Win10; zero distribution cost).
-		// Each glyph is availability-checked once; icons without a font glyph
-		// fall through to the legacy letter/shape drawing below.
+		// Codepoints are tied to the bundled Lucide subset; see docs/lucide-font.md.
 		struct IconGlyph { int iIcon; wchar_t wch; };
 		static const IconGlyph c_aIconGlyphs[] = {
-			// only glyphs verified against the official Fluent/MDL2 lists
-			// (learn.microsoft.com); icons without an official glyph keep the
-			// letter/shape drawing below (table/numbered list have none)
-			{ 6, 0xE8DD },		// bold
-			{ 7, 0xE8DB },		// italic
-			{ 8, 0xEDE0 },		// strikethrough
-			{ 9, 0xE943 },		// inline code
-			{ 11, 0xE848 },		// quote
-			{ 12, 0xE8FD },		// bullet list
-			{ 14, 0xE9D5 },		// task list
-			{ 16, 0xE71B },		// link
-			{ 17, 0xE8B9 },		// image
-			{ 18, 0xF232 },		// table (GridViewSmall; not in MDL2 -> shape fallback on Win10)
-			{ 19, 0xE713 },		// customize (gear)
+			{ 0, 0xE385 },		// heading-1
+			{ 1, 0xE386 },		// heading-2
+			{ 2, 0xE387 },		// heading-3
+			{ 3, 0xE388 },		// heading-4
+			{ 4, 0xE389 },		// heading-5
+			{ 5, 0xE38A },		// heading-6
+			{ 6, 0xE05D },		// bold
+			{ 7, 0xE0FB },		// italic
+			{ 8, 0xE177 },		// strikethrough
+			{ 9, 0xE093 },		// code
+			{ 10, 0xE206 },		// code-xml (code block)
+			{ 11, 0xE239 },		// quote
+			{ 12, 0xE106 },		// list (bullet)
+			{ 13, 0xE1D1 },		// list-ordered
+			{ 14, 0xE4C3 },		// list-todo
+			{ 15, 0xE11C },		// minus (horizontal rule)
+			{ 16, 0xE102 },		// link
+			{ 17, 0xE0F6 },		// image
+			{ 18, 0xE17D },		// table
+			{ 19, 0xE154 },		// settings (customize)
 		};
-		static int s_iFont = 0;			// 0 none, 1 Fluent, 2 MDL2
-		static bool s_abGlyph[_countof( c_aIconGlyphs )] = { false };
-		static bool s_bFontChecked = false;
-		if( !s_bFontChecked ){
-			s_bFontChecked = true;
-			HDC hdcProbe = CreateCompatibleDC( NULL );
-			LPCWSTR apszFaces[] = { L"Segoe Fluent Icons", L"Segoe MDL2 Assets" };
-			for( int f = 0; f < 2 && s_iFont == 0; f++ ){
-				HFONT hfontProbe = CreateFontW( -16, 0, 0, 0, FW_NORMAL, FALSE, FALSE, FALSE,
-					DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS, DEFAULT_QUALITY, FF_DONTCARE, apszFaces[f] );
-				if( !hfontProbe ){
-					continue;
-				}
-				HFONT hfontProbeOld = (HFONT)SelectObject( hdcProbe, hfontProbe );
-				BOOL bAny = FALSE;
-				for( int g = 0; g < (int)_countof( c_aIconGlyphs ); g++ ){
-					WCHAR wChar = (WCHAR)c_aIconGlyphs[g].wch;
-					WORD wIndex = 0xFFFF;
-					if( GetGlyphIndicesW( hdcProbe, &wChar, 1, &wIndex, GGI_MARK_NONEXISTING_GLYPHS ) != GDI_ERROR && wIndex != 0xFFFF ){
-						s_abGlyph[g] = true;
-						bAny = TRUE;
-					}
-				}
-				SelectObject( hdcProbe, hfontProbeOld );
-				DeleteObject( hfontProbe );
-				if( bAny ){
-					s_iFont = f + 1;
-				}
-			}
-			DeleteDC( hdcProbe );
-		}
 		BOOL bGlyphDrawn = FALSE;
-		if( s_iFont != 0 ){
-			for( int g = 0; g < (int)_countof( c_aIconGlyphs ); g++ ){
-				if( c_aIconGlyphs[g].iIcon != iIcon || !s_abGlyph[g] ){
-					continue;
+		for( int g = 0; g < (int)_countof( c_aIconGlyphs ); g++ ){
+			if( c_aIconGlyphs[g].iIcon != iIcon ) continue;
+			HFONT hfontIcon = GetMdIconFont( cx );
+			if( !hfontIcon ) break;
+			HFONT hfontIconOld = (HFONT)SelectObject( hdc, hfontIcon );
+			if( hfontIconOld && hfontIconOld != (HFONT)HGDI_ERROR ){
+				WCHAR szFace[LF_FACESIZE] = {};
+				WORD wIndex = 0xFFFF;
+				if( GetTextFaceW( hdc, _countof( szFace ), szFace ) && lstrcmpiW( szFace, L"Lucide" ) == 0 &&
+					GetGlyphIndicesW( hdc, &c_aIconGlyphs[g].wch, 1, &wIndex, GGI_MARK_NONEXISTING_GLYPHS ) != GDI_ERROR &&
+					wIndex != 0 && wIndex != 0xFFFF ){
+					SetBkMode( hdc, TRANSPARENT );
+					SetTextColor( hdc, crFg );
+					RECT rcGlyph = { 0, 0, cx, cx };
+					bGlyphDrawn = DrawTextW( hdc, &c_aIconGlyphs[g].wch, 1, &rcGlyph, DT_CENTER | DT_VCENTER | DT_SINGLELINE ) != 0;
 				}
-				HFONT hfontIcon = CreateFontW( -cx, 0, 0, 0, FW_NORMAL, FALSE, FALSE, FALSE,
-					DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS, ANTIALIASED_QUALITY, FF_DONTCARE,
-					( s_iFont == 1 ) ? L"Segoe Fluent Icons" : L"Segoe MDL2 Assets" );
-				HFONT hfontIconOld = (HFONT)SelectObject( hdc, hfontIcon );
-				SetBkMode( hdc, TRANSPARENT );
-				SetTextColor( hdc, crFg );
-				RECT rcGlyph = { 0, 0, cx, cx };
-				DrawTextW( hdc, &c_aIconGlyphs[g].wch, 1, &rcGlyph, DT_CENTER | DT_VCENTER | DT_SINGLELINE );
 				SelectObject( hdc, hfontIconOld );
-				DeleteObject( hfontIcon );
-				bGlyphDrawn = TRUE;
-				break;
 			}
+			DeleteObject( hfontIcon );
+			break;
 		}
 		if( !bGlyphDrawn ){
 		switch( iIcon ){

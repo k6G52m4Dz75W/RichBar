@@ -625,6 +625,11 @@ public:
 		}
 	}
 
+	static void ReleaseMdIconFont()
+	{
+		T::ReleaseMdIconFont();
+	}
+
 	void FreeLocInstance( HINSTANCE hinstLoc )
 	{
 		if( T::_USE_LOC_DLL != LOC_USE_EMEDLOC_DLL ){
@@ -938,6 +943,7 @@ extern "C" void __stdcall OnEvents( HWND hwndView, UINT nEvent, LPARAM lParam )
 			else if( nEvent & EVENT_CLOSE ){
 				ASSERT_STRICT( _ETLData.m_pETLFrameMap->empty() );
 				DeleteAllFrames();  // previous versions of EmEditor do not fire EVENT_CLOSE_FRAME.
+				CETLFrameX::ReleaseMdIconFont();
 				delete _ETLData.m_pETLFrameMap;
 				_ETLData.m_pETLFrameMap = NULL;
 				_ETLData.m_wCmdID = 0;
