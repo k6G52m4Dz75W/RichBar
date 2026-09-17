@@ -61,6 +61,10 @@ Markdown 按钮集的图形类图标取自系统图标字体——**Segoe Fluent
 `tools/generate-glyph-reference.ps1` 重新生成（采用 GDI `GetGlyphIndices`
 探测——与插件渲染相同的真值来源）。
 
+> GitHub 会把 HTML 文件当纯文本源码展示。想直接看到渲染效果，可通过
+> [htmlpreview.github.io](https://htmlpreview.github.io/?https://github.com/k6G52m4Dz75W/RichBar/blob/master/docs/glyph-reference.html)
+> 在线打开——或下载该文件后用任意浏览器打开。
+
 ### 最佳实践说明（依据官方指南）
 
 - 图标字体的字形位于 Unicode 私有区（PUA），因此始终显式指定字体家族——

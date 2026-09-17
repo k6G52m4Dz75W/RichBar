@@ -69,6 +69,10 @@ glyphs RichBar currently maps. Regenerate it with
 `tools/generate-glyph-reference.ps1` (GDI `GetGlyphIndices` probing, the same
 ground truth the plug-in renders with).
 
+> GitHub serves HTML files as plain source, so for an instant rendered view
+> open it through [htmlpreview.github.io](https://htmlpreview.github.io/?https://github.com/k6G52m4Dz75W/RichBar/blob/master/docs/glyph-reference.html)
+> — or download the file and open it in any browser.
+
 ### Best-practice notes (per the official guidance)
 
 - Icon-font glyphs live in the Unicode Private Use Area, so the family name
