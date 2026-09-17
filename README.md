@@ -1,79 +1,137 @@
 # RichBar
 
-**RichBar** 是一个 EmEditor 插件，提供增强的 HTML + Markdown 双模式工具栏，
-基于 Emurasoft 官方 HTMLBar 插件源码（`19.5.0`）fork 而来。
-它旨在替代 EmEditor v26 内置的 HTML/Markdown 工具栏（闭源、标签藏在下拉菜单里）。
+English | [简体中文](README.zh.md)
 
-## 功能
+**RichBar** is an EmEditor plug-in providing an enhanced HTML + Markdown
+toolbar, forked from the official Emurasoft HTMLBar plug-in source
+(`19.5.0`). It is meant to replace the HTML/Markdown toolbar built into
+EmEditor v26 (closed source, with most tags hidden inside dropdown menus).
 
-- **双模式自动切换**：根据当前配置名（HTML / Markdown 列表独立持久化）自动切换
-  按钮集，并以文件扩展名兜底（`.md` `.markdown` `.mdown` `.mkd` ↔ `.htm` `.html` `.xhtml` `.shtml`）。
-- **手动模式切换 `[H][M]`**：工具栏最左侧两个成组按钮，按下的一侧是当前模式。
-  适合新建未保存文档（无文件名、无配置信号）时手动指定；任何文档或配置变化
-  自动回到检测模式。
-- **Markdown 按钮集**（25 个）：H1–H6、粗体、斜体、删除线、行内代码、围栏代码块、
-  引用、无序/有序（自动编号）/任务列表、水平线、链接、图片（文件选择器）、
-  表格、自定义按钮。包裹类命令对已包裹文本再点击一次即取消。
-- **运行时绘制图标**：按当前按钮尺寸直接绘制，任意 DPI 清晰；
-  颜色按栏背景亮度自动取反（浅底深字 / 深底浅字），主题或配置变化时自动重绘。
-- **多语言**：卫星资源 DLL（`mui\1033` 英文、`mui\2052` 简体中文标签）。
-- **设置走官方通道**：`EE_REG_SET_VALUE` / `EE_REG_QUERY_VALUE`
-  （`EmEditorPlugIns\RichBar` 键，INI 模式自动改用 `eePlugins.ini`），
-  与原版 HTMLBar 插件的设置完全隔离。
+## Features
 
-## 构建与安装
+- **Dual-mode auto switching**: the button set follows the current
+  configuration (independent, persistent HTML / Markdown name lists) with a
+  file-extension fallback (`.md` `.markdown` `.mdown` `.mkd` ↔ `.htm` `.html`
+  `.xhtml` `.shtml`). Switching documents or configurations rebuilds the bar.
+- **Manual mode switch `[H][M]`**: the leftmost two grouped toolbar buttons —
+  the pressed side is the active mode. Covers new, unsaved documents where
+  auto detection has nothing to go by; any document or configuration change
+  returns the bar to auto detection.
+- **Markdown button set** (25): H1–H6, bold, italic, strikethrough, inline
+  code, fenced code block, block quote, bullet / numbered (auto numbering) /
+  task lists, horizontal rule, link, image (file picker), table, customize.
+  Wrapping commands toggle off when applied twice.
+- **Runtime-drawn, theme-adaptive icons**: rendered directly at the current
+  button size (crisp at any DPI), colored by the bar background luminance
+  (dark glyphs on light bars, light glyphs on dark bars), with a hot image
+  list so hovered buttons stay readable in dark-band modes. Pictograms draw
+  from the system icon font (see below); light/dark theme and configuration
+  changes re-render automatically.
+- **MUI**: satellite resource DLLs (`mui\1033` English, `mui\2052` Simplified
+  Chinese).
+- **Settings via the official channel**: `EE_REG_SET_VALUE` /
+  `EE_REG_QUERY_VALUE` (the `EmEditorPlugIns\RichBar` key; `eePlugins.ini`
+  automatically in INI mode) — fully isolated from the original HTMLBar
+  plug-in's settings.
 
-- Visual Studio（项目工具集 v142，可用 `-p:PlatformToolset=v145` 覆盖构建）：
+## Toolbar icon reference
+
+The Markdown set's pictograms draw from the system icon fonts —
+**Segoe Fluent Icons** (Windows 11) and **Segoe MDL2 Assets** (Windows 10).
+The two fonts share the same codepoints but the artwork differs slightly
+(most visibly on Strikethrough), hence the two preview columns. Preview
+images are hot-linked from the official Microsoft Learn glyph tables.
+
+| Toolbar button | Codepoint | Segoe Fluent Icons (Win 11) | Segoe MDL2 Assets (Win 10) |
+|---|---|---|---|
+| Bold | U+E8DD | <img src="https://learn.microsoft.com/en-us/windows/apps/design/iconography/images/segoe-fluent-icons/e8dd.png" width="20" alt="Bold (Fluent)"> | <img src="https://learn.microsoft.com/en-us/windows/apps/design/iconography/images/segoe-mdl/e8dd.png" width="20" alt="Bold (MDL2)"> |
+| Italic | U+E8DB | <img src="https://learn.microsoft.com/en-us/windows/apps/design/iconography/images/segoe-fluent-icons/e8db.png" width="20" alt="Italic (Fluent)"> | <img src="https://learn.microsoft.com/en-us/windows/apps/design/iconography/images/segoe-mdl/e8db.png" width="20" alt="Italic (MDL2)"> |
+| Strikethrough | U+EDE0 | <img src="https://learn.microsoft.com/en-us/windows/apps/design/iconography/images/segoe-fluent-icons/ede0.png" width="20" alt="Strikethrough (Fluent)"> | <img src="https://learn.microsoft.com/en-us/windows/apps/design/iconography/images/segoe-mdl/ede0.png" width="20" alt="Strikethrough (MDL2)"> |
+| Inline code | U+E943 | <img src="https://learn.microsoft.com/en-us/windows/apps/design/iconography/images/segoe-fluent-icons/e943.png" width="20" alt="Code (Fluent)"> | <img src="https://learn.microsoft.com/en-us/windows/apps/design/iconography/images/segoe-mdl/e943.png" width="20" alt="Code (MDL2)"> |
+| Block quote | U+E848 | <img src="https://learn.microsoft.com/en-us/windows/apps/design/iconography/images/segoe-fluent-icons/e848.png" width="20" alt="LeftQuote (Fluent)"> | <img src="https://learn.microsoft.com/en-us/windows/apps/design/iconography/images/segoe-mdl/e848.png" width="20" alt="LeftQuote (MDL2)"> |
+| Bullet list | U+E8FD | <img src="https://learn.microsoft.com/en-us/windows/apps/design/iconography/images/segoe-fluent-icons/e8fd.png" width="20" alt="BulletedList (Fluent)"> | <img src="https://learn.microsoft.com/en-us/windows/apps/design/iconography/images/segoe-mdl/e8fd.png" width="20" alt="BulletedList (MDL2)"> |
+| Task list | U+E9D5 | <img src="https://learn.microsoft.com/en-us/windows/apps/design/iconography/images/segoe-fluent-icons/e9d5.png" width="20" alt="CheckList (Fluent)"> | <img src="https://learn.microsoft.com/en-us/windows/apps/design/iconography/images/segoe-mdl/e9d5.png" width="20" alt="CheckList (MDL2)"> |
+| Link | U+E71B | <img src="https://learn.microsoft.com/en-us/windows/apps/design/iconography/images/segoe-fluent-icons/e71b.png" width="20" alt="Link (Fluent)"> | <img src="https://learn.microsoft.com/en-us/windows/apps/design/iconography/images/segoe-mdl/e71b.png" width="20" alt="Link (MDL2)"> |
+| Image | U+E8B9 | <img src="https://learn.microsoft.com/en-us/windows/apps/design/iconography/images/segoe-fluent-icons/e8b9.png" width="20" alt="Picture (Fluent)"> | <img src="https://learn.microsoft.com/en-us/windows/apps/design/iconography/images/segoe-mdl/e8b9.png" width="20" alt="Picture (MDL2)"> |
+| Customize (gear) | U+E713 | <img src="https://learn.microsoft.com/en-us/windows/apps/design/iconography/images/segoe-fluent-icons/e713.png" width="20" alt="Settings (Fluent)"> | <img src="https://learn.microsoft.com/en-us/windows/apps/design/iconography/images/segoe-mdl/e713.png" width="20" alt="Settings (MDL2)"> |
+| Headings H1–H6 | — | letter-drawn | letter-drawn |
+| Numbered list | — | shape-drawn (no official glyph) | shape-drawn (no official glyph) |
+| Table | — | shape-drawn (no official glyph) | shape-drawn (no official glyph) |
+| Code block | — | letter-drawn `{ }` | letter-drawn `{ }` |
+| Horizontal rule | — | line-drawn | line-drawn |
+| Mode switch H / M | — | letter-drawn | letter-drawn |
+
+### Best-practice notes (per the official guidance)
+
+- Icon-font glyphs live in the Unicode Private Use Area, so the family name
+  is always set explicitly — Fluent Icons on Windows 11, MDL2 Assets on
+  Windows 10 (the equivalent of XAML's `SymbolThemeFontFamily`), and every
+  glyph is probed with `GetGlyphIndices` (`GGI_MARK_NONEXISTING_GLYPHS`)
+  before use. Icons whose glyph is missing on a given machine fall back to
+  the letter/shape drawings — never a missing-character box.
+- Glyphs in the deprecated `E0xx`–`E5xx` range are not used.
+- The fonts recommend sizes 16/20/24/32/40/48/64 for hinted rendering;
+  RichBar renders anti-aliased at arbitrary sizes (tunable via
+  `GLYPH_SIZE_SCALE` in `RichBar.h`) so the icons scale freely with the
+  button size.
+- No font files are redistributed — the fonts are part of Windows and are
+  referenced by family name only.
+
+## Build & install
+
+- Visual Studio (project toolset v142; override with
+  `-p:PlatformToolset=v145` on newer Build Tools):
 
   ```
   MSBuild RichBar.sln -p:Configuration=Release -p:Platform=x64 -p:PlatformToolset=v145
   ```
 
-- 2052 中文卫星需要额外构建（只有此脚本会生成）：
+- The Simplified Chinese satellite needs its own build step (only this
+  script produces it):
 
   ```
   powershell -File tools\build-loc-2052.ps1
   ```
 
-- 部署 `dist\`（`RichBar.dll` + `mui\1033\RichBar_loc.dll` + `mui\2052\RichBar_loc.dll`），
-  在 EmEditor「自定义插件」中添加 `dist\RichBar.dll`，或把
-  自定义中的插件文件夹指向 `dist\`。
+- Deploy the `dist\` folder (`RichBar.dll` + `mui\1033\RichBar_loc.dll` +
+  `mui\2052\RichBar_loc.dll`), add `dist\RichBar.dll` via Customize
+  Plug-ins, or point EmEditor's plug-ins folder at `dist\`.
 
-## 使用提示（实测有效）
+## Usage tips (tested)
 
-- **不想要屏幕上的 "RichBar" 标题文字**：EmEditor 自定义选项中有"工具栏标题"
-  显示开关，关掉即可。注意**不要**通过清空插件传给 EmEditor 的栏标题来实现
-  （0.11.1 试过）：查看 > 工具栏 菜单用这个标题作为工具栏的名称和开关依据，
-  清空会导致菜单条目空白。0.11.3 起标题为常量 "RichBar"，交给 EmEditor 的
-  显示开关去控制屏幕显示，两者各司其职。
-- **高分辨率屏幕**：自定义中（与工具栏标题显示相同的设置处）可选择
-  "显示工具栏大图标"。插件的 HTML 位图会拉伸切换，Markdown 图标和 `[H][M]`
-  开关则按新尺寸直接重绘，两种模式都能正常适配。
-- **深色工具栏**：工具 > 自定义 > 视图 > "自定义栏颜色"，
-  取消"使用系统颜色"，背景设深色（如 `#1E1E1E`）、文字设浅色（如 `#D0D0D0`）。
-  插件图标会按背景亮度自动翻转为浅色字形，切回浅色也自动反转。
-  `.eetheme` 主题文件只影响编辑器文本区，管不到工具栏区域。
-- **Very Dark（极暗）模式**：0.12.0 起通过官方接口（`EI_IS_VERY_DARK` /
-  `EI_WM_CTLCOLOR` / `EI_WM_THEMECHANGED`）自动适配——栏区域融入黑色带区、
-  图标翻转为浅色，主题切换实时跟随；旧版 EmEditor 不受影响。
-- **HTML 模式的按钮样式**：HTML 按钮集仍使用原版 BMP 彩色图标资产
-  （未主题化）；Markdown 按钮集与 `[H][M]` 开关为运行时绘制、可主题自适应。
-- **图标来源**：Markdown 图形类图标优先使用系统图标字体
-  （Windows 11 的 Segoe Fluent Icons / Windows 10 的 Segoe MDL2 Assets，
-  粗体/斜体/删除线/行内代码/引用/三种列表/链接/图片/表格/齿轮），
-  逐字形校验可用性；标题 H1–H6、代码块、水平线和 `[H][M]` 开关按字母设计；
-  没有系统图标字体的机器回退为字母/形状绘制。不携带任何字体文件。
+- **Hide the on-screen "RichBar" title text**: EmEditor's customization has a
+  toolbar-title display option — turn it off there. Do **not** empty the band
+  title passed by the plug-in (0.11.1 tried): the View > Toolbars menu uses
+  that title as the toolbar's name and toggle. Since 0.11.3 the title is the
+  constant "RichBar"; let EmEditor's display option control the on-screen
+  part.
+- **Dark toolbar**: Tools > Customize > View > "custom bar colors" — uncheck
+  "use system color", set a dark background (e.g. `#1E1E1E`) and light text
+  (e.g. `#D0D0D0`). Icons flip to light glyphs automatically and flip back on
+  light backgrounds. `.eetheme` theme files only affect the editor text area,
+  not the bars.
+- **Very Dark mode**: since 0.12.0 the official API is used
+  (`EI_IS_VERY_DARK` / `EI_WM_CTLCOLOR` / `EI_WM_THEMECHANGED`) — the bar
+  blends into the black band and icons switch to light glyphs, live on theme
+  changes; older EmEditor versions are unaffected.
+- **High-resolution displays**: the customization (same place as the toolbar
+  title option) can enable large toolbar icons. The HTML bitmaps scale and
+  the Markdown icons / `[H][M]` switch re-draw at the new size.
+- **HTML mode button style**: the HTML set still uses the original BMP color
+  assets (not themeable); the Markdown set and the `[H][M]` switch are
+  runtime-drawn and theme-adaptive.
 
-## 版本方案
+## Version scheme
 
-| 版本区间 | 含义 |
-|---------|------|
-| `0.1.0`  | 原始上游 HTMLBar 源码原样 fork，未做修改。 |
-| `0.4.x`  | 兼容性修复，使原插件能在现代 EmEditor（v26）上编译加载。 |
-| `0.9.0` – `0.13.x` | HTML + Markdown 双模式工具栏，向 `1.0.0` 迈进。 |
+| Range | Meaning |
+|-------|---------|
+| `0.1.0` | The original upstream HTMLBar source as forked, unmodified. |
+| `0.4.x` | Compatibility fixes to build and load on modern EmEditor (v26). |
+| `0.9.0` – `0.13.x` | The HTML + Markdown dual-mode toolbar, heading towards `1.0.0`. |
 
-详细变更见 [CHANGELOG.md](CHANGELOG.md)（英文）/ [CHANGELOG.zh.md](CHANGELOG.zh.md)（中文）。
+See [CHANGELOG.md](CHANGELOG.md) (English) /
+[CHANGELOG.zh.md](CHANGELOG.zh.md) (Chinese) for details.
 
-## 许可
+## License
 
-见 [LICENSE](LICENSE)。原版代码版权归 Emurasoft 所有。
+See [LICENSE](LICENSE). Original code copyright Emurasoft.

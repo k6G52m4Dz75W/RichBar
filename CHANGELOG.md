@@ -14,6 +14,19 @@ this code base:
 | `0.4.x`       | Compatibility fixes that make the original plug-in build and load correctly on modern EmEditor (v26). |
 | `0.9.0` – `0.13.x` | The HTML + Markdown dual-mode toolbar, heading towards `1.0.0`. |
 
+## [0.13.2] - 2026-09-17
+
+### Fixed
+
+- **Wrong glyph mappings found by auditing the official Fluent/MDL2 glyph
+  tables.** `EA3A` is `CircleRing`, not a table (the Table button drew a
+  ring), and `EA1C` does not exist in either font. The Table and Numbered
+  list buttons now always use their original shape drawings (grid / digits);
+  the remaining ten font glyphs were verified against the official
+  Microsoft Learn glyph tables, and the READMEs gained a full icon
+  reference table (with per-font preview images) plus an English/Chinese
+  language pair (README.md / README.zh.md).
+
 ## [0.13.1] - 2026-09-17
 
 ### Changed

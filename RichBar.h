@@ -1241,17 +1241,18 @@ public:
 		// fall through to the legacy letter/shape drawing below.
 		struct IconGlyph { int iIcon; wchar_t wch; };
 		static const IconGlyph c_aIconGlyphs[] = {
+			// only glyphs verified against the official Fluent/MDL2 lists
+			// (learn.microsoft.com); icons without an official glyph keep the
+			// letter/shape drawing below (table/numbered list have none)
 			{ 6, 0xE8DD },		// bold
 			{ 7, 0xE8DB },		// italic
 			{ 8, 0xEDE0 },		// strikethrough
 			{ 9, 0xE943 },		// inline code
 			{ 11, 0xE848 },		// quote
 			{ 12, 0xE8FD },		// bullet list
-			{ 13, 0xEA1C },		// numbered list
 			{ 14, 0xE9D5 },		// task list
 			{ 16, 0xE71B },		// link
 			{ 17, 0xE8B9 },		// image
-			{ 18, 0xEA3A },		// table
 			{ 19, 0xE713 },		// customize (gear)
 		};
 		static int s_iFont = -1;			// -1 unknown, 0 none, 1 Fluent, 2 MDL2
