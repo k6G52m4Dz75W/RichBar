@@ -14,7 +14,7 @@ this code base:
 | `0.4.x`       | Compatibility fixes that make the original plug-in build and load correctly on modern EmEditor (v26). |
 | `0.9.0` – `0.13.x` | The HTML + Markdown dual-mode toolbar, heading towards `1.0.0`. |
 
-## [Unreleased]
+## [0.13.4] - 2026-09-17
 
 ### Changed
 
