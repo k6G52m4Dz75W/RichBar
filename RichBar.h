@@ -1256,7 +1256,7 @@ public:
 			{ 18, 0xF232 },		// table (GridViewSmall; not in MDL2 -> shape fallback on Win10)
 			{ 19, 0xE713 },		// customize (gear)
 		};
-		static int s_iFont = -1;			// -1 unknown, 0 none, 1 Fluent, 2 MDL2
+		static int s_iFont = 0;			// 0 none, 1 Fluent, 2 MDL2
 		static bool s_abGlyph[_countof( c_aIconGlyphs )] = { false };
 		static bool s_bFontChecked = false;
 		if( !s_bFontChecked ){

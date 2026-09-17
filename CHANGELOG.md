@@ -14,6 +14,20 @@ this code base:
 | `0.4.x`       | Compatibility fixes that make the original plug-in build and load correctly on modern EmEditor (v26). |
 | `0.9.0` – `0.13.x` | The HTML + Markdown dual-mode toolbar, heading towards `1.0.0`. |
 
+## [Unreleased]
+
+### Fixed
+
+- Initialize the Markdown icon font selector to its actual "none" state so
+  font probing runs. Previously its initial value was -1 while the probe loop
+  required 0, so all mapped icons used legacy drawing, including Link (E71B).
+  Earlier claims that the toolbar was already rendering these font mappings
+  were incorrect. The codepoint mappings themselves are unchanged.
+- Add `tools/test-icon-rendering.ps1`: compile the drawing methods extracted
+  from RichBar.h and compare Link pixels with Fluent E71B and the legacy
+  fallback at 16/24/32 pixels in both foreground colors. This is an offscreen
+  regression test, not an EmEditor UI test.
+
 ## [0.13.3] - 2026-09-17
 
 ### Added
