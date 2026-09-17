@@ -12,6 +12,14 @@
 
 ## [0.13.3] - 2026-09-17
 
+### 新增
+
+- **交互式字形参考**：`docs/glyph-reference.html`——列出两套系统图标字体
+  暴露的全部字形（经 GDI 探测发现 Fluent 2033 个、MDL2 1833 个，多于官方
+  页面文档化的数量），基于本机安装的字体实时渲染，带 Light/Dark 配色与
+  字体切换、过滤功能，并以蓝色边框标出 RichBar 当前映射的字形。
+  可用 `tools/generate-glyph-reference.ps1` 重新生成。
+
 ### 修复
 
 - **表格按钮现在绘制真正的网格字形**（Segoe Fluent Icons 的 U+F232

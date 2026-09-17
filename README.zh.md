@@ -54,6 +54,13 @@ Markdown 按钮集的图形类图标取自系统图标字体——**Segoe Fluent
 | 水平线 | — | 线条绘制 | 线条绘制 |
 | 模式开关 H / M | — | 字母绘制 | 字母绘制 |
 
+**完整交互式参考**：[docs/glyph-reference.html](docs/glyph-reference.html)
+列出了两套字体暴露的*全部*字形（比微软文档页展示的更多——不少是未文档化的），
+基于本机安装的字体实时渲染，带 Light/Dark 配色切换、字体切换、名称/码位过滤，
+并以蓝色边框标出 RichBar 当前映射的字形。可用
+`tools/generate-glyph-reference.ps1` 重新生成（采用 GDI `GetGlyphIndices`
+探测——与插件渲染相同的真值来源）。
+
 ### 最佳实践说明（依据官方指南）
 
 - 图标字体的字形位于 Unicode 私有区（PUA），因此始终显式指定字体家族——

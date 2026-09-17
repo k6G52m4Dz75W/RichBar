@@ -16,6 +16,15 @@ this code base:
 
 ## [0.13.3] - 2026-09-17
 
+### Added
+
+- **Interactive glyph reference**: `docs/glyph-reference.html` — every glyph
+  both system icon fonts expose (2033 Fluent / 1833 MDL2, discovered via GDI
+  probing — more than the official pages document), rendered live from the
+  installed fonts with Light/Dark scheme and font toggles, filtering, and
+  blue borders on the glyphs RichBar maps. Regenerate with
+  `tools/generate-glyph-reference.ps1`.
+
 ### Fixed
 
 - **The Table button now draws a real grid** (U+F232 GridViewSmall from

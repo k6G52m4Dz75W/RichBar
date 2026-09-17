@@ -61,6 +61,14 @@ images are hot-linked from the official Microsoft Learn glyph tables.
 | Horizontal rule | — | line-drawn | line-drawn |
 | Mode switch H / M | — | letter-drawn | letter-drawn |
 
+**Full interactive reference:** [docs/glyph-reference.html](docs/glyph-reference.html)
+lists *every* glyph both fonts expose (more than Microsoft's pages show — many
+are undocumented), rendered live from the installed fonts with a Light/Dark
+scheme toggle, a font toggle, a name/codepoint filter, and blue borders on the
+glyphs RichBar currently maps. Regenerate it with
+`tools/generate-glyph-reference.ps1` (GDI `GetGlyphIndices` probing, the same
+ground truth the plug-in renders with).
+
 ### Best-practice notes (per the official guidance)
 
 - Icon-font glyphs live in the Unicode Private Use Area, so the family name
