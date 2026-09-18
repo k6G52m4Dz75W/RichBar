@@ -1273,10 +1273,7 @@ public:
 			FF_DONTCARE, L"remixicon" );
 	}
 
-	// cw is the drawing width; the three HTML dropdown slots pass a reduced
-	// width so the glyph stays clear of the control's own wholedropdown
-	// arrow, which the control paints in the button's bottom-right corner.
-	BOOL DrawIconGlyph( HDC hdc, int cx, int cw, WCHAR ch, COLORREF crFg )
+	BOOL DrawIconGlyph( HDC hdc, int cx, WCHAR ch, COLORREF crFg )
 	{
 		HFONT hfontIcon = GetMdIconFont( cx );
 		if( !hfontIcon ) return FALSE;
@@ -1290,7 +1287,7 @@ public:
 				index != 0 && index != 0xFFFF ){
 				SetBkMode( hdc, TRANSPARENT );
 				SetTextColor( hdc, crFg );
-				RECT rc = { 0, 0, cw, cx };
+				RECT rc = { 0, 0, cx, cx };
 				drawn = DrawTextW( hdc, &ch, 1, &rc, DT_CENTER | DT_VCENTER | DT_SINGLELINE ) != 0;
 			}
 			SelectObject( hdc, old );
@@ -1330,12 +1327,12 @@ public:
 			// the [H][M] mode switch: HTML5 / Markdown glyphs from the same
 			// Remix subset as every other button (filled variants read best
 			// at toolbar sizes)
-			DrawIconGlyph( hdc, cx, cx, iIcon == MD_ICON_MODE_H ? 0xEE40 /*html5-fill*/ : 0xEF1D /*markdown-fill*/, crFg );
+			DrawIconGlyph( hdc, cx, iIcon == MD_ICON_MODE_H ? 0xEE40 /*html5-fill*/ : 0xEF1D /*markdown-fill*/, crFg );
 			return;
 		}
 		for( int g = 0; g < (int)_countof( c_aIconGlyphs ); g++ ){
 			if( c_aIconGlyphs[g].iIcon == iIcon ){
-				DrawIconGlyph( hdc, cx, cx, c_aIconGlyphs[g].wch, crFg );
+				DrawIconGlyph( hdc, cx, c_aIconGlyphs[g].wch, crFg );
 				break;
 			}
 		}
@@ -1357,12 +1354,7 @@ public:
 			0xED9E, 0xEB97, 0xEA21, 0xEE59, 0xED3B, 0xEF83  // function, error, warning, info, flag, sound
 		};
 		if( iIcon < 0 || iIcon >= (int)_countof( glyphs ) ) return;
-		// The three in-bar dropdowns keep the button's bottom-right corner
-		// clear for the control's own wholedropdown arrow (theme-colored):
-		// Remix glyphs are wider than the Lucide ones and used to run under
-		// that arrow, which made its color look wrong.
-		int cw = ( iIcon == 0 || iIcon == 6 || iIcon == 23 ) ? cx * 70 / 100 : cx;
-		DrawIconGlyph( hdc, cx, cw, glyphs[iIcon], crFg );
+		DrawIconGlyph( hdc, cx, glyphs[iIcon], crFg );
 		// no fallback artwork by design: the subset ships inside this DLL
 	}
 

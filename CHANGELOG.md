@@ -14,21 +14,6 @@ this code base:
 | `0.4.x`       | Compatibility fixes that make the original plug-in build and load correctly on modern EmEditor (v26). |
 | `0.9.0` – `0.17.x` | The HTML + Markdown dual-mode toolbar, heading towards `1.0.0`. |
 
-## [0.17.3] - 2026-09-18
-
-### Fixed
-
-- **Reverts both 0.17.1 and 0.17.2** (the self-drawn arrow attempts — both
-  were wrong-headed and are gone).
-- **The actual cause of the wrong-looking dropdown arrows:** the Remix
-  glyphs are wider than the Lucide ones and ran into the button's
-  bottom-right corner, right under the control's own wholedropdown arrow.
-  The arrow itself is drawn by the toolbar control in its own theme color
-  (as it always has); overlapping the artwork made it look wrong. The
-  three HTML dropdown slots (heading, font, form) now draw their glyph in
-  the left 70% of the cell, keeping the corner clear for the arrow —
-  the same geometry as the Lucide era, and no custom arrow drawing.
-
 ## [0.17.0] - 2026-09-18
 
 ### Changed
