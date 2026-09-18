@@ -299,7 +299,11 @@ static void TestImageLists(bool fallback) {
                         HGDIOBJ oldFont = SelectObject(dc,font);
                         ValidateGlyph(dc,ch);
                         SetBkMode(dc,TRANSPARENT); SetTextColor(dc,color);
-                        RECT rc = {0,0,size,size};
+                        // dropdown slots draw into a reduced width, keeping
+                        // the bottom-right corner clear for the control arrow
+                        int cw = (mode == MODE_HTML && (icon == 0 || icon == 6 || icon == 23))
+                            ? size * 70 / 100 : size;
+                        RECT rc = {0,0,cw,size};
                         Check(DrawTextW(dc,&ch,1,&rc,DT_CENTER|DT_VCENTER|DT_SINGLELINE), "direct list reference draw failed");
                         SelectObject(dc,oldFont); DeleteObject(font);
                         GdiFlush();
