@@ -14,6 +14,19 @@ this code base:
 | `0.4.x`       | Compatibility fixes that make the original plug-in build and load correctly on modern EmEditor (v26). |
 | `0.9.0` – `0.14.x` | The HTML + Markdown dual-mode toolbar, heading towards `1.0.0`. |
 
+## [0.15.5] - 2026-09-17
+
+### Fixed
+
+- **A hover-opened menu covered the button's tooltip.** Menu and tooltip
+  are both topmost popups competing for the same spot below the button;
+  the standard Windows practice is for the tooltip to stand down while a
+  menu tracks (menu bars and Ribbons behave the same). Before showing a
+  dropdown the plug-in now hides the toolbar's tooltip control (`TTM_POP`)
+  and deactivates it (`TTM_ACTIVATE`), reactivating it when the menu
+  closes, so the tooltip returns on the next mouse move without ever
+  overlapping the menu.
+
 ## [0.15.4] - 2026-09-17
 
 ### Fixed

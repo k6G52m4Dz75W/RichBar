@@ -2807,6 +2807,16 @@ public:
 				}
 			}
 		}
+		// Windows convention for hover/click menus: while a menu tracks, the
+		// tooltip stands down. Both are topmost popups fighting for the same
+		// spot below the button, so hiding the tip for the menu's lifetime is
+		// the standard practice (menu bars and Ribbons do the same). The tip
+		// returns on the next mouse move once the menu closes.
+		HWND hwndTips = m_hwndToolbar ? (HWND)SendMessage( m_hwndToolbar, TB_GETTOOLTIPS, 0, 0 ) : NULL;
+		if( hwndTips ){
+			SendMessage( hwndTips, TTM_POP, 0, 0 );
+			SendMessage( hwndTips, TTM_ACTIVATE, FALSE, 0 );
+		}
 		m_bInDropdownMenu = true;
 		switch( cmd.m_iCmd ){
 		case CMD_FONT:
@@ -2873,6 +2883,9 @@ public:
 
 		}
 		m_bInDropdownMenu = false;
+		if( hwndTips ){
+			SendMessage( hwndTips, TTM_ACTIVATE, TRUE, 0 );
+		}
 		if( iOldImage >= 0 ){
 			TBBUTTONINFO bi = {};
 			bi.cbSize = sizeof( bi );
