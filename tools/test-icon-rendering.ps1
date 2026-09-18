@@ -16,6 +16,9 @@ $defines = ([regex]::Matches($header, '(?m)^#define (?:MD_TEXT_HEIGHT|MD_CODE_HE
 $prefix = @'
 #include <windows.h>
 #include <commctrl.h>
+#ifndef ILCF_COPY
+#define ILCF_COPY 0x00000002
+#endif
 #define MODE_HTML 0
 #define MODE_MD 1
 #define GLYPH_COLOR_DARK RGB(48,48,48)
@@ -225,9 +228,7 @@ static void TestImageLists(bool fallback) {
             int count = mode == MODE_HTML ? 48 : 20;
             for (COLORREF fg : {RGB(48,48,48), RGB(224,224,224)}) {
                 HIMAGELIST list = renderer.BuildToolbarImageList(size, fg, mode);
-                Check(list && ImageList_GetImageCount(list) == count, "wrong command image-list count");
-                renderer.AddModeSwitchIcons(list, size, fg);
-                Check(ImageList_GetImageCount(list) == count+2, "wrong count after H/M append");
+                Check(list && ImageList_GetImageCount(list) == count+2, "wrong command image-list count (commands + H/M)");
                 HIMAGELIST hot = renderer.BuildHotImageList(size);
                 Check(hot && ImageList_GetImageCount(hot) == count+2, "wrong hot image-list count");
                 for (int state = 0; state < 2; ++state) {
@@ -290,6 +291,52 @@ static void TestImageLists(bool fallback) {
     Renderer::ReleaseMdIconFont();
     printf("PASS actual HTML/MD normal+hot image lists, H/M slots, HTML-MD-HTML rebuilds: %d pixel comparisons (%s)\n", comparisons, fallback ? "fallback" : "Lucide");
 }
+static void TestPressedCopies() {
+    // Mirrors DisplayBar's pressed-state mechanism: on a dark band the normal
+    // list is built with a second, dark-drawn copy of every image appended
+    // after the light ones; each dark copy must equal the hot list's image.
+    Renderer renderer;
+    renderer.m_iMode = MODE_HTML;
+    const int size = 16;
+    const COLORREF fg = RGB(224,224,224), hotFg = RGB(48,48,48);
+    auto drawPixels = [&](HIMAGELIST list, int icon) {
+        HDC dc = CreateCompatibleDC(NULL);
+        BITMAPINFO info = {};
+        info.bmiHeader.biSize = sizeof(BITMAPINFOHEADER);
+        info.bmiHeader.biWidth = size; info.bmiHeader.biHeight = -size;
+        info.bmiHeader.biPlanes = 1; info.bmiHeader.biBitCount = 32;
+        void* bits = NULL;
+        HBITMAP bmp = CreateDIBSection(dc, &info, DIB_RGB_COLORS, &bits, NULL, 0);
+        Check(dc && bmp && bits, "pressed-copy test bitmap failed");
+        HGDIOBJ old = SelectObject(dc, bmp);
+        RECT rc = {0, 0, size, size};
+        HBRUSH bg = CreateSolidBrush(RGB(255, 0, 255));
+        FillRect(dc, &rc, bg);
+        DeleteObject(bg);
+        HICON hicon = ImageList_GetIcon(list, icon, ILD_TRANSPARENT);
+        Check(hicon && DrawIconEx(dc, 0, 0, hicon, size, size, 0, NULL, DI_NORMAL), "pressed-copy icon draw failed");
+        if (hicon) DestroyIcon(hicon);
+        GdiFlush();
+        std::vector<DWORD> pixels((DWORD*)bits, (DWORD*)bits + size*size);
+        for (auto& p : pixels) p &= 0xFFFFFF;
+        SelectObject(dc, old);
+        DeleteObject(bmp);
+        DeleteDC(dc);
+        return pixels;
+    };
+    HIMAGELIST normal = renderer.BuildToolbarImageList(size, fg, MODE_HTML, 2);
+    int light = ImageList_GetImageCount(normal) / 2;
+    Check(light == 50, "normal list with dark copies has unexpected count");
+    HIMAGELIST hot = renderer.BuildToolbarImageList(size, hotFg, MODE_HTML);
+    Check(ImageList_GetImageCount(hot) == light, "hot list must mirror the light images");
+    for (int i = 0; i < light; ++i)
+        Check(drawPixels(normal, light + i) == drawPixels(hot, i), "dark copy differs from its hot image");
+    Check(drawPixels(normal, 0) != drawPixels(normal, light), "dark copy must differ from the light glyph");
+    ImageList_Destroy(hot);
+    ImageList_Destroy(normal);
+    renderer.ReleaseMdIconFont();
+    printf("PASS pressed-state dark copies drawn into the normal list: %d images verified\n", light);
+}
 int main(int argc, char** argv) {
     Check(argc == 2, "expected normal, add-fail or missing-glyph argument");
     failAdd = strcmp(argv[1], "add-fail") == 0;
@@ -325,6 +372,7 @@ int main(int argc, char** argv) {
     failAdd = strcmp(argv[1], "add-fail") == 0;
     missingGlyph = strcmp(argv[1], "missing-glyph") == 0;
     TestImageLists(failAdd || missingGlyph);
+    TestPressedCopies();
     return 0;
 }
 '@

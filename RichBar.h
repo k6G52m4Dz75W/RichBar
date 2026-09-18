@@ -165,6 +165,10 @@ WCHAR OctToDec( LPWSTR& p )
 #define MD_CODE_HEIGHT		12
 #define MD_SUBSCRIPT_HEIGHT	8
 
+#ifndef ILCF_COPY
+#define ILCF_COPY 0x00000002	// ImageList_Copy: keep the source image (old _WIN32_IE targets)
+#endif
+
 #define MODE_HTML				0
 #define MODE_MD					1
 #define MODE_COUNT				2
@@ -380,6 +384,7 @@ public:
 	HWND m_hwndToolbar;
 	HIMAGELIST m_himageToolbar;
 	HIMAGELIST m_himageToolbarHot;
+	int m_nLightIcons;	// images before the pressed-state dark copies appended below them
 	HWND m_hDlg;
 	TCHAR m_szOldConfig[MAX_CONFIG_NAME];
 	DWORD m_dwFindFlags;
@@ -1119,8 +1124,8 @@ public:
 
 		// manual mode switch: [H][M] | separator | command buttons;
 		// the checked side shows the effective mode and doubles as its indicator
-		int nIcons = 0;
-		if( m_himageToolbar ){
+		int nIcons = m_nLightIcons;	// excludes the pressed-state dark copies
+		if( nIcons <= 0 && m_himageToolbar ){
 			nIcons = ImageList_GetImageCount( m_himageToolbar );
 		}
 		atb[0].iBitmap = max( 0, nIcons - 2 );
@@ -1144,10 +1149,11 @@ public:
 			if( it->m_iCmd == CMD_SEPARATOR ){
 				atb[i + 3].fsStyle = TBSTYLE_SEP;
 			}
-			if( it->m_iCmd == CMD_FONT ){
-				atb[i + 3].fsStyle = BTNS_DROPDOWN;
-			}
-			if( it->m_iCmd == CMD_DROPDOWN_HEADER || it->m_iCmd == CMD_DROPDOWN_FORM ){
+			// Every in-bar dropdown is a whole-button dropdown. The split
+			// BTNS_DROPDOWN style (font button) renders its arrow region with
+			// pressed-state drawing, which pulls from the normal image list
+			// and washes the glyph out on a dark band's light hover fill.
+			if( it->m_iCmd == CMD_FONT || it->m_iCmd == CMD_DROPDOWN_HEADER || it->m_iCmd == CMD_DROPDOWN_FORM ){
 				atb[i + 3].fsStyle = BTNS_WHOLEDROPDOWN;
 			}
 
@@ -1573,28 +1579,36 @@ public:
 		}
 	}
 
-	HIMAGELIST BuildToolbarImageList( int cx, COLORREF crFg, int mode )
+	HIMAGELIST BuildToolbarImageList( int cx, COLORREF crFg, int mode, int nCopies = 1 )
 	{
 		int count = mode == MODE_MD ? 20 : 48;
-		HIMAGELIST himl = ImageList_Create( cx, cx, ILC_COLOR32, count, 2 );
+		HIMAGELIST himl = ImageList_Create( cx, cx, ILC_COLOR32, ( count + 2 ) * nCopies, 2 );
 		if( !himl ){
 			return NULL;
 		}
-		for( int i = 0; i < count; i++ ){
-			void* pvBits = NULL;
-			HBITMAP hbm = CreateMdIconBitmap( cx, &pvBits );
-			if( !hbm ){
-				break;
+		// Each copy repeats every command image plus the two [H][M] glyphs.
+		// The first copy uses the bar's foreground; any further copies are
+		// drawn dark, giving pressed dropdown buttons a readable glyph on
+		// the light pressed fill (pressed drawing always uses this list).
+		for( int c = 0; c < nCopies; c++ ){
+			COLORREF crCopyFg = c ? GLYPH_COLOR_DARK : crFg;
+			for( int i = 0; i < count; i++ ){
+				void* pvBits = NULL;
+				HBITMAP hbm = CreateMdIconBitmap( cx, &pvBits );
+				if( !hbm ){
+					break;
+				}
+				HDC hdc = CreateCompatibleDC( NULL );
+				HBITMAP hbmOld = (HBITMAP)SelectObject( hdc, hbm );
+				if( mode == MODE_MD ) DrawMdIcon( hdc, cx, i, crCopyFg );
+				else DrawHtmlIcon( hdc, cx, i, crCopyFg );
+				SelectObject( hdc, hbmOld );
+				DeleteDC( hdc );
+				MdKeyOutBackground( cx, pvBits );
+				ImageList_Add( himl, hbm, NULL );
+				DeleteObject( hbm );
 			}
-			HDC hdc = CreateCompatibleDC( NULL );
-			HBITMAP hbmOld = (HBITMAP)SelectObject( hdc, hbm );
-			if( mode == MODE_MD ) DrawMdIcon( hdc, cx, i, crFg );
-			else DrawHtmlIcon( hdc, cx, i, crFg );
-			SelectObject( hdc, hbmOld );
-			DeleteDC( hdc );
-			MdKeyOutBackground( cx, pvBits );
-			ImageList_Add( himl, hbm, NULL );
-			DeleteObject( hbm );
+			AddModeSwitchIcons( himl, cx, crCopyFg );
 		}
 		return himl;
 	}
@@ -1603,10 +1617,7 @@ public:
 	{
 		// hover fills buttons with the light system highlight, so the hot list
 		// mirrors the normal list with dark glyphs to stay readable on it
-		COLORREF crHotFg = GLYPH_COLOR_DARK;
-		HIMAGELIST himl = BuildToolbarImageList( cx, crHotFg, m_iMode );
-		if( himl ) AddModeSwitchIcons( himl, cx, crHotFg );
-		return himl;
+		return BuildToolbarImageList( cx, GLYPH_COLOR_DARK, m_iMode );
 	}
 
 	void DisplayBar( bool bVisible )
@@ -1651,7 +1662,11 @@ public:
 
 			COLORREF crGlyphFg = GetBarGlyphColor();
 			m_crGlyphFg = crGlyphFg;
-			m_himageToolbar = BuildToolbarImageList( cxButtonSize, crGlyphFg, m_iMode );
+			// On a dark band (light glyphs) request a second, dark-drawn copy
+			// of every image appended to this list; pressed dropdown buttons
+			// are pointed at their dark copy while their menu tracks.
+			const int nCopies = ( crGlyphFg == GLYPH_COLOR_LIGHT ) ? 2 : 1;
+			m_himageToolbar = BuildToolbarImageList( cxButtonSize, crGlyphFg, m_iMode, nCopies );
 			if( !m_himageToolbar ){
 				DestroyWindow( m_hDlg );
 				m_hDlg = NULL;
@@ -1659,13 +1674,13 @@ public:
 				return;
 			}
 			_ASSERT( m_himageToolbar );
-			AddModeSwitchIcons( m_himageToolbar, cxButtonSize, crGlyphFg );
+			m_nLightIcons = ImageList_GetImageCount( m_himageToolbar ) / nCopies;
 			SendMessage( hwndToolbar, TB_SETIMAGELIST, 0, (LPARAM)m_himageToolbar );
 
 			// on hover the toolbar fills buttons with the light system highlight;
 			// when the band is dark (light glyphs) supply a hot image list with
 			// dark glyphs so hovered buttons stay readable
-			if( m_crGlyphFg == GLYPH_COLOR_LIGHT ){
+			if( nCopies == 2 ){
 				m_himageToolbarHot = BuildHotImageList( cxButtonSize );
 				SendMessage( hwndToolbar, TB_SETHOTIMAGELIST, 0, (LPARAM)m_himageToolbarHot );
 			}
@@ -2758,6 +2773,31 @@ public:
 				NMTOOLBAR* pToolbar = (NMTOOLBAR*)pnmh;
 				if( pToolbar->iItem >= ID_COMMAND_BASE && pToolbar->iItem < ID_COMMAND_BASE + (int)Cmds().size() ) {
 					CCmd& cmd = Cmds()[pToolbar->iItem - ID_COMMAND_BASE];
+					// While the menu tracks, the button stays pressed and the
+					// toolbar draws pressed buttons from the normal list:
+					// light glyphs on the light pressed fill on a dark band.
+					// That list carries dark copies of every image after
+					// m_nLightIcons (mirroring the hot list), so point just
+					// this button at its dark variant for the menu's lifetime.
+					int iOldImage = -1;
+					if( m_himageToolbarHot != NULL && m_nLightIcons > 0 ){
+						int nIndex = (int)SendMessage( m_hwndToolbar, TB_COMMANDTOINDEX, pToolbar->iItem, 0L );
+						TBBUTTON tb = {};
+						if( nIndex >= 0 && SendMessage( m_hwndToolbar, TB_GETBUTTON, nIndex, (LPARAM)&tb ) ){
+							iOldImage = tb.iBitmap;
+							int iDark = m_nLightIcons + iOldImage;
+							if( iDark < ImageList_GetImageCount( m_himageToolbar ) ){
+								TBBUTTONINFO bi = {};
+								bi.cbSize = sizeof( bi );
+								bi.dwMask = TBIF_IMAGE;
+								bi.iImage = iDark;
+								SendMessage( m_hwndToolbar, TB_SETBUTTONINFO, pToolbar->iItem, (LPARAM)&bi );
+							}
+							else {
+								iOldImage = -1;
+							}
+						}
+					}
 					switch( cmd.m_iCmd ){
 					case CMD_FONT:
 						{
@@ -2819,8 +2859,15 @@ public:
 								break;
 							}
 						}
-						break;
+							break;
 
+					}
+					if( iOldImage >= 0 ){
+						TBBUTTONINFO bi = {};
+						bi.cbSize = sizeof( bi );
+						bi.dwMask = TBIF_IMAGE;
+						bi.iImage = iOldImage;
+						SendMessage( m_hwndToolbar, TB_SETBUTTONINFO, pToolbar->iItem, (LPARAM)&bi );
 					}
 				}
 			}
@@ -3106,7 +3153,9 @@ public:
 		HWND hwndCombo = GetDlgItem( hDlg, IDC_COMBO_ICON );
 		if( !hwndCombo )  return;
 	    SendMessage( hwndCombo, CBEM_SETIMAGELIST, 0, (LPARAM)m_himageToolbar );
-		int nCount = ImageList_GetImageCount( m_himageToolbar );
+		// enumerate light icons only; the tail of the list holds the
+		// pressed-state dark copies, which are not user-selectable slots
+		int nCount = ( m_nLightIcons > 0 ) ? m_nLightIcons : ImageList_GetImageCount( m_himageToolbar );
 		for( int i = -1; i < nCount; i++ ) {
 			COMBOBOXEXITEM item = { 0 };
 			item.mask = CBEIF_IMAGE | CBEIF_SELECTEDIMAGE | CBEIF_TEXT;

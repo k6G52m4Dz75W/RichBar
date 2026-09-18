@@ -14,6 +14,28 @@ this code base:
 | `0.4.x`       | Compatibility fixes that make the original plug-in build and load correctly on modern EmEditor (v26). |
 | `0.9.0` – `0.14.x` | The HTML + Markdown dual-mode toolbar, heading towards `1.0.0`. |
 
+## [0.15.1] - 2026-09-17
+
+### Fixed
+
+- **The Font ("T") button's hover inversion was broken on dark bands.** The
+  font button used the split `BTNS_DROPDOWN` style: hovering its small arrow
+  region triggered pressed-state drawing, which always renders from the
+  normal image list — light glyphs on the light hover fill — so the icon
+  appeared not to invert while every other button did. The font button is
+  now a whole-button dropdown (like the heading and form buttons); its menu
+  still contains the `Font...` entry that opens the font dialog.
+- **Dropdown buttons kept the wrong color while their menu was open.** A
+  pressed button always draws from the normal image list, so on a dark band
+  the pressed form/heading/font button showed light glyphs on the light
+  pressed fill. The normal list now carries dark copies of every image
+  (mirroring the hot list), and while a dropdown menu tracks, just that
+  button is pointed at its dark copy via `TB_SETBUTTONINFO`, then restored
+  when the menu closes. Other buttons keep their normal glyphs; on a light
+  bar nothing changes (dark glyphs are readable on the pressed fill). The
+  icon picker in the Customize dialog enumerates the light icons only, so
+  saved icon slots are unaffected.
+
 ## [0.15.0] - 2026-09-17
 
 ### Changed
