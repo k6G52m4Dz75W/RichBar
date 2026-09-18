@@ -1,0 +1,6 @@
+{
+  "package": "lucide-static",
+  "version": "1.47.0",
+  "markdown": ["heading-1", "heading-2", "heading-3", "heading-4", "heading-5", "heading-6", "bold", "italic", "strikethrough", "code", "code-xml", "quote", "list", "list-ordered", "list-todo", "minus", "link", "image", "table", "settings"],
+  "html": ["heading", "pilcrow", "corner-down-left", "bold", "italic", "underline", "type", "palette", "image", "link", "table", "minus", "message-square-code", "text-align-start", "text-align-center", "text-align-end", "text-align-justify", "list-ordered", "list", "list-indent-decrease", "quote", "highlighter", "baseline", "panels-top-left", "settings", "clipboard-list", "text-cursor-input", "key-round", "text-select", "square-check", "circle-dot", "group", "panel-top-open", "list-collapse", "rectangle-ellipsis", "square-mouse-pointer", "eye-off", "box", "camera", "disc", "scan-line", "printer", "square-function", "circle-x", "triangle-alert", "info", "flag", "volume-2"]
+}

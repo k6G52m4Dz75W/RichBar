@@ -6,9 +6,19 @@ if ($start -lt 0) { throw 'Lucide font helpers not found; core implementation mu
 $end = $header.IndexOf('COLORREF GetBarGlyphColor()', $start)
 if ($end -lt 0) { throw 'Drawing methods end not found' }
 $methods = $header.Substring($start, $end - $start)
+$bitmapStart = $header.IndexOf('HBITMAP CreateMdIconBitmap(')
+$bitmapEnd = $header.IndexOf('static HANDLE& MdIconFontResource()', $bitmapStart)
+$listStart = $header.IndexOf('void AddModeSwitchIcons(')
+$listEnd = $header.IndexOf('void DisplayBar(', $listStart)
+if ($bitmapStart -lt 0 -or $listStart -lt 0 -or $listEnd -lt 0) { throw 'Image-list helpers not found' }
+$methods = $header.Substring($bitmapStart, $bitmapEnd - $bitmapStart) + $methods + $header.Substring($listStart, $listEnd - $listStart)
 $defines = ([regex]::Matches($header, '(?m)^#define (?:MD_TEXT_HEIGHT|MD_CODE_HEIGHT|MD_SUBSCRIPT_HEIGHT|MD_ICON_MODE_H|MD_ICON_MODE_M)\s+\d+')).Value -join "`n"
 $prefix = @'
 #include <windows.h>
+#include <commctrl.h>
+#define MODE_HTML 0
+#define MODE_MD 1
+#define GLYPH_COLOR_DARK RGB(48,48,48)
 #include <strsafe.h>
 #include <cstdio>
 #include <cstdlib>
@@ -18,7 +28,15 @@ $prefix = @'
 #define StringPrintf StringCchPrintfW
 #define IDR_LUCIDE_FONT 200
 static HINSTANCE EEGetInstanceHandle() { return GetModuleHandle(NULL); }
-static bool failAdd = false, missingGlyph = false;
+static bool failAdd = false, missingGlyph = false, htmlTests = false;
+static const WCHAR htmlExpected[] = {
+    0xE384,0xE3A3,0xE0A1,0xE05D,0xE0FB,0xE19A,0xE198,0xE1DD,
+    0xE0F6,0xE102,0xE17D,0xE11C,0xE56C,0xE185,0xE182,0xE183,
+    0xE184,0xE1D1,0xE106,0xE107,0xE239,0xE0F4,0xE285,0xE12C,
+    0xE154,0xE086,0xE265,0xE4A3,0xE6EA,0xE559,0xE345,0xE464,
+    0xE438,0xE59B,0xE21F,0xE202,0xE0BB,0xE061,0xE064,0xE0AF,
+    0xE258,0xE141,0xE22D,0xE084,0xE193,0xE0F9,0xE0D1,0xE1AB
+};
 static int addCalls = 0, added = 0, removeCalls = 0, probes = 0, faceCalls = 0, puaDraws = 0;
 static int currentIcon = -1, currentSize = 0;
 static COLORREF currentColor = 0;
@@ -90,7 +108,7 @@ static int Draw(HDC dc, LPCWSTR s, int n, LPRECT r, UINT flags) {
     if (HasPua(s, n)) {
         ++puaDraws;
         Check(!failAdd && !missingGlyph, "fallback attempted a PUA draw");
-        Check(currentIcon >= 0 && currentIcon < 20 && n == 1 && s[0] == expected[currentIcon].ch,
+        Check(htmlTests || (currentIcon >= 0 && currentIcon < 20 && n == 1 && s[0] == expected[currentIcon].ch),
             "wrong mapped glyph drawn");
         ValidateGlyph(dc, s[0]);
     }
@@ -107,6 +125,7 @@ static BOOL Text(HDC dc, int x, int y, LPCWSTR s, int n) {
 #define DrawTextW Draw
 #define TextOutW Text
 struct Renderer {
+    int m_iMode = MODE_MD;
 '@
 $suffix = @'
 };
@@ -196,6 +215,81 @@ static void ReleaseAndCheck() {
     Renderer::ReleaseMdIconFont();
     Check(removeCalls == before + (installed ? 1 : 0), "release is not idempotent");
 }
+static void TestImageLists(bool fallback) {
+    htmlTests = true;
+    Renderer renderer;
+    int comparisons = 0;
+    for (int size : {16, 24, 32}) {
+        for (int mode : {MODE_HTML, MODE_MD, MODE_HTML}) {
+            renderer.m_iMode = mode;
+            int count = mode == MODE_HTML ? 48 : 20;
+            for (COLORREF fg : {RGB(48,48,48), RGB(224,224,224)}) {
+                HIMAGELIST list = renderer.BuildToolbarImageList(size, fg, mode);
+                Check(list && ImageList_GetImageCount(list) == count, "wrong command image-list count");
+                renderer.AddModeSwitchIcons(list, size, fg);
+                Check(ImageList_GetImageCount(list) == count+2, "wrong count after H/M append");
+                HIMAGELIST hot = renderer.BuildHotImageList(size);
+                Check(hot && ImageList_GetImageCount(hot) == count+2, "wrong hot image-list count");
+                for (int state = 0; state < 2; ++state) {
+                    COLORREF color = state ? RGB(48,48,48) : fg;
+                    for (int icon = 0; icon < count+2; ++icon) {
+                        // Diagnostic tag: MD=100+, HTML=200+, +50 for the hot list.
+                        currentIcon = icon + (mode == MODE_MD ? 100 : 200) + (state ? 50 : 0);
+                        currentSize = size; currentColor = color;
+                        HDC dc = CreateCompatibleDC(NULL);
+                        void* bits = NULL;
+                        HBITMAP bmp = renderer.CreateMdIconBitmap(size, &bits);
+                        Check(dc && bmp && bits, "list test bitmap allocation failed");
+                        HGDIOBJ old = SelectObject(dc, bmp);
+                        HICON hicon = ImageList_GetIcon(state ? hot : list, icon, ILD_TRANSPARENT);
+                        Check(hicon && DrawIconEx(dc, 0, 0, hicon, size, size, 0, NULL, DI_NORMAL), "icon draw failed");
+                        if (hicon) DestroyIcon(hicon);
+                        GdiFlush();
+                        std::vector<DWORD> actual((DWORD*)bits, (DWORD*)bits+size*size);
+                        bool ink = false;
+                        for (auto& p : actual) { p &= 0xFFFFFF; ink |= p != 0xFF00FF; }
+                        Check(ink, "empty image-list slot");
+                        for (int p=0; p<size*size; ++p) ((DWORD*)bits)[p] = 0xFF00FF;
+                        if (icon >= count) {
+                            renderer.DrawMdIcon(dc, size, 20+icon-count, color);                        } else if (!fallback) {
+                            WCHAR ch = mode == MODE_HTML ? htmlExpected[icon] : expected[icon].ch;
+                            HFONT font = CreateFontW(-size,0,0,0,FW_NORMAL,FALSE,FALSE,FALSE,DEFAULT_CHARSET,
+                                OUT_DEFAULT_PRECIS,CLIP_DEFAULT_PRECIS,ANTIALIASED_QUALITY,FF_DONTCARE,L"lucide");
+                            HGDIOBJ oldFont = SelectObject(dc,font);
+                            ValidateGlyph(dc,ch);
+                            SetBkMode(dc,TRANSPARENT); SetTextColor(dc,color);
+                            RECT rc = {0,0,size,size};
+                            Check(DrawTextW(dc,&ch,1,&rc,DT_CENTER|DT_VCENTER|DT_SINGLELINE), "direct list reference draw failed");
+                            SelectObject(dc,oldFont); DeleteObject(font);
+                        } else if (mode == MODE_HTML) {
+                            renderer.DrawMdText(dc,size,L"?",14,FW_BOLD,FALSE,color);
+                        } else {
+                            renderer.DrawMdIcon(dc,size,icon,color);
+                        }
+                        GdiFlush();
+                        std::vector<DWORD> reference((DWORD*)bits,(DWORD*)bits+size*size);
+                        for (auto& p : reference) p &= 0xFFFFFF;
+                        if (actual != reference) {
+                            for (int p = 0; p < size*size; ++p) {
+                                if (actual[p] != reference[p]) {
+                                    fprintf(stderr, "DIFF px(%d,%d) list=%06lx ref=%06lx tag=%d\n",
+                                        p % size, p / size, actual[p], reference[p], currentIcon);
+                                    break;
+                                }
+                            }
+                        }
+                        Check(actual == reference, "image-list pixels differ from expected glyph/foreground/fallback");
+                        ++comparisons;
+                        SelectObject(dc,old); DeleteObject(bmp); DeleteDC(dc);
+                    }
+                }
+                ImageList_Destroy(hot); ImageList_Destroy(list);
+            }
+        }
+    }
+    Renderer::ReleaseMdIconFont();
+    printf("PASS actual HTML/MD normal+hot image lists, H/M slots, HTML-MD-HTML rebuilds: %d pixel comparisons (%s)\n", comparisons, fallback ? "fallback" : "Lucide");
+}
 int main(int argc, char** argv) {
     Check(argc == 2, "expected normal, add-fail or missing-glyph argument");
     failAdd = strcmp(argv[1], "add-fail") == 0;
@@ -228,6 +322,9 @@ int main(int argc, char** argv) {
     Check(added == removeCalls && removeCalls == 2, "registration/removal counts unbalanced");
     printf("PASS %s: add-attempts=%d registered=%d removed=%d probes=%d PUA-draws=%d; reinit/idempotent-release PASS\n",
         argv[1], addCalls, added, removeCalls, probes, puaDraws);
+    failAdd = strcmp(argv[1], "add-fail") == 0;
+    missingGlyph = strcmp(argv[1], "missing-glyph") == 0;
+    TestImageLists(failAdd || missingGlyph);
     return 0;
 }
 '@
@@ -241,7 +338,7 @@ $vswhere = "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.e
 $install = & $vswhere -latest -products '*' -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath
 if (!$install) { throw 'Visual C++ build tools not found' }
 $vcvars = Join-Path $install 'VC\Auxiliary\Build\vcvars64.bat'
-$batch = "@call `"$vcvars`" >nul`r`n@if errorlevel 1 exit /b %errorlevel%`r`n@rc /nologo /fo test.res test.rc`r`n@if errorlevel 1 exit /b %errorlevel%`r`n@cl /nologo /EHsc /std:c++14 /DUNICODE /D_UNICODE test.cpp test.res user32.lib gdi32.lib /Fe:test.exe`r`n@exit /b %errorlevel%`r`n"
+$batch = "@call `"$vcvars`" >nul`r`n@if errorlevel 1 exit /b %errorlevel%`r`n@rc /nologo /fo test.res test.rc`r`n@if errorlevel 1 exit /b %errorlevel%`r`n@cl /nologo /EHsc /std:c++14 /DUNICODE /D_UNICODE test.cpp test.res user32.lib gdi32.lib comctl32.lib /Fe:test.exe`r`n@exit /b %errorlevel%`r`n"
 [IO.File]::WriteAllText((Join-Path $temp 'build.cmd'), $batch)
 Push-Location $temp
 try {

@@ -1332,6 +1332,29 @@ public:
 		}
 	}
 
+	BOOL DrawLucideGlyph( HDC hdc, int cx, WCHAR ch, COLORREF crFg )
+	{
+		HFONT hfontIcon = GetMdIconFont( cx );
+		if( !hfontIcon ) return FALSE;
+		BOOL drawn = FALSE;
+		HFONT old = (HFONT)SelectObject( hdc, hfontIcon );
+		if( old && old != (HFONT)HGDI_ERROR ){
+			WCHAR face[LF_FACESIZE] = {};
+			WORD index = 0xFFFF;
+			if( GetTextFaceW( hdc, _countof( face ), face ) && lstrcmpiW( face, L"Lucide" ) == 0 &&
+				GetGlyphIndicesW( hdc, &ch, 1, &index, GGI_MARK_NONEXISTING_GLYPHS ) != GDI_ERROR &&
+				index != 0 && index != 0xFFFF ){
+				SetBkMode( hdc, TRANSPARENT );
+				SetTextColor( hdc, crFg );
+				RECT rc = { 0, 0, cx, cx };
+				drawn = DrawTextW( hdc, &ch, 1, &rc, DT_CENTER | DT_VCENTER | DT_SINGLELINE ) != 0;
+			}
+			SelectObject( hdc, old );
+		}
+		DeleteObject( hfontIcon );
+		return drawn;
+	}
+
 	void DrawMdIcon( HDC hdc, int cx, int iIcon, COLORREF crFg )
 	{
 		HPEN hpen = CreatePen( PS_SOLID, max( 1, cx / 16 ), crFg );
@@ -1365,23 +1388,7 @@ public:
 		BOOL bGlyphDrawn = FALSE;
 		for( int g = 0; g < (int)_countof( c_aIconGlyphs ); g++ ){
 			if( c_aIconGlyphs[g].iIcon != iIcon ) continue;
-			HFONT hfontIcon = GetMdIconFont( cx );
-			if( !hfontIcon ) break;
-			HFONT hfontIconOld = (HFONT)SelectObject( hdc, hfontIcon );
-			if( hfontIconOld && hfontIconOld != (HFONT)HGDI_ERROR ){
-				WCHAR szFace[LF_FACESIZE] = {};
-				WORD wIndex = 0xFFFF;
-				if( GetTextFaceW( hdc, _countof( szFace ), szFace ) && lstrcmpiW( szFace, L"Lucide" ) == 0 &&
-					GetGlyphIndicesW( hdc, &c_aIconGlyphs[g].wch, 1, &wIndex, GGI_MARK_NONEXISTING_GLYPHS ) != GDI_ERROR &&
-					wIndex != 0 && wIndex != 0xFFFF ){
-					SetBkMode( hdc, TRANSPARENT );
-					SetTextColor( hdc, crFg );
-					RECT rcGlyph = { 0, 0, cx, cx };
-					bGlyphDrawn = DrawTextW( hdc, &c_aIconGlyphs[g].wch, 1, &rcGlyph, DT_CENTER | DT_VCENTER | DT_SINGLELINE ) != 0;
-				}
-				SelectObject( hdc, hfontIconOld );
-			}
-			DeleteObject( hfontIcon );
+			bGlyphDrawn = DrawLucideGlyph( hdc, cx, c_aIconGlyphs[g].wch, crFg );
 			break;
 		}
 		if( !bGlyphDrawn ){
@@ -1498,6 +1505,25 @@ public:
 		DeleteObject( hpen );
 	}
 
+	void DrawHtmlIcon( HDC hdc, int cx, int iIcon, COLORREF crFg )
+	{
+		// Preserve all 48 persisted HTML icon slots, including customization-only icons.
+		static const WCHAR glyphs[] = {
+			0xE384, 0xE3A3, 0xE0A1, 0xE05D, 0xE0FB, 0xE19A, // heading, paragraph, break, bold, italic, underline
+			0xE198, 0xE1DD, 0xE0F6, 0xE102, 0xE17D, 0xE11C, // font, color, image, link, table, rule
+			0xE56C, 0xE185, 0xE182, 0xE183, 0xE184, 0xE1D1, // comment, alignment, ordered list
+			0xE106, 0xE107, 0xE239, 0xE0F4, 0xE285, 0xE12C, // list, unindent, quote, highlight, font color, form
+			0xE154, 0xE086, 0xE265, 0xE4A3, 0xE6EA, 0xE559, // settings, form element, text, password, textarea, checkbox
+			0xE345, 0xE464, 0xE438, 0xE59B, 0xE21F, 0xE202, // radio, group, select, listbox, buttons
+			0xE0BB, 0xE061, 0xE064, 0xE0AF, 0xE258, 0xE141, // hidden, object, camera, disc, scanner, printer
+			0xE22D, 0xE084, 0xE193, 0xE0F9, 0xE0D1, 0xE1AB  // function, error, warning, info, flag, sound
+		};
+		if( iIcon < 0 || iIcon >= (int)_countof( glyphs ) ) return;
+		if( !DrawLucideGlyph( hdc, cx, glyphs[iIcon], crFg ) ){
+			DrawMdText( hdc, cx, L"?", MD_TEXT_HEIGHT, FW_BOLD, FALSE, crFg );
+		}
+	}
+
 	COLORREF GetBarGlyphColor()
 	{
 		// Very Dark mode paints the whole bar area black (officially supported
@@ -1547,13 +1573,14 @@ public:
 		}
 	}
 
-	HIMAGELIST BuildMdImageList( int cx, COLORREF crFg )
+	HIMAGELIST BuildToolbarImageList( int cx, COLORREF crFg, int mode )
 	{
-		HIMAGELIST himl = ImageList_Create( cx, cx, ILC_COLOR32, 20, 8 );
+		int count = mode == MODE_MD ? 20 : 48;
+		HIMAGELIST himl = ImageList_Create( cx, cx, ILC_COLOR32, count, 2 );
 		if( !himl ){
 			return NULL;
 		}
-		for( int i = 0; i < 20; i++ ){
+		for( int i = 0; i < count; i++ ){
 			void* pvBits = NULL;
 			HBITMAP hbm = CreateMdIconBitmap( cx, &pvBits );
 			if( !hbm ){
@@ -1561,7 +1588,8 @@ public:
 			}
 			HDC hdc = CreateCompatibleDC( NULL );
 			HBITMAP hbmOld = (HBITMAP)SelectObject( hdc, hbm );
-			DrawMdIcon( hdc, cx, i, crFg );
+			if( mode == MODE_MD ) DrawMdIcon( hdc, cx, i, crFg );
+			else DrawHtmlIcon( hdc, cx, i, crFg );
 			SelectObject( hdc, hbmOld );
 			DeleteDC( hdc );
 			MdKeyOutBackground( cx, pvBits );
@@ -1576,23 +1604,8 @@ public:
 		// hover fills buttons with the light system highlight, so the hot list
 		// mirrors the normal list with dark glyphs to stay readable on it
 		COLORREF crHotFg = GLYPH_COLOR_DARK;
-		HIMAGELIST himl = NULL;
-		if( m_iMode == MODE_MD ){
-			himl = BuildMdImageList( cx, crHotFg );
-			if( himl ){
-				AddModeSwitchIcons( himl, cx, crHotFg );
-			}
-			return himl;
-		}
-		// HTML mode: the colored BMP icons read fine on the light fill, so
-		// duplicate the normal list and replace only the two switch glyphs
-		himl = ImageList_Duplicate( m_himageToolbar );
-		if( himl ){
-			int nCount = ImageList_GetImageCount( himl );
-			ImageList_Remove( himl, nCount - 1 );
-			ImageList_Remove( himl, nCount - 2 );
-			AddModeSwitchIcons( himl, cx, crHotFg );
-		}
+		HIMAGELIST himl = BuildToolbarImageList( cx, crHotFg, m_iMode );
+		if( himl ) AddModeSwitchIcons( himl, cx, crHotFg );
 		return himl;
 	}
 
@@ -1623,15 +1636,7 @@ public:
 			m_hDlg = hDlg;
 
 			int nDPI = (int)Editor_DocInfo( m_hWnd, 0, EI_GET_DPI, 0 );
-			int nImageDPI = (nDPI >= DEFAULT_DPI && nDPI <= 120) ? DEFAULT_DPI : nDPI;
-			bool bLarge = false;
-			if( m_bLargeToolbar || MulDiv( 16, nImageDPI, DEFAULT_DPI ) >= 24 ){
-				bLarge = true;
-			}
-			int cxSrc = bLarge ? 24 : 16;
-			int cxDest = MulDiv( m_bLargeToolbar ? 24 : 16, nImageDPI, DEFAULT_DPI );
 			int cxButtonSize = MulDiv( m_bLargeToolbar ? 24 : 16, nDPI, DEFAULT_DPI );
-			bool bNeedStretch = ( cxSrc != cxDest );
 
 			//int cx = g_metrics.ScaleY( m_bLargeToolbar ? BUTTON_SIZE_LARGE : BUTTON_SIZE_SMALL );
 			DWORD dwStyle = TBSTYLE_TOOLTIPS | TBSTYLE_TRANSPARENT | WS_CHILD | WS_CLIPCHILDREN | WS_CLIPSIBLINGS | CCS_NODIVIDER | CCS_NORESIZE | WS_VISIBLE | TBSTYLE_FLAT | CCS_NOPARENTALIGN | CCS_NOMOVEY;
@@ -1646,24 +1651,12 @@ public:
 
 			COLORREF crGlyphFg = GetBarGlyphColor();
 			m_crGlyphFg = crGlyphFg;
-			if( m_iMode == MODE_MD ){
-				// runtime-drawn icons contrasting with the bar's real background
-				m_himageToolbar = BuildMdImageList( cxButtonSize, crGlyphFg );
-			}
-			if( m_himageToolbar == NULL ){
-				if( bNeedStretch ){
-					m_himageToolbar = ImageList_Create( cxDest, cxDest, ILC_COLOR32 | ILC_MASK, 0, 32 );
-					HBITMAP hbm = MyLoadBitmap( EEGetInstanceHandle(), MAKEINTRESOURCE( bLarge ? IDB_TOOLBAR_LARGE : IDB_TOOLBAR ) );
-					_ASSERT( hbm );
-					int nNumImages = GetBitmapCount( hbm, cxSrc );
-					if( nNumImages != 0 ){
-						VERIFY( StretchBitmap( &hbm, cxDest, cxDest, nNumImages, 1 ) );
-						VERIFY( ImageList_AddMasked( m_himageToolbar, hbm, CLR_NONE ) == 0 );
-					}
-				}
-				else {
-					m_himageToolbar = ImageList_LoadImage( EEGetInstanceHandle(), MAKEINTRESOURCE( bLarge ? IDB_TOOLBAR_LARGE : IDB_TOOLBAR ), bLarge ? 24 : 16, 0, CLR_NONE, IMAGE_BITMAP, LR_CREATEDIBSECTION );
-				}
+			m_himageToolbar = BuildToolbarImageList( cxButtonSize, crGlyphFg, m_iMode );
+			if( !m_himageToolbar ){
+				DestroyWindow( m_hDlg );
+				m_hDlg = NULL;
+				m_hwndToolbar = NULL;
+				return;
 			}
 			_ASSERT( m_himageToolbar );
 			AddModeSwitchIcons( m_himageToolbar, cxButtonSize, crGlyphFg );

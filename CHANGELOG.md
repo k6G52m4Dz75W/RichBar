@@ -14,6 +14,34 @@ this code base:
 | `0.4.x`       | Compatibility fixes that make the original plug-in build and load correctly on modern EmEditor (v26). |
 | `0.9.0` – `0.14.x` | The HTML + Markdown dual-mode toolbar, heading towards `1.0.0`. |
 
+## [0.15.0] - 2026-09-17
+
+### Changed
+
+- **The HTML toolbar's legacy colored BMP icons are replaced with the same
+  bundled Lucide design as the Markdown set.** All 48 persisted HTML slots
+  (the 25 default buttons plus the 23 customization-only commands such as
+  form controls and media glyphs) now draw runtime monochrome Lucide icons
+  through the same shared glyph path, so both modes share one stroke
+  language, follow the bar background luminance / Very Dark mode, and stay
+  crisp at any DPI. Stored icon slots, saved customizations and command
+  behavior are unchanged — only the artwork differs.
+- The bundled font subset grows from 20 to **58 unique Lucide icons**
+  (7,780 → **21,564 bytes**) to cover the HTML set. The subset is now
+  reproducible: `tools/subset-lucide.cjs` regenerates it from the
+  `lucide-static` font directory against the checked-in
+  `tools/lucide-icons.json` name list, and refuses to run against an
+  unexpected upstream font version. `LICENSE.third-party` and
+  `docs/lucide-font.md` record the new artifact (including SHA256).
+- **Hover recoloring now covers the HTML mode too.** Because both sets are
+  monochrome, the hot image list rebuilds every HTML button with dark glyphs
+  on the light hover fill (previously the colored BMPs were duplicated
+  unchanged). The plug-in entry icon in the Plug-ins list keeps its bitmap.
+- If an HTML slot's glyph is unavailable (font registration failed), the
+  button draws a bold `?` marker instead of a wrong icon; Markdown keeps its
+  legacy letter/shape fallback. The 0.14-era diagnostic that disabled all
+  Markdown fallbacks was reverted before this release.
+
 ## [0.14.0] - 2026-09-17
 
 ### Changed
