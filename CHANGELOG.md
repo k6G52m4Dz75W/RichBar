@@ -14,22 +14,6 @@ this code base:
 | `0.4.x`       | Compatibility fixes that make the original plug-in build and load correctly on modern EmEditor (v26). |
 | `0.9.0` – `0.17.x` | The HTML + Markdown dual-mode toolbar, heading towards `1.0.0`. |
 
-## [0.17.1] - 2026-09-18
-
-### Fixed
-
-- **The dropdown buttons' triangle arrows were drawn in the wrong color.**
-  The arrows were painted by the toolbar control itself using the system
-  theme, which ignores EmEditor's bar colors — a black arrow on the black
-  band. The control-drawn arrow is gone (`TBSTYLE_EX_DRAWDDARROWS`
-  removed); the three in-bar dropdowns (heading, font, form) now carry a
-  small filled triangle baked into their icon bitmaps, so the arrow follows
-  the same foreground, hover and pressed colors as every other pixel. The
-  regression reference draws replicate the arrow for those slots. Clicking
-  a dropdown still opens its menu: `TBN_DROPDOWN` remains the primary
-  path, with a `WM_COMMAND` safety net for common control versions that
-  deliver a plain command once the extended style is gone.
-
 ## [0.17.0] - 2026-09-18
 
 ### Changed
