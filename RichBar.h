@@ -2807,13 +2807,9 @@ public:
 				}
 			}
 		}
-		// Windows convention for hover/click menus: while a menu tracks, the
-		// tooltip stands down. Both are topmost popups fighting for the same
-		// spot below the button. Hide any visible tip, and the TTN_GETDISPINFO
-		// handler keeps supplying empty text while a menu tracks (an empty tip
-		// is never shown). Deactivating the control itself is deliberately
-		// avoided: a re-activated tooltip can stay dormant when the mouse
-		// never leaves the tool, which silenced tooltips for good in 0.15.5.
+		// The tooltip has had its time by now (the menu delay is the tooltip
+		// delay plus a margin); retire it so the menu owns the spot below
+		// the button instead of the two popups overlapping.
 		HWND hwndTips = m_hwndToolbar ? (HWND)SendMessage( m_hwndToolbar, TB_GETTOOLTIPS, 0, 0 ) : NULL;
 		if( hwndTips ){
 			SendMessage( hwndTips, TTM_POP, 0, 0 );
@@ -2981,8 +2977,18 @@ public:
 		}
 		KillTimer( m_hDlg, IDT_HOVER_MENU );
 		m_nHoverMenuCmd = nCmd;
-		DWORD dwDelay = 400;
-		SystemParametersInfo( SPI_GETMENUSHOWDELAY, 0, &dwDelay, 0 );
+		// Word-style sequencing: the tooltip shows first, and only if the
+		// mouse keeps resting on the button does the menu take over. So the
+		// menu waits for the tooltip's own initial delay plus a reading
+		// margin; ShowDropdownMenu then retires the tip via TTM_POP.
+		DWORD dwDelay = 1000;
+		HWND hwndTips = (HWND)SendMessage( hwnd, TB_GETTOOLTIPS, 0, 0 );
+		if( hwndTips ){
+			DWORD dwTip = (DWORD)SendMessage( hwndTips, TTM_GETDELAYTIME, TTDT_INITIAL, 0 );
+			if( dwTip > 0 && dwTip < 3000 ){
+				dwDelay = dwTip + 500;
+			}
+		}
 		SetTimer( m_hDlg, IDT_HOVER_MENU, dwDelay, NULL );
 	}
 
@@ -3001,12 +3007,6 @@ public:
 		case TTN_GETDISPINFO:
 			{
 				NMTTDISPINFO* pDispInfo = (NMTTDISPINFO*)pnmh;
-				if( m_bInDropdownMenu ){
-					// a menu is tracking: an empty tooltip is never shown, so
-					// the tip stands down without touching the control state
-					pDispInfo->szText[0] = _T('\0');
-					break;
-				}
 				if( pDispInfo->hdr.idFrom >= ID_COMMAND_BASE && pDispInfo->hdr.idFrom < ID_COMMAND_BASE + Cmds().size() ) {
 					CCmd& cmd = Cmds()[ pDispInfo->hdr.idFrom - ID_COMMAND_BASE];
 					StringCopyN( pDispInfo->szText, _countof( pDispInfo->szText ), cmd.m_sTitle.c_str(), _countof( pDispInfo->szText ) - 1 );

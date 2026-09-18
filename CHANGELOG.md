@@ -14,6 +14,26 @@ this code base:
 | `0.4.x`       | Compatibility fixes that make the original plug-in build and load correctly on modern EmEditor (v26). |
 | `0.9.0` – `0.14.x` | The HTML + Markdown dual-mode toolbar, heading towards `1.0.0`. |
 
+## [0.15.7] - 2026-09-17
+
+### Changed
+
+- **Tooltip-first dropdown sequencing.** Hovering a dropdown button now
+  shows the tooltip first; the menu only opens if the mouse keeps resting
+  on the button. The hover delay is the system tooltip initial delay
+  (`TTM_GETDELAYTIME`, `TTDT_INITIAL`) plus a 500 ms reading margin
+  (1 s fallback), and when the menu opens it retires the tooltip with
+  `TTM_POP` so the two popups never overlap. Plain hover keeps working
+  normally, so tooltips on dropdown buttons are finally visible.
+
+### Fixed
+
+- **Reverted the 0.15.6 empty-tooltip hack.** Supplying empty text from
+  `TTN_GETDISPINFO` was a dirty workaround: the tooltip control can still
+  surface an empty tip box, whose box next to the button read as a slight
+  icon shift, and tooltips on dropdown buttons remained unusable. The
+  handler is back to supplying titles untouched.
+
 ## [0.15.6] - 2026-09-17
 
 ### Fixed
