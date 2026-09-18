@@ -1,7 +1,7 @@
 # Third-party licenses
 
-The bundled remixicon_subset.ttf font subset (59 unique Remix Icon glyphs,
-8,712 bytes, SHA256 d4f8e168d177a4be5fada91053f96076abbd6c74028e0a69506591ce18e423cc)
+The bundled remixicon_subset.ttf font subset (61 unique Remix Icon glyphs,
+8,924 bytes, SHA256 762fa5a7102a881897ebd1702d5343ee598dff44f42208fb596c89e5b75bd307)
 was derived from remixicon.ttf as shipped in the Remix Icon 4.9.1 release
 package (RemixIcon_Fonts_v4.9.1.zip, https://github.com/Remix-Design/RemixIcon).
 This file contains the complete, unmodified license text shipped with that

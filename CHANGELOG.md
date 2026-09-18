@@ -12,7 +12,22 @@ this code base:
 |---------------|---------|
 | `0.1.0`       | The original upstream HTMLBar source as forked (Emurasoft `19.5.0`), unmodified. |
 | `0.4.x`       | Compatibility fixes that make the original plug-in build and load correctly on modern EmEditor (v26). |
-| `0.9.0` – `0.14.x` | The HTML + Markdown dual-mode toolbar, heading towards `1.0.0`. |
+| `0.9.0` – `0.17.x` | The HTML + Markdown dual-mode toolbar, heading towards `1.0.0`. |
+
+## [0.17.0] - 2026-09-18
+
+### Changed
+
+- **The [H][M] mode switch now uses Remix Icon glyphs**, completing the
+  single-source icon design: HTML shows `html5-fill` (U+EE40) and Markdown
+  shows `markdown-fill` (U+EF1D), both filled variants for legibility at
+  toolbar sizes. The former Segoe UI Bold letter drawing (`DrawMdText`,
+  `MD_TEXT_HEIGHT`) is removed — every button on the bar now draws from
+  the one bundled subset.
+- The bundled subset grows to **61 unique icons** (8,712 → **8,924
+  bytes**, new SHA256 recorded in `LICENSE.third-party` and
+  `docs/remix-icon.md`); the `modes` array in `tools/remix-icons.json`
+  feeds the two switch glyphs into the subset.
 
 ## [0.16.0] - 2026-09-18
 

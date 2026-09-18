@@ -163,9 +163,6 @@ WCHAR OctToDec( LPWSTR& p )
 #define GLYPH_COLOR_DARK		RGB( 48, 48, 48 )
 #define GLYPH_COLOR_LIGHT		RGB( 224, 224, 224 )
 
-// Pixel heights relative to a 16-pixel icon canvas; large icons use 24.
-#define MD_TEXT_HEIGHT		14
-
 #define MODE_HTML				0
 #define MODE_MD					1
 #define MODE_COUNT				2
@@ -1276,19 +1273,6 @@ public:
 			FF_DONTCARE, L"remixicon" );
 	}
 
-	void DrawMdText( HDC hdc, int cx, LPCWSTR pszText, int nBaseHeight, int nWeight, bool bItalic, COLORREF crFg )
-	{
-		HFONT hfont = CreateFontW( -MulDiv( nBaseHeight, cx, 16 ), 0, 0, 0, nWeight, bItalic, FALSE, FALSE,
-			DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS, ANTIALIASED_QUALITY, FF_DONTCARE, L"Segoe UI" );
-		HFONT hfontOld = (HFONT)SelectObject( hdc, hfont );
-		SetBkMode( hdc, TRANSPARENT );
-		SetTextColor( hdc, crFg );
-		RECT rc = { 0, 0, cx, cx };
-		DrawTextW( hdc, pszText, -1, &rc, DT_CENTER | DT_VCENTER | DT_SINGLELINE | DT_NOPREFIX );
-		SelectObject( hdc, hfontOld );
-		DeleteObject( hfont );
-	}
-
 	BOOL DrawIconGlyph( HDC hdc, int cx, WCHAR ch, COLORREF crFg )
 	{
 		HFONT hfontIcon = GetMdIconFont( cx );
@@ -1340,9 +1324,10 @@ public:
 			{ 19, 0xF0EE },		// settings-line (customize)
 		};
 		if( iIcon >= MD_ICON_MODE_H ){
-			// the [H][M] mode switch stays Segoe UI lettering; the icon font
-			// carries pictograms only
-			DrawMdText( hdc, cx, iIcon == MD_ICON_MODE_H ? L"H" : L"M", MD_TEXT_HEIGHT, FW_BOLD, FALSE, crFg );
+			// the [H][M] mode switch: HTML5 / Markdown glyphs from the same
+			// Remix subset as every other button (filled variants read best
+			// at toolbar sizes)
+			DrawIconGlyph( hdc, cx, iIcon == MD_ICON_MODE_H ? 0xEE40 /*html5-fill*/ : 0xEF1D /*markdown-fill*/, crFg );
 			return;
 		}
 		for( int g = 0; g < (int)_countof( c_aIconGlyphs ); g++ ){

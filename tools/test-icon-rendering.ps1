@@ -51,6 +51,8 @@ static const ExpectedGlyph expected[] = {
     {10, 0xEBA7}, {11, 0xEC51}, {12, 0xEEBE}, {13, 0xEEBB}, {14, 0xEEB9},
     {15, 0xF1AF}, {16, 0xEEB2}, {17, 0xEE4B}, {18, 0xF1DE}, {19, 0xF0EE}
 };
+// [H][M] mode-switch glyphs: html5-fill, markdown-fill.
+static const WCHAR modeExpected[] = { 0xEE40, 0xEF1D };
 static const WCHAR htmlExpected[] = {
     0xEE03,0xEFC8,0xF200,0xEAD1,0xEE6B,0xF244,0xED8C,0xEFC5,
     0xEE4B,0xEEB2,0xF1DE,0xF1AF,0xEAEB,0xEA27,0xEA25,0xEA28,
@@ -110,9 +112,11 @@ static DWORD Probe(HDC dc, LPCWSTR s, int n, LPWORD out, DWORD flags) {
 static int Draw(HDC dc, LPCWSTR s, int n, LPRECT r, UINT flags) {
     if (HasPua(s, n)) {
         ++puaDraws;
-        Check(!failAdd && !missingGlyph, "fallback attempted a PUA draw");
-        Check(htmlTests || (currentIcon >= 0 && currentIcon < 20 && n == 1 && s[0] == expected[currentIcon].ch),
-            "wrong mapped glyph drawn");
+        Check(!failAdd && !missingGlyph, "glyph draw attempted while font unavailable");
+        wchar_t expect = 0;
+        if (!htmlTests && currentIcon >= 0 && currentIcon < 20) expect = expected[currentIcon].ch;
+        else if (!htmlTests && currentIcon >= 20 && currentIcon < 22) expect = modeExpected[currentIcon - 20];
+        Check(expect == 0 || (n == 1 && s[0] == expect), "wrong mapped glyph drawn");
         ValidateGlyph(dc, s[0]);
     }
     return DrawTextW(dc, s, n, r, flags);
@@ -194,16 +198,14 @@ static void Sweep(bool fallback) {
             for (int icon = 0; icon <= 21; ++icon) {
                 int drawsBefore = puaDraws, probesBefore = probes, facesBefore = faceCalls;
                 auto actual = Render(size, fg, icon);
-                bool mapped = icon < 20;
-                bool expectInk = !fallback || !mapped;
-                Check(HasInk(actual) == expectInk,
-                    expectInk ? "empty icon bitmap" : "fallback mapped slot must stay blank");
-                Check(puaDraws - drawsBefore == ((!fallback && mapped) ? 1 : 0), "incorrect PUA draw count");
-                if (mapped && !failAdd) {
+                Check(HasInk(actual) == !fallback,
+                    fallback ? "fallback slot must stay blank" : "empty icon bitmap");
+                Check(puaDraws - drawsBefore == (fallback ? 0 : 1), "incorrect PUA draw count");
+                if (!failAdd) {
                     Check(probes == probesBefore + 1 && faceCalls == facesBefore + 1,
                         "each glyph must check actual face and glyph index");
                 }
-                if (!fallback && mapped) {
+                if (!fallback && icon < 20) {
                     Check(actual == Render(size, fg, icon, true), "pixels differ from direct Remix drawing");
                     ++comparisons;
                 }
@@ -211,7 +213,7 @@ static void Sweep(bool fallback) {
             }
         }
     }
-    printf("%s: nonempty=%d/308 exact-Remix=%d/%d PUA-draws=%d\n",
+    printf("%s: cases=%d exact-Remix=%d/%d PUA-draws=%d\n",
         fallback ? "fallback" : "normal", cases, comparisons, fallback ? 0 : 280, puaDraws);
 }
 static void ReleaseAndCheck() {
@@ -281,29 +283,25 @@ static void TestImageLists(bool fallback) {
                         GdiFlush();
                         std::vector<DWORD> actual((DWORD*)bits, (DWORD*)bits+size*size);
                         for (auto& p : actual) p &= 0xFFFFFF;
-                        bool mapped = icon < count;
-                        if (mapped && fallback) {
-                            // no fallback artwork: the stored slot must be blank
-                            Check(!slotHasInk(state ? hot : list, icon), "fallback mapped slot must stay blank");
+                        if (fallback) {
+                            // no fallback artwork: every stored slot must be blank
+                            Check(!slotHasInk(state ? hot : list, icon), "fallback slot must stay blank");
                             ++comparisons;
                             SelectObject(dc,old); DeleteObject(bmp); DeleteDC(dc);
                             continue;
                         }
                         Check(HasInk(actual), "empty image-list slot");
                         for (int p=0; p<size*size; ++p) ((DWORD*)bits)[p] = 0xFF00FF;
-                        if (icon >= count) {
-                            renderer.DrawMdIcon(dc, size, 20+icon-count, color);
-                        } else {
-                            WCHAR ch = mode == MODE_HTML ? htmlExpected[icon] : expected[icon].ch;
-                            HFONT font = CreateFontW(-size,0,0,0,FW_NORMAL,FALSE,FALSE,FALSE,DEFAULT_CHARSET,
-                                OUT_DEFAULT_PRECIS,CLIP_DEFAULT_PRECIS,ANTIALIASED_QUALITY,FF_DONTCARE,L"remixicon");
-                            HGDIOBJ oldFont = SelectObject(dc,font);
-                            ValidateGlyph(dc,ch);
-                            SetBkMode(dc,TRANSPARENT); SetTextColor(dc,color);
-                            RECT rc = {0,0,size,size};
-                            Check(DrawTextW(dc,&ch,1,&rc,DT_CENTER|DT_VCENTER|DT_SINGLELINE), "direct list reference draw failed");
-                            SelectObject(dc,oldFont); DeleteObject(font);
-                        }
+                        WCHAR ch = icon >= count ? modeExpected[icon - count]
+                                 : (mode == MODE_HTML ? htmlExpected[icon] : expected[icon].ch);
+                        HFONT font = CreateFontW(-size,0,0,0,FW_NORMAL,FALSE,FALSE,FALSE,DEFAULT_CHARSET,
+                            OUT_DEFAULT_PRECIS,CLIP_DEFAULT_PRECIS,ANTIALIASED_QUALITY,FF_DONTCARE,L"remixicon");
+                        HGDIOBJ oldFont = SelectObject(dc,font);
+                        ValidateGlyph(dc,ch);
+                        SetBkMode(dc,TRANSPARENT); SetTextColor(dc,color);
+                        RECT rc = {0,0,size,size};
+                        Check(DrawTextW(dc,&ch,1,&rc,DT_CENTER|DT_VCENTER|DT_SINGLELINE), "direct list reference draw failed");
+                        SelectObject(dc,oldFont); DeleteObject(font);
                         GdiFlush();
                         std::vector<DWORD> reference((DWORD*)bits,(DWORD*)bits+size*size);
                         for (auto& p : reference) p &= 0xFFFFFF;
@@ -385,16 +383,16 @@ int main(int argc, char** argv) {
     ReleaseAndCheck();
     Sweep(failAdd || missingGlyph);
     if (failAdd) {
-        Check(addCalls == 280 && added == 0 && probes == 0 && puaDraws == 0,
+        Check(addCalls == 308 && added == 0 && probes == 0 && puaDraws == 0,
             "failed registration must retry without probing/drawing PUA");
         // Recovery without release also verifies a failed install was not cached.
         failAdd = false;
         auto recovered = Render(24, RGB(48,48,48), 16);
         Check(recovered == Render(24, RGB(48,48,48), 16, true), "registration retry did not recover");
-        Check(added == 1 && addCalls == 281, "retry must register exactly once");
+        Check(added == 1 && addCalls == 309, "retry must register exactly once");
     } else {
         Check(addCalls == 1 && added == 1, "registration not shared across renderers and sizes");
-        if (missingGlyph) Check(probes == 280 && puaDraws == 0, "missing-glyph fallback not exercised");
+        if (missingGlyph) Check(probes == 308 && puaDraws == 0, "missing-glyph fallback not exercised");
     }
     ReleaseAndCheck();
     Check(removeCalls == 1, "first registration not removed exactly once");

@@ -12,15 +12,15 @@ replaces `docs/lucide-font.md` (the Lucide subset was removed in 0.16.0).
 - The release's `remixicon.ttf` is **613,136 bytes**, SHA256
   `cdff268662c834fbe023a8d34f77e2842c50025b093bc827c9b71adefc81b256`.
 - Bundled artifact: `remixicon_subset.ttf` at the repository root —
-  **8,712 bytes**, **59 unique icons** (plus `.notdef`), SHA256
-  `d4f8e168d177a4be5fada91053f96076abbd6c74028e0a69506591ce18e423cc`.
+  **8,924 bytes**, **61 unique icons** (plus `.notdef`), SHA256
+  `762fa5a7102a881897ebd1702d5343ee598dff44f42208fb596c89e5b75bd307`.
 
 Verify the bundled subset at any time:
 
 ```powershell
-Get-Item .\remixicon_subset.ttf | Select-Object Length    # 8712
+Get-Item .\remixicon_subset.ttf | Select-Object Length    # 8924
 Get-FileHash .\remixicon_subset.ttf -Algorithm SHA256
-# d4f8e168d177a4be5fada91053f96076abbd6c74028e0a69506591ce18e423cc
+# 762fa5a7102a881897ebd1702d5343ee598dff44f42208fb596c89e5b75bd307
 ```
 
 ## Regenerating the subset
@@ -35,7 +35,8 @@ node tools/subset-icon-font.cjs <RemixIcon fonts directory>
 - The authoritative name lists (slot order) are in
   [`tools/remix-icons.json`](../tools/remix-icons.json): the `markdown`
   array fills the Markdown slots 0–19, the `html` array fills the HTML
-  slots 0–47.
+  slots 0–47, and the `modes` array supplies the two `[H][M]` switch
+  glyphs.
 - Codepoints are read from the release's `remixicon.css`.
 
 ## Markdown mapping (slots 0–19)
@@ -120,6 +121,16 @@ icons).
 | 46 | Blue flag | `flag-line` | U+ED3B |
 | 47 | Background sound | `music-2-line` | U+EF83 |
 
+## Mode switch glyphs ([H][M])
+
+Since 0.17.0 the leftmost mode-switch pair also draws from this subset
+(filled variants, most legible at toolbar sizes):
+
+| Slot | Command | Remix Icon name | Codepoint |
+|---|---|---|---|
+| 20 | Mode switch: HTML | `html5-fill` | U+EE40 |
+| 21 | Mode switch: Markdown | `markdown-fill` | U+EF1D |
+
 ## Runtime notes
 
 - The subset is embedded in `RichBar.dll` as an `RCDATA` resource
@@ -133,9 +144,9 @@ icons).
   (font registration failed or glyph unavailable) stays blank. The legacy
   Markdown letter/shape drawings and the HTML `?` marker were removed in
   0.16.0 — an explicit simplification, since the font ships inside the DLL.
-- The **H/M mode switch is not drawn from the icon font**: it remains
-  Segoe UI Bold letters at **14/21 px** (normal/large) at 96 DPI, scaled
-  with the canvas.
+- **Every button on the bar draws from this subset**, including the [H][M]
+  mode switch (since 0.17.0): `html5-fill` for HTML, `markdown-fill` for
+  Markdown.
 - The legacy colored HTML BMPs remain unused, and the plug-in entry icon in
   the Plug-ins list keeps its own bitmap.
 

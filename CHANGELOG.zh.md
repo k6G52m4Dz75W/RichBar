@@ -8,7 +8,20 @@
 |---------|------|
 | `0.1.0`  | 原始上游 HTMLBar 源码原样 fork（Emurasoft `19.5.0` 合并版），未做任何修改。 |
 | `0.4.x`  | 兼容性修复，使原插件能够在现代 EmEditor（v26）上正确编译和加载。 |
-| `0.9.0` – `0.14.x` | HTML + Markdown 双模式工具栏，向 `1.0.0` 迈进。 |
+| `0.9.0` – `0.17.x` | HTML + Markdown 双模式工具栏，向 `1.0.0` 迈进。 |
+
+## [0.17.0] - 2026-09-18
+
+### 变更
+
+- **[H][M] 模式开关改用 Remix Icon 图案**，单一图标来源就此完整：HTML
+  显示 `html5-fill`（U+EE40），Markdown 显示 `markdown-fill`（U+EF1D），
+  均选用填充变体以保证工具栏尺寸下的清晰度。原 Segoe UI Bold 字母绘制
+  （`DrawMdText`、`MD_TEXT_HEIGHT`）已删除——工具栏上的所有按钮都绘制
+  自同一个内嵌子集。
+- 内嵌子集扩展到 **61 个去重图标**（8,712 → **8,924 字节**，新 SHA256
+  已记录于 `LICENSE.third-party` 与 `docs/remix-icon.md`）；
+  `tools/remix-icons.json` 新增 `modes` 数组，将两个开关字形纳入子集。
 
 ## [0.16.0] - 2026-09-18
 

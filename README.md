@@ -7,7 +7,7 @@ toolbar, forked from the official Emurasoft HTMLBar plug-in source
 (`19.5.0`). It is meant to replace the HTML/Markdown toolbar built into
 EmEditor v26 (closed source, with most tags hidden inside dropdown menus).
 
-Current release: **0.16.0 — 2026-09-18**.
+Current release: **0.17.0 — 2026-09-18**.
 
 ## Features
 
@@ -73,7 +73,7 @@ adaptivity changed. The 59 unique names and codepoints are mapped in
 
 ### Rendering and font packaging
 
-- `remixicon_subset.ttf` (59 unique icons, **8,712 bytes**) is embedded in
+- `remixicon_subset.ttf` (61 unique icons, **8,924 bytes**) is embedded in
   `RichBar.dll` as an `RCDATA` resource (`IDR_ICON_FONT`). It is loaded
   directly into process-private memory with `AddFontMemResourceEx`: **no
   system font installation and no temporary font files**. Users do not need
@@ -82,9 +82,10 @@ adaptivity changed. The 59 unique names and codepoints are mapped in
   [`docs/remix-icon.md`](docs/remix-icon.md)).
 - Normal/large icon canvases are **16/24 px at 96 DPI**, scaled with display
   DPI (for example, 24/36 px at 150%). There is no extra 135% enlargement.
-- The **H/M mode switch is unchanged**: Segoe UI Bold text, **14/21 px at
-  96 DPI** for normal/large icons, scaled with the canvas. These are pixel
-  character heights, not points. H/M is not part of the Remix Icon subset.
+- The **H/M mode switch is icon-font glyphs too** (since 0.17.0): the Remix
+  `html5-fill` (U+EE40) and `markdown-fill` (U+EF1D) pictograms replace the
+  former Segoe UI Bold letters, so every button on the bar draws from the
+  one bundled subset.
 - **No fallback artwork**: since 0.16.0 the legacy Markdown letter/shape
   drawings and the HTML `?` marker are removed. A slot whose glyph cannot
   resolve (font registration failed or glyph unavailable) stays blank — an
@@ -104,12 +105,13 @@ On Windows with the Visual C++ build tools, the test command is:
 powershell -File tools/test-icon-rendering.ps1
 ```
 
-The 0.16.0 test script covers **all 20 Markdown icons across 7 sizes and 2
-foreground colors** (280 pixel-exact comparisons against direct Remix Icon
-drawing), the **actual normal and hot image lists** for both modes including
-the H/M slots and the pressed-state dark copies (1,464 comparisons per
-scenario), **fallback subprocesses that assert the mapped slots stay
-blank**, and font registration/release/reinitialization checks. This is
+The 0.17.0 test script covers **all 20 Markdown icons plus the H/M glyphs
+across 7 sizes and 2 foreground colors** (280 pixel-exact comparisons
+against direct Remix Icon drawing for the 20 command icons), the **actual
+normal and hot image lists** for both modes including the H/M slots and
+the pressed-state dark copies (1,464 comparisons per scenario), **fallback
+subprocesses that assert every slot stays blank**, and font
+registration/release/reinitialization checks. This is
 offscreen regression coverage, not a claim that an EmEditor visual check
 has passed.
 
@@ -193,7 +195,7 @@ Run the build commands from the repository root.
 |-------|---------|
 | `0.1.0` | The original upstream HTMLBar source as forked, unmodified. |
 | `0.4.x` | Compatibility fixes to build and load on modern EmEditor (v26). |
-| `0.9.0` – `0.16.x` | The HTML + Markdown dual-mode toolbar, heading towards `1.0.0`. |
+| `0.9.0` – `0.17.x` | The HTML + Markdown dual-mode toolbar, heading towards `1.0.0`. |
 
 See [CHANGELOG.md](CHANGELOG.md) (English) /
 [CHANGELOG.zh.md](CHANGELOG.zh.md) (Chinese) for details.
