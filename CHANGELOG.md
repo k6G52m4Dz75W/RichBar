@@ -14,6 +14,26 @@ this code base:
 | `0.4.x`       | Compatibility fixes that make the original plug-in build and load correctly on modern EmEditor (v26). |
 | `0.9.0` – `0.14.x` | The HTML + Markdown dual-mode toolbar, heading towards `1.0.0`. |
 
+## [0.15.3] - 2026-09-17
+
+### Fixed
+
+- **The hovered button's highlight faded while its menu stayed open.** A
+  hover-opened menu left the button unpressed, so once the menu loop
+  captured the mouse the toolbar's hot tracking timed out and the button
+  fell back to its normal look. The hover path now holds the button in the
+  pressed state (with the 0.15.1 dark-glyph swap) until the menu closes,
+  exactly like the click path looks.
+- **After dismissing a menu on blank space, hovering never reopened it.**
+  `TBN_HOTITEMCHANGE` merges the leaving and entering events of one mouse
+  move into a single notification, and the handler returned after the
+  leaving half, swallowing every later hover; the same-button suppression
+  also relied solely on a leaving event that could be missed. The leaving
+  and entering halves are now handled independently, and the suppression
+  additionally expires after a double-click time, so recovery can never
+  stick. A tracking menu now also ignores hover churn and pending timers,
+  preventing re-entrant double menus.
+
 ## [0.15.2] - 2026-09-17
 
 ### Added

@@ -397,7 +397,9 @@ public:
 	int m_nLightIcons;	// images before the pressed-state dark copies appended below them
 	UINT m_nHoverMenuCmd;		// dropdown command waiting for the hover-open timer
 	UINT m_nHoverSuppressCmd;	// dropdown whose menu just closed; reopen only after the mouse leaves
+	DWORD m_dwSuppressTick;		// when the suppression was set; expires after a double-click time
 	bool m_bHoverSuppress;
+	bool m_bInDropdownMenu;		// a dropdown menu is tracking right now
 	HWND m_hDlg;
 	TCHAR m_szOldConfig[MAX_CONFIG_NAME];
 	DWORD m_dwFindFlags;
@@ -2783,18 +2785,29 @@ public:
 		return false;
 	}
 
-	void ShowDropdownMenu( UINT nIDCommand, bool bPressed )
+	void ShowDropdownMenu( UINT nIDCommand, bool bPressedByMouse )
 	{
 		CCmd& cmd = Cmds()[nIDCommand - ID_COMMAND_BASE];
-		// When opened by a click the button is pressed, and the toolbar draws
-		// pressed buttons from the normal list: light glyphs on the light
-		// pressed fill on a dark band. That list carries dark copies of every
-		// image after m_nLightIcons (mirroring the hot list), so point just
-		// this button at its dark variant for the menu's lifetime. A menu
-		// opened by hovering needs no swap: the button draws hot, and the hot
-		// list already carries dark glyphs.
+		// Keep the button visually held for the menu's whole lifetime. A
+		// click leaves it pressed by the mouse itself; a hover-open must set
+		// the pressed state manually, or the hot fill fades once the menu
+		// loop captures the mouse and the toolbar's hot tracking times out.
+		BYTE fsRestore = 0;
+		bool bHoldPressed = false;
+		if( !bPressedByMouse ){
+			int nState = (int)SendMessage( m_hwndToolbar, TB_GETSTATE, nIDCommand, 0 );
+			if( nState >= 0 && ( nState & TBSTATE_PRESSED ) == 0 ){
+				fsRestore = (BYTE)nState;
+				bHoldPressed = true;
+				SendMessage( m_hwndToolbar, TB_SETSTATE, nIDCommand, (LPARAM)( nState | TBSTATE_PRESSED ) );
+			}
+		}
+		// Pressed buttons draw from the normal list, whose light glyphs wash
+		// out on the light pressed fill on a dark band. That list carries
+		// dark copies of every image after m_nLightIcons (mirroring the hot
+		// list), so point just this button at its dark variant.
 		int iOldImage = -1;
-		if( bPressed && m_himageToolbarHot != NULL && m_nLightIcons > 0 ){
+		if( ( bPressedByMouse || bHoldPressed ) && m_himageToolbarHot != NULL && m_nLightIcons > 0 ){
 			int nIndex = (int)SendMessage( m_hwndToolbar, TB_COMMANDTOINDEX, nIDCommand, 0L );
 			TBBUTTON tb = {};
 			if( nIndex >= 0 && SendMessage( m_hwndToolbar, TB_GETBUTTON, nIndex, (LPARAM)&tb ) ){
@@ -2812,6 +2825,7 @@ public:
 				}
 			}
 		}
+		m_bInDropdownMenu = true;
 		switch( cmd.m_iCmd ){
 		case CMD_FONT:
 			{
@@ -2876,6 +2890,7 @@ public:
 			break;
 
 		}
+		m_bInDropdownMenu = false;
 		if( iOldImage >= 0 ){
 			TBBUTTONINFO bi = {};
 			bi.cbSize = sizeof( bi );
@@ -2883,10 +2898,15 @@ public:
 			bi.iImage = iOldImage;
 			SendMessage( m_hwndToolbar, TB_SETBUTTONINFO, nIDCommand, (LPARAM)&bi );
 		}
+		if( bHoldPressed ){
+			SendMessage( m_hwndToolbar, TB_SETSTATE, nIDCommand, (LPARAM)fsRestore );
+		}
 		// A menu just opened here keeps the button quiet until the mouse
-		// leaves it, so dismissal does not instantly reopen the same menu.
+		// leaves it or a double-click time passes, so dismissal does not
+		// instantly reopen the same menu yet recovery can never stick.
 		m_bHoverSuppress = true;
 		m_nHoverSuppressCmd = nIDCommand;
+		m_dwSuppressTick = GetTickCount();
 	}
 
 	void OnHoverMenuTimer()
@@ -2894,7 +2914,7 @@ public:
 		KillTimer( m_hDlg, IDT_HOVER_MENU );
 		UINT nCmd = m_nHoverMenuCmd;
 		m_nHoverMenuCmd = 0;
-		if( !nCmd || !m_hwndToolbar ){
+		if( !nCmd || !m_hwndToolbar || m_bInDropdownMenu ){
 			return;
 		}
 		// the mouse may have moved on while the delay ran
@@ -2909,6 +2929,9 @@ public:
 		if( !m_hwndToolbar || !m_hDlg ){
 			return;
 		}
+		// One notification can carry both flags (moving straight from button
+		// A to button B), so handle the leaving part and keep going: an early
+		// return here once swallowed every subsequent hover-open.
 		if( pHot->dwFlags & HICF_LEAVING ){
 			if( m_bHoverSuppress && pHot->idOld == (int)m_nHoverSuppressCmd ){
 				m_bHoverSuppress = false;
@@ -2917,13 +2940,25 @@ public:
 				KillTimer( m_hDlg, IDT_HOVER_MENU );
 				m_nHoverMenuCmd = 0;
 			}
-			return;
+		}
+		if( m_bInDropdownMenu ){
+			return;	// a dropdown menu is tracking; ignore hover churn
 		}
 		if( !( pHot->dwFlags & HICF_MOUSE ) ){
 			return;	// keyboard navigation never auto-opens
 		}
 		UINT nCmd = (UINT)pHot->idNew;
-		if( m_bHoverSuppress && nCmd == m_nHoverSuppressCmd ){
+		if( nCmd == (UINT)-1 ){
+			return;	// hot state cleared; nobody became hot
+		}
+		if( m_bHoverSuppress ){
+			// the same button stays quiet briefly after its menu closed, but
+			// the suppression must expire even if a HICF_LEAVING was missed
+			if( nCmd != m_nHoverSuppressCmd || GetTickCount() - m_dwSuppressTick > (DWORD)GetDoubleClickTime() ){
+				m_bHoverSuppress = false;
+			}
+		}
+		if( m_bHoverSuppress ){
 			return;
 		}
 		if( !IsDropdownCommand( nCmd ) ){
