@@ -1263,17 +1263,13 @@ public:
 		}
 	}
 
-	static HFONT GetMdIconFont( int cx )
+
+	BOOL DrawIconGlyphRect( HDC hdc, RECT rc, WCHAR ch, COLORREF crFg )
 	{
-		if( !MdIconFontInstall() ) return NULL;
-		return CreateFontW( -cx, 0, 0, 0, FW_NORMAL, FALSE, FALSE, FALSE,
+		if( !MdIconFontInstall() ) return FALSE;
+		HFONT hfontIcon = CreateFontW( -( rc.bottom - rc.top ), 0, 0, 0, FW_NORMAL, FALSE, FALSE, FALSE,
 			DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS, ANTIALIASED_QUALITY,
 			FF_DONTCARE, L"remixicon" );
-	}
-
-	BOOL DrawIconGlyph( HDC hdc, int cx, WCHAR ch, COLORREF crFg )
-	{
-		HFONT hfontIcon = GetMdIconFont( cx );
 		if( !hfontIcon ) return FALSE;
 		BOOL drawn = FALSE;
 		HFONT old = (HFONT)SelectObject( hdc, hfontIcon );
@@ -1285,13 +1281,18 @@ public:
 				index != 0 && index != 0xFFFF ){
 				SetBkMode( hdc, TRANSPARENT );
 				SetTextColor( hdc, crFg );
-				RECT rc = { 0, 0, cx, cx };
 				drawn = DrawTextW( hdc, &ch, 1, &rc, DT_CENTER | DT_VCENTER | DT_SINGLELINE ) != 0;
 			}
 			SelectObject( hdc, old );
 		}
 		DeleteObject( hfontIcon );
 		return drawn;
+	}
+
+	BOOL DrawIconGlyph( HDC hdc, int cx, WCHAR ch, COLORREF crFg )
+	{
+		RECT rc = { 0, 0, cx, cx };
+		return DrawIconGlyphRect( hdc, rc, ch, crFg );
 	}
 
 	void DrawMdIcon( HDC hdc, int cx, int iIcon, COLORREF crFg )
@@ -1338,26 +1339,13 @@ public:
 		// a failed registration or glyph simply leaves the slot blank
 	}
 
-	// The dropdown affordance for the three in-bar menu buttons is baked
-	// into their icons: a small filled triangle at the bottom-right corner.
-	// It is drawn with the same foreground color as the rest of the artwork,
-	// so it is always correct in every theme, hover and pressed state.
-	void DrawDropdownArrow( HDC hdc, int cx, COLORREF crFg )
+	// The dropdown affordance for the three in-bar menu buttons is Remix's
+	// own down-triangle (arrow-down-s-fill), rendered from the same font
+	// beside the main glyph - same stroke language, same foreground color.
+	void DrawDropdownMarker( HDC hdc, int cx, COLORREF crFg )
 	{
-		POINT apt[3] = {
-			{ cx * 62 / 100, cx * 70 / 100 },
-			{ cx * 92 / 100, cx * 70 / 100 },
-			{ cx * 77 / 100, cx * 90 / 100 }
-		};
-		HBRUSH hbr = CreateSolidBrush( crFg );
-		HPEN hpen = CreatePen( PS_SOLID, 1, crFg );
-		HBRUSH hbrOld = (HBRUSH)SelectObject( hdc, hbr );
-		HPEN hpenOld = (HPEN)SelectObject( hdc, hpen );
-		Polygon( hdc, apt, 3 );
-		SelectObject( hdc, hbrOld );
-		SelectObject( hdc, hpenOld );
-		DeleteObject( hpen );
-		DeleteObject( hbr );
+		RECT rc = { cx * 64 / 100, cx * 20 / 100, cx, cx * 80 / 100 };
+		DrawIconGlyphRect( hdc, rc, 0xEA4C /*arrow-down-s-fill*/, crFg );
 	}
 
 	void DrawHtmlIcon( HDC hdc, int cx, int iIcon, COLORREF crFg )
@@ -1374,11 +1362,17 @@ public:
 			0xED9E, 0xEB97, 0xEA21, 0xEE59, 0xED3B, 0xEF83  // function, error, warning, info, flag, sound
 		};
 		if( iIcon < 0 || iIcon >= (int)_countof( glyphs ) ) return;
-		DrawIconGlyph( hdc, cx, glyphs[iIcon], crFg );
-		// the three in-bar dropdowns carry a themed-color arrow baked in
+		// The three in-bar dropdown buttons carry Remix's own down-triangle
+		// (arrow-down-s-fill) beside the main glyph as the menu affordance -
+		// same font, same stroke language, same foreground color.
 		if( iIcon == 0 || iIcon == 6 || iIcon == 23 ){
-			DrawDropdownArrow( hdc, cx, crFg );
+			RECT rcGlyph = { 0, 0, cx * 66 / 100, cx };
+			DrawIconGlyphRect( hdc, rcGlyph, glyphs[iIcon], crFg );
+			DrawDropdownMarker( hdc, cx, crFg );
+			return;
 		}
+		RECT rcFull = { 0, 0, cx, cx };
+		DrawIconGlyphRect( hdc, rcFull, glyphs[iIcon], crFg );
 		// no fallback artwork by design: the subset ships inside this DLL
 	}
 

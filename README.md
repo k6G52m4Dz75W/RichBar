@@ -7,7 +7,7 @@ toolbar, forked from the official Emurasoft HTMLBar plug-in source
 (`19.5.0`). It is meant to replace the HTML/Markdown toolbar built into
 EmEditor v26 (closed source, with most tags hidden inside dropdown menus).
 
-Current release: **0.17.4 — 2026-09-18**.
+Current release: **0.17.5 — 2026-09-18**.
 
 ## Features
 
