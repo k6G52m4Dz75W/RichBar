@@ -14,6 +14,25 @@ this code base:
 | `0.4.x`       | Compatibility fixes that make the original plug-in build and load correctly on modern EmEditor (v26). |
 | `0.9.0` – `0.17.x` | The HTML + Markdown dual-mode toolbar, heading towards `1.0.0`. |
 
+## [0.17.2] - 2026-09-18
+
+### Fixed
+
+- **0.17.1's arrow fix did not work and has been reverted.** Removing
+  `TBSTYLE_EX_DRAWDDARROWS` does not stop the toolbar from drawing its own
+  theme arrow — the `BTNS_WHOLEDROPDOWN` style alone triggers it — so the
+  wrongly colored control arrow stayed and the baked triangle appeared
+  next to it as a second arrow.
+- **The dropdown buttons are now plain buttons.** With no dropdown style
+  the control draws no arrow of its own; the three in-bar dropdowns
+  (heading, font, form) carry the small filled triangle inside their icon
+  bitmaps, colored like every other pixel and therefore correct in all
+  themes, hover and pressed states. A click arrives as a plain
+  `WM_COMMAND` and `OnDlgCommand` opens the dropdown menu for it; hover
+  still opens after the tooltip delay. `TBN_DROPDOWN` handling is kept for
+  safety. (The briefly deployed 0.17.1 binary is superseded by this
+  release.)
+
 ## [0.17.0] - 2026-09-18
 
 ### Changed
