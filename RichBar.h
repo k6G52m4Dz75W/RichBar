@@ -151,6 +151,8 @@ WCHAR OctToDec( LPWSTR& p )
 // toolbar mode-switch buttons (command IDs below ID_COMMAND_BASE)
 #define ID_MODE_HTML			90
 #define ID_MODE_MD				91
+// hover-to-open dropdown delay timer (m_hDlg)
+#define IDT_HOVER_MENU			1
 // runtime-drawn glyphs appended to every toolbar image list
 #define MD_ICON_MODE_H			20
 #define MD_ICON_MODE_M			21
@@ -167,6 +169,14 @@ WCHAR OctToDec( LPWSTR& p )
 
 #ifndef ILCF_COPY
 #define ILCF_COPY 0x00000002	// ImageList_Copy: keep the source image (old _WIN32_IE targets)
+#endif
+#ifndef TB_GETHOTITEM
+#define TB_GETHOTITEM (WM_USER + 74)
+#endif
+#ifndef HICF_MOUSE
+#define HICF_MOUSE 0x0001
+#define HICF_ENTERING 0x0010
+#define HICF_LEAVING 0x0020
 #endif
 
 #define MODE_HTML				0
@@ -385,6 +395,9 @@ public:
 	HIMAGELIST m_himageToolbar;
 	HIMAGELIST m_himageToolbarHot;
 	int m_nLightIcons;	// images before the pressed-state dark copies appended below them
+	UINT m_nHoverMenuCmd;		// dropdown command waiting for the hover-open timer
+	UINT m_nHoverSuppressCmd;	// dropdown whose menu just closed; reopen only after the mouse leaves
+	bool m_bHoverSuppress;
 	HWND m_hDlg;
 	TCHAR m_szOldConfig[MAX_CONFIG_NAME];
 	DWORD m_dwFindFlags;
@@ -2756,6 +2769,181 @@ public:
 		//}
 	}
 
+	bool IsDropdownCommand( UINT nIDCommand )
+	{
+		if( nIDCommand < ID_COMMAND_BASE || nIDCommand >= ID_COMMAND_BASE + Cmds().size() ){
+			return false;
+		}
+		switch( Cmds()[nIDCommand - ID_COMMAND_BASE].m_iCmd ){
+		case CMD_FONT:
+		case CMD_DROPDOWN_HEADER:
+		case CMD_DROPDOWN_FORM:
+			return true;
+		}
+		return false;
+	}
+
+	void ShowDropdownMenu( UINT nIDCommand, bool bPressed )
+	{
+		CCmd& cmd = Cmds()[nIDCommand - ID_COMMAND_BASE];
+		// When opened by a click the button is pressed, and the toolbar draws
+		// pressed buttons from the normal list: light glyphs on the light
+		// pressed fill on a dark band. That list carries dark copies of every
+		// image after m_nLightIcons (mirroring the hot list), so point just
+		// this button at its dark variant for the menu's lifetime. A menu
+		// opened by hovering needs no swap: the button draws hot, and the hot
+		// list already carries dark glyphs.
+		int iOldImage = -1;
+		if( bPressed && m_himageToolbarHot != NULL && m_nLightIcons > 0 ){
+			int nIndex = (int)SendMessage( m_hwndToolbar, TB_COMMANDTOINDEX, nIDCommand, 0L );
+			TBBUTTON tb = {};
+			if( nIndex >= 0 && SendMessage( m_hwndToolbar, TB_GETBUTTON, nIndex, (LPARAM)&tb ) ){
+				iOldImage = tb.iBitmap;
+				int iDark = m_nLightIcons + iOldImage;
+				if( iDark < ImageList_GetImageCount( m_himageToolbar ) ){
+					TBBUTTONINFO bi = {};
+					bi.cbSize = sizeof( bi );
+					bi.dwMask = TBIF_IMAGE;
+					bi.iImage = iDark;
+					SendMessage( m_hwndToolbar, TB_SETBUTTONINFO, nIDCommand, (LPARAM)&bi );
+				}
+				else {
+					iOldImage = -1;
+				}
+			}
+		}
+		switch( cmd.m_iCmd ){
+		case CMD_FONT:
+			{
+				int n = PopupMenuSub( nIDCommand, IDR_POPUP_FONT );
+				if( n == 999 ){
+					OnFont();
+				}
+				else if( n > 0 ){
+					_ASSERT( n - 1 < (int)m_RecentFontArray.size() );
+					TCHAR sz[LF_FACESIZE];
+					StringCopy( sz, _countof( sz ), m_RecentFontArray[n - 1].c_str() );
+					InsertTagFont( sz );
+				}
+			}
+			break;
+
+		case CMD_DROPDOWN_HEADER:
+			{
+				int n = PopupMenuSub( nIDCommand, IDR_POPUP_HEADER );
+				if( n > 0 ){
+					TCHAR szTagBegin[8], szTagEnd[8];
+					StringPrintf( szTagBegin, _countof( szTagBegin ), _T("<h%d>"), n );
+					StringPrintf( szTagEnd, _countof( szTagEnd ), _T("</h%d>"), n );
+					InsertTag( szTagBegin, szTagEnd );
+				}
+			}
+			break;
+
+		case CMD_DROPDOWN_FORM:
+			{
+				int n = PopupMenuSub( nIDCommand, IDR_POPUP_FORM );
+				switch( n )	{
+				case 1:
+					InsertTag( _T("<form method=\"post\" action=\"\">\n\t"), _T("\n<input type=\"submit\"><input type=\"reset\"></form>\n") );
+					break;
+				case 2:
+					InsertTag( _T("<input type=\"text\" id=\"\" />"), _T("") );
+					break;
+				case 3:
+					InsertTag( _T("<textarea id=\"\" rows=\"3\" cols=\"30\">"), _T("</textarea>") );
+					break;
+				case 4:
+					InsertTag( _T("<input type=\"checkbox\" id=\"\" />"), _T("") );
+					break;
+				case 5:
+					InsertTag( _T("<input type=\"radio\" id=\"\" />"), _T("") );
+					break;
+				case 6:
+					InsertTag( _T("<fieldset style=\"padding: 2\">\n<legend>Group Box"), _T("</legend></fieldset>") );
+					break;
+				case 7:
+					InsertTag( _T("<select size=\"1\" id=\"\">"), _T("</select>") );
+					break;
+				case 8:
+					InsertTag( _T("<input type=\"button\" value=\"Button\" id=\"\">"), _T("") );
+					break;
+				case 9:
+					InsertTag( _T("<button id=\"\">Type Here"), _T("</button>") );
+					break;
+				}
+			}
+			break;
+
+		}
+		if( iOldImage >= 0 ){
+			TBBUTTONINFO bi = {};
+			bi.cbSize = sizeof( bi );
+			bi.dwMask = TBIF_IMAGE;
+			bi.iImage = iOldImage;
+			SendMessage( m_hwndToolbar, TB_SETBUTTONINFO, nIDCommand, (LPARAM)&bi );
+		}
+		// A menu just opened here keeps the button quiet until the mouse
+		// leaves it, so dismissal does not instantly reopen the same menu.
+		m_bHoverSuppress = true;
+		m_nHoverSuppressCmd = nIDCommand;
+	}
+
+	void OnHoverMenuTimer()
+	{
+		KillTimer( m_hDlg, IDT_HOVER_MENU );
+		UINT nCmd = m_nHoverMenuCmd;
+		m_nHoverMenuCmd = 0;
+		if( !nCmd || !m_hwndToolbar ){
+			return;
+		}
+		// the mouse may have moved on while the delay ran
+		if( (int)SendMessage( m_hwndToolbar, TB_GETHOTITEM, 0, 0 ) != (int)SendMessage( m_hwndToolbar, TB_COMMANDTOINDEX, nCmd, 0L ) ){
+			return;
+		}
+		ShowDropdownMenu( nCmd, false );
+	}
+
+	void OnToolbarHotItemChange( NMTBHOTITEM* pHot )
+	{
+		if( !m_hwndToolbar || !m_hDlg ){
+			return;
+		}
+		if( pHot->dwFlags & HICF_LEAVING ){
+			if( m_bHoverSuppress && pHot->idOld == (int)m_nHoverSuppressCmd ){
+				m_bHoverSuppress = false;
+			}
+			if( m_nHoverMenuCmd != 0 && pHot->idOld == (int)m_nHoverMenuCmd ){
+				KillTimer( m_hDlg, IDT_HOVER_MENU );
+				m_nHoverMenuCmd = 0;
+			}
+			return;
+		}
+		if( !( pHot->dwFlags & HICF_MOUSE ) ){
+			return;	// keyboard navigation never auto-opens
+		}
+		UINT nCmd = (UINT)pHot->idNew;
+		if( m_bHoverSuppress && nCmd == m_nHoverSuppressCmd ){
+			return;
+		}
+		if( !IsDropdownCommand( nCmd ) ){
+			// moving onto a plain button cancels a pending hover-open
+			if( m_nHoverMenuCmd != 0 ){
+				KillTimer( m_hDlg, IDT_HOVER_MENU );
+				m_nHoverMenuCmd = 0;
+			}
+			return;
+		}
+		if( nCmd == m_nHoverMenuCmd ){
+			return;
+		}
+		KillTimer( m_hDlg, IDT_HOVER_MENU );
+		m_nHoverMenuCmd = nCmd;
+		DWORD dwDelay = 400;
+		SystemParametersInfo( SPI_GETMENUSHOWDELAY, 0, &dwDelay, 0 );
+		SetTimer( m_hDlg, IDT_HOVER_MENU, dwDelay, NULL );
+	}
+
 	void OnDlgNotify( NMHDR* pnmh )
 	{
 		switch( pnmh->code ){
@@ -2768,107 +2956,15 @@ public:
 				}
 			}
 			break;
+		case TBN_HOTITEMCHANGE:
+			OnToolbarHotItemChange( (NMTBHOTITEM*)pnmh );
+			break;
 		case TBN_DROPDOWN:
 			{
 				NMTOOLBAR* pToolbar = (NMTOOLBAR*)pnmh;
 				if( pToolbar->iItem >= ID_COMMAND_BASE && pToolbar->iItem < ID_COMMAND_BASE + (int)Cmds().size() ) {
-					CCmd& cmd = Cmds()[pToolbar->iItem - ID_COMMAND_BASE];
-					// While the menu tracks, the button stays pressed and the
-					// toolbar draws pressed buttons from the normal list:
-					// light glyphs on the light pressed fill on a dark band.
-					// That list carries dark copies of every image after
-					// m_nLightIcons (mirroring the hot list), so point just
-					// this button at its dark variant for the menu's lifetime.
-					int iOldImage = -1;
-					if( m_himageToolbarHot != NULL && m_nLightIcons > 0 ){
-						int nIndex = (int)SendMessage( m_hwndToolbar, TB_COMMANDTOINDEX, pToolbar->iItem, 0L );
-						TBBUTTON tb = {};
-						if( nIndex >= 0 && SendMessage( m_hwndToolbar, TB_GETBUTTON, nIndex, (LPARAM)&tb ) ){
-							iOldImage = tb.iBitmap;
-							int iDark = m_nLightIcons + iOldImage;
-							if( iDark < ImageList_GetImageCount( m_himageToolbar ) ){
-								TBBUTTONINFO bi = {};
-								bi.cbSize = sizeof( bi );
-								bi.dwMask = TBIF_IMAGE;
-								bi.iImage = iDark;
-								SendMessage( m_hwndToolbar, TB_SETBUTTONINFO, pToolbar->iItem, (LPARAM)&bi );
-							}
-							else {
-								iOldImage = -1;
-							}
-						}
-					}
-					switch( cmd.m_iCmd ){
-					case CMD_FONT:
-						{
-							int n = PopupMenuSub( pToolbar->iItem, IDR_POPUP_FONT );
-							if( n == 999 ){
-								OnFont();
-							}
-							else if( n > 0 ){
-								_ASSERT( n - 1 < (int)m_RecentFontArray.size() );
-								TCHAR sz[LF_FACESIZE];
-								StringCopy( sz, _countof( sz ), m_RecentFontArray[n - 1].c_str() );
-								InsertTagFont( sz );
-							}
-						}
-						break;
-
-					case CMD_DROPDOWN_HEADER:
-						{
-							int n = PopupMenuSub( pToolbar->iItem, IDR_POPUP_HEADER );
-							if( n > 0 ){
-								TCHAR szTagBegin[8], szTagEnd[8];
-								StringPrintf( szTagBegin, _countof( szTagBegin ), _T("<h%d>"), n );
-								StringPrintf( szTagEnd, _countof( szTagEnd ), _T("</h%d>"), n );
-								InsertTag( szTagBegin, szTagEnd );
-							}
-						}
-						break;
-
-					case CMD_DROPDOWN_FORM:
-						{
-							int n = PopupMenuSub( pToolbar->iItem, IDR_POPUP_FORM );
-							switch( n )	{
-							case 1:
-								InsertTag( _T("<form method=\"post\" action=\"\">\n\t"), _T("\n<input type=\"submit\"><input type=\"reset\"></form>\n") );
-								break;
-							case 2:
-								InsertTag( _T("<input type=\"text\" id=\"\" />"), _T("") );
-								break;
-							case 3:
-								InsertTag( _T("<textarea id=\"\" rows=\"3\" cols=\"30\">"), _T("</textarea>") );
-								break;
-							case 4:
-								InsertTag( _T("<input type=\"checkbox\" id=\"\" />"), _T("") );
-								break;
-							case 5:
-								InsertTag( _T("<input type=\"radio\" id=\"\" />"), _T("") );
-								break;
-							case 6:
-								InsertTag( _T("<fieldset style=\"padding: 2\">\n<legend>Group Box"), _T("</legend></fieldset>") );
-								break;
-							case 7:
-								InsertTag( _T("<select size=\"1\" id=\"\">"), _T("</select>") );
-								break;
-							case 8:
-								InsertTag( _T("<input type=\"button\" value=\"Button\" id=\"\">"), _T("") );
-								break;
-							case 9:
-								InsertTag( _T("<button id=\"\">Type Here"), _T("</button>") );
-								break;
-							}
-						}
-							break;
-
-					}
-					if( iOldImage >= 0 ){
-						TBBUTTONINFO bi = {};
-						bi.cbSize = sizeof( bi );
-						bi.dwMask = TBIF_IMAGE;
-						bi.iImage = iOldImage;
-						SendMessage( m_hwndToolbar, TB_SETBUTTONINFO, pToolbar->iItem, (LPARAM)&bi );
-					}
+					// clicked: the button is pressed, so pass the pressed-swap flag
+					ShowDropdownMenu( (UINT)pToolbar->iItem, true );
 				}
 			}
 			break;
@@ -3369,6 +3465,16 @@ INT_PTR CALLBACK NewProc( HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam )
 		{
 			CMyFrame* pFrame = static_cast<CMyFrame*>(GetFrame( hwnd ));
 			pFrame->OnDlgNotify( (NMHDR*)lParam );
+		}
+		break;
+
+	case WM_TIMER:
+		if( wParam == IDT_HOVER_MENU ){
+			CMyFrame* pFrame = static_cast<CMyFrame*>(GetFrame( hwnd ));
+			if( pFrame ){
+				pFrame->OnHoverMenuTimer();
+			}
+			return 0;
 		}
 		break;
 

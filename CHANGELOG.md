@@ -14,6 +14,20 @@ this code base:
 | `0.4.x`       | Compatibility fixes that make the original plug-in build and load correctly on modern EmEditor (v26). |
 | `0.9.0` – `0.14.x` | The HTML + Markdown dual-mode toolbar, heading towards `1.0.0`. |
 
+## [0.15.2] - 2026-09-17
+
+### Added
+
+- **Dropdown menus open on hover.** Moving the mouse onto the heading, font
+  or form button now shows its menu after the system menu delay
+  (`SPI_GETMENUSHOWDELAY`), like a menu bar — no click and no pressed-state
+  repaint needed. Moving onto a plain button cancels a pending hover-open;
+  keyboard hot-item navigation never auto-opens. A button whose menu just
+  closed stays quiet until the mouse leaves it, so dismissing a menu does
+  not instantly reopen it. Clicking a dropdown button still works: that
+  path keeps the 0.15.1 pressed-state dark-glyph swap. The three dropdown
+  handlers were factored into one `ShowDropdownMenu` used by both paths.
+
 ## [0.15.1] - 2026-09-17
 
 ### Fixed
