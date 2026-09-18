@@ -302,10 +302,6 @@ static void TestImageLists(bool fallback) {
                         RECT rc = {0,0,size,size};
                         Check(DrawTextW(dc,&ch,1,&rc,DT_CENTER|DT_VCENTER|DT_SINGLELINE), "direct list reference draw failed");
                         SelectObject(dc,oldFont); DeleteObject(font);
-                        if (mode == MODE_HTML && (icon == 0 || icon == 6 || icon == 23)) {
-                            // dropdown slots carry the baked-in arrow
-                            renderer.DrawDropdownArrow(dc, size, color);
-                        }
                         GdiFlush();
                         std::vector<DWORD> reference((DWORD*)bits,(DWORD*)bits+size*size);
                         for (auto& p : reference) p &= 0xFFFFFF;
