@@ -2809,13 +2809,14 @@ public:
 		}
 		// Windows convention for hover/click menus: while a menu tracks, the
 		// tooltip stands down. Both are topmost popups fighting for the same
-		// spot below the button, so hiding the tip for the menu's lifetime is
-		// the standard practice (menu bars and Ribbons do the same). The tip
-		// returns on the next mouse move once the menu closes.
+		// spot below the button. Hide any visible tip, and the TTN_GETDISPINFO
+		// handler keeps supplying empty text while a menu tracks (an empty tip
+		// is never shown). Deactivating the control itself is deliberately
+		// avoided: a re-activated tooltip can stay dormant when the mouse
+		// never leaves the tool, which silenced tooltips for good in 0.15.5.
 		HWND hwndTips = m_hwndToolbar ? (HWND)SendMessage( m_hwndToolbar, TB_GETTOOLTIPS, 0, 0 ) : NULL;
 		if( hwndTips ){
 			SendMessage( hwndTips, TTM_POP, 0, 0 );
-			SendMessage( hwndTips, TTM_ACTIVATE, FALSE, 0 );
 		}
 		m_bInDropdownMenu = true;
 		switch( cmd.m_iCmd ){
@@ -2883,9 +2884,6 @@ public:
 
 		}
 		m_bInDropdownMenu = false;
-		if( hwndTips ){
-			SendMessage( hwndTips, TTM_ACTIVATE, TRUE, 0 );
-		}
 		if( iOldImage >= 0 ){
 			TBBUTTONINFO bi = {};
 			bi.cbSize = sizeof( bi );
@@ -3003,6 +3001,12 @@ public:
 		case TTN_GETDISPINFO:
 			{
 				NMTTDISPINFO* pDispInfo = (NMTTDISPINFO*)pnmh;
+				if( m_bInDropdownMenu ){
+					// a menu is tracking: an empty tooltip is never shown, so
+					// the tip stands down without touching the control state
+					pDispInfo->szText[0] = _T('\0');
+					break;
+				}
 				if( pDispInfo->hdr.idFrom >= ID_COMMAND_BASE && pDispInfo->hdr.idFrom < ID_COMMAND_BASE + Cmds().size() ) {
 					CCmd& cmd = Cmds()[ pDispInfo->hdr.idFrom - ID_COMMAND_BASE];
 					StringCopyN( pDispInfo->szText, _countof( pDispInfo->szText ), cmd.m_sTitle.c_str(), _countof( pDispInfo->szText ) - 1 );

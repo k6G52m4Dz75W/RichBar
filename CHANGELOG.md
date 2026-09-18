@@ -14,6 +14,20 @@ this code base:
 | `0.4.x`       | Compatibility fixes that make the original plug-in build and load correctly on modern EmEditor (v26). |
 | `0.9.0` – `0.14.x` | The HTML + Markdown dual-mode toolbar, heading towards `1.0.0`. |
 
+## [0.15.6] - 2026-09-17
+
+### Fixed
+
+- **Tooltips stopped appearing for good after 0.15.5.** Deactivating the
+  tooltip control for a menu's lifetime left it dormant when the mouse
+  never left the button: without a fresh tool-enter event its show timer
+  never restarted, so tooltips went silent permanently. The menu now
+  stands tooltips down without touching the control state: any visible
+  tip is hidden with `TTM_POP` when the menu opens, and while a menu
+  tracks the `TTN_GETDISPINFO` handler supplies empty text (an empty tip
+  is never displayed). The tooltip's own lifecycle stays untouched, so it
+  returns reliably on the first mouse move after the menu closes.
+
 ## [0.15.5] - 2026-09-17
 
 ### Fixed
