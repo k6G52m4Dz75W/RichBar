@@ -13,6 +13,7 @@
 #define ZERO_INIT_FIRST_MEM(classname, firstmem)  ZeroMemory( &firstmem, sizeof( classname ) - ((char*)&firstmem - (char*)this) );
 
 INT_PTR CALLBACK NewProc( HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam );
+LRESULT CALLBACK ToolbarProc( HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam );
 INT_PTR CALLBACK TableDlg( HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam );
 INT_PTR CALLBACK PropDlg( HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam );
 INT_PTR CALLBACK InputParamsDlg( HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam );
@@ -166,18 +167,6 @@ WCHAR OctToDec( LPWSTR& p )
 #define MD_TEXT_HEIGHT		14
 #define MD_CODE_HEIGHT		12
 #define MD_SUBSCRIPT_HEIGHT	8
-
-#ifndef ILCF_COPY
-#define ILCF_COPY 0x00000002	// ImageList_Copy: keep the source image (old _WIN32_IE targets)
-#endif
-#ifndef TB_GETHOTITEM
-#define TB_GETHOTITEM (WM_USER + 74)
-#endif
-#ifndef HICF_MOUSE
-#define HICF_MOUSE 0x0001
-#define HICF_ENTERING 0x0010
-#define HICF_LEAVING 0x0020
-#endif
 
 #define MODE_HTML				0
 #define MODE_MD					1
@@ -394,11 +383,11 @@ public:
 	HWND m_hwndToolbar;
 	HIMAGELIST m_himageToolbar;
 	HIMAGELIST m_himageToolbarHot;
+	WNDPROC m_wpOldToolbarProc;	// toolbar subclass chain
 	int m_nLightIcons;	// images before the pressed-state dark copies appended below them
 	UINT m_nHoverMenuCmd;		// dropdown command waiting for the hover-open timer
-	UINT m_nHoverSuppressCmd;	// dropdown whose menu just closed; reopen only after the mouse leaves
-	DWORD m_dwSuppressTick;		// when the suppression was set; expires after a double-click time
-	bool m_bHoverSuppress;
+	UINT m_nLastMenuCmd;		// dropdown whose menu closed last; reopen only after the mouse leaves it
+	bool m_bLastMenuLeft;		// the mouse has left m_nLastMenuCmd since its menu closed
 	bool m_bInDropdownMenu;		// a dropdown menu is tracking right now
 	HWND m_hDlg;
 	TCHAR m_szOldConfig[MAX_CONFIG_NAME];
@@ -1670,6 +1659,10 @@ public:
 			HWND hwndToolbar = CreateWindowEx( 0, TOOLBARCLASSNAME, NULL, dwStyle,
 				0, 0, 0, cxButtonSize, m_hDlg, (HMENU)(INT_PTR)100, NULL, NULL );
 			m_hwndToolbar = hwndToolbar;
+			// subclass for the hover-to-open dropdown logic (mouse-move/leave
+			// tracking and holding the hot look while a menu tracks)
+			SetWindowLongPtr( hwndToolbar, GWLP_USERDATA, (LONG_PTR)this );
+			m_wpOldToolbarProc = (WNDPROC)SetWindowLongPtr( hwndToolbar, GWLP_WNDPROC, (LONG_PTR)ToolbarProc );
 			SendMessage( hwndToolbar, TB_BUTTONSTRUCTSIZE, (WPARAM) sizeof(TBBUTTON), 0 ); 
 			SendMessage( hwndToolbar, TB_SETBUTTONSIZE, 0, cxButtonSize );
 			SendMessage( hwndToolbar, TB_SETEXTENDEDSTYLE, 0, dwExStyle );
@@ -2788,26 +2781,15 @@ public:
 	void ShowDropdownMenu( UINT nIDCommand, bool bPressedByMouse )
 	{
 		CCmd& cmd = Cmds()[nIDCommand - ID_COMMAND_BASE];
-		// Keep the button visually held for the menu's whole lifetime. A
-		// click leaves it pressed by the mouse itself; a hover-open must set
-		// the pressed state manually, or the hot fill fades once the menu
-		// loop captures the mouse and the toolbar's hot tracking times out.
-		BYTE fsRestore = 0;
-		bool bHoldPressed = false;
-		if( !bPressedByMouse ){
-			int nState = (int)SendMessage( m_hwndToolbar, TB_GETSTATE, nIDCommand, 0 );
-			if( nState >= 0 && ( nState & TBSTATE_PRESSED ) == 0 ){
-				fsRestore = (BYTE)nState;
-				bHoldPressed = true;
-				SendMessage( m_hwndToolbar, TB_SETSTATE, nIDCommand, (LPARAM)( nState | TBSTATE_PRESSED ) );
-			}
-		}
 		// Pressed buttons draw from the normal list, whose light glyphs wash
 		// out on the light pressed fill on a dark band. That list carries
 		// dark copies of every image after m_nLightIcons (mirroring the hot
-		// list), so point just this button at its dark variant.
+		// list), so point just this button at its dark variant. A menu opened
+		// by hovering never presses the button: while the menu tracks we
+		// swallow the toolbar's WM_MOUSELEAVE (see ToolbarProc), so the hot
+		// look simply never fades and the glyph never shifts.
 		int iOldImage = -1;
-		if( ( bPressedByMouse || bHoldPressed ) && m_himageToolbarHot != NULL && m_nLightIcons > 0 ){
+		if( bPressedByMouse && m_himageToolbarHot != NULL && m_nLightIcons > 0 ){
 			int nIndex = (int)SendMessage( m_hwndToolbar, TB_COMMANDTOINDEX, nIDCommand, 0L );
 			TBBUTTON tb = {};
 			if( nIndex >= 0 && SendMessage( m_hwndToolbar, TB_GETBUTTON, nIndex, (LPARAM)&tb ) ){
@@ -2898,15 +2880,17 @@ public:
 			bi.iImage = iOldImage;
 			SendMessage( m_hwndToolbar, TB_SETBUTTONINFO, nIDCommand, (LPARAM)&bi );
 		}
-		if( bHoldPressed ){
-			SendMessage( m_hwndToolbar, TB_SETSTATE, nIDCommand, (LPARAM)fsRestore );
+		// A menu just opened here stays quiet until the mouse has actually
+		// left the button, tracked deterministically in the mouse handlers.
+		m_nLastMenuCmd = nIDCommand;
+		m_bLastMenuLeft = false;
+		// The menu loop consumed the mouse; if the cursor ended up outside
+		// the toolbar, let the button's hot look clear right away.
+		POINT pt = { 0, 0 };
+		RECT rc = { 0, 0, 0, 0 };
+		if( GetCursorPos( &pt ) && GetWindowRect( m_hwndToolbar, &rc ) && !PtInRect( &rc, pt ) ){
+			SendMessage( m_hwndToolbar, WM_MOUSELEAVE, 0, 0 );
 		}
-		// A menu just opened here keeps the button quiet until the mouse
-		// leaves it or a double-click time passes, so dismissal does not
-		// instantly reopen the same menu yet recovery can never stick.
-		m_bHoverSuppress = true;
-		m_nHoverSuppressCmd = nIDCommand;
-		m_dwSuppressTick = GetTickCount();
 	}
 
 	void OnHoverMenuTimer()
@@ -2917,57 +2901,69 @@ public:
 		if( !nCmd || !m_hwndToolbar || m_bInDropdownMenu ){
 			return;
 		}
-		// the mouse may have moved on while the delay ran
-		if( (int)SendMessage( m_hwndToolbar, TB_GETHOTITEM, 0, 0 ) != (int)SendMessage( m_hwndToolbar, TB_COMMANDTOINDEX, nCmd, 0L ) ){
+		// the mouse may have moved on while the delay ran: the cursor must
+		// still sit inside the button's rect
+		int nIndex = (int)SendMessage( m_hwndToolbar, TB_COMMANDTOINDEX, nCmd, 0L );
+		if( nIndex < 0 ){
+			return;
+		}
+		RECT rc = { 0, 0, 0, 0 };
+		if( !SendMessage( m_hwndToolbar, TB_GETITEMRECT, nIndex, (LPARAM)&rc ) ){
+			return;
+		}
+		MapWindowPoints( m_hwndToolbar, NULL, (POINT*)&rc, 2 );
+		POINT pt = { 0, 0 };
+		if( !GetCursorPos( &pt ) || !PtInRect( &rc, pt ) ){
 			return;
 		}
 		ShowDropdownMenu( nCmd, false );
 	}
 
-	void OnToolbarHotItemChange( NMTBHOTITEM* pHot )
+	// Runs inside the toolbar subclass. Returns true when the message is
+	// swallowed.
+	bool OnToolbarMessage( HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam )
 	{
-		if( !m_hwndToolbar || !m_hDlg ){
-			return;
+		if( msg == WM_MOUSELEAVE && m_bInDropdownMenu ){
+			// the menu loop captured the mouse; the button must keep its hot
+			// look for as long as its menu stays open, so the leave event is
+			// quietly dropped instead of being forwarded to the toolbar
+			return true;
 		}
-		// One notification can carry both flags (moving straight from button
-		// A to button B), so handle the leaving part and keep going: an early
-		// return here once swallowed every subsequent hover-open.
-		if( pHot->dwFlags & HICF_LEAVING ){
-			if( m_bHoverSuppress && pHot->idOld == (int)m_nHoverSuppressCmd ){
-				m_bHoverSuppress = false;
-			}
-			if( m_nHoverMenuCmd != 0 && pHot->idOld == (int)m_nHoverMenuCmd ){
-				KillTimer( m_hDlg, IDT_HOVER_MENU );
-				m_nHoverMenuCmd = 0;
-			}
+		if( msg == WM_MOUSEMOVE ){
+			OnToolbarMouseMove( hwnd, lParam );
+		}
+		else if( msg == WM_MOUSELEAVE ){
+			OnToolbarMouseLeave();
+		}
+		return false;
+	}
+
+	void OnToolbarMouseMove( HWND hwnd, LPARAM lParam )
+	{
+		POINT pt = { (short)LOWORD( lParam ), (short)HIWORD( lParam ) };
+		UINT nCmd = 0;
+		int nHit = (int)SendMessage( hwnd, TB_HITTEST, 0, (LPARAM)&pt );
+		TBBUTTON tb = {};
+		if( nHit >= 0 && SendMessage( hwnd, TB_GETBUTTON, nHit, (LPARAM)&tb ) && tb.idCommand >= ID_COMMAND_BASE ){
+			nCmd = (UINT)tb.idCommand;
+		}
+		// deterministic leave tracking: any move onto another item or blank
+		// space frees the last served button for a fresh hover-open
+		if( m_nLastMenuCmd != 0 && nCmd != m_nLastMenuCmd ){
+			m_bLastMenuLeft = true;
 		}
 		if( m_bInDropdownMenu ){
-			return;	// a dropdown menu is tracking; ignore hover churn
-		}
-		if( !( pHot->dwFlags & HICF_MOUSE ) ){
-			return;	// keyboard navigation never auto-opens
-		}
-		UINT nCmd = (UINT)pHot->idNew;
-		if( nCmd == (UINT)-1 ){
-			return;	// hot state cleared; nobody became hot
-		}
-		if( m_bHoverSuppress ){
-			// the same button stays quiet briefly after its menu closed, but
-			// the suppression must expire even if a HICF_LEAVING was missed
-			if( nCmd != m_nHoverSuppressCmd || GetTickCount() - m_dwSuppressTick > (DWORD)GetDoubleClickTime() ){
-				m_bHoverSuppress = false;
-			}
-		}
-		if( m_bHoverSuppress ){
 			return;
 		}
 		if( !IsDropdownCommand( nCmd ) ){
-			// moving onto a plain button cancels a pending hover-open
 			if( m_nHoverMenuCmd != 0 ){
 				KillTimer( m_hDlg, IDT_HOVER_MENU );
 				m_nHoverMenuCmd = 0;
 			}
 			return;
+		}
+		if( nCmd == m_nLastMenuCmd && !m_bLastMenuLeft ){
+			return;	// menu closed here moments ago; the mouse never left
 		}
 		if( nCmd == m_nHoverMenuCmd ){
 			return;
@@ -2977,6 +2973,15 @@ public:
 		DWORD dwDelay = 400;
 		SystemParametersInfo( SPI_GETMENUSHOWDELAY, 0, &dwDelay, 0 );
 		SetTimer( m_hDlg, IDT_HOVER_MENU, dwDelay, NULL );
+	}
+
+	void OnToolbarMouseLeave()
+	{
+		m_bLastMenuLeft = true;
+		if( m_nHoverMenuCmd != 0 ){
+			KillTimer( m_hDlg, IDT_HOVER_MENU );
+			m_nHoverMenuCmd = 0;
+		}
 	}
 
 	void OnDlgNotify( NMHDR* pnmh )
@@ -2990,9 +2995,6 @@ public:
 					StringCopyN( pDispInfo->szText, _countof( pDispInfo->szText ), cmd.m_sTitle.c_str(), _countof( pDispInfo->szText ) - 1 );
 				}
 			}
-			break;
-		case TBN_HOTITEMCHANGE:
-			OnToolbarHotItemChange( (NMTBHOTITEM*)pnmh );
 			break;
 		case TBN_DROPDOWN:
 			{
@@ -3461,6 +3463,18 @@ public:
 
 
 };
+
+LRESULT CALLBACK ToolbarProc( HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam )
+{
+	CMyFrame* pFrame = (CMyFrame*)GetWindowLongPtr( hwnd, GWLP_USERDATA );
+	if( pFrame && pFrame->OnToolbarMessage( hwnd, msg, wParam, lParam ) ){
+		return 0;	// swallowed: e.g. WM_MOUSELEAVE while our menu tracks
+	}
+	WNDPROC wpOld = pFrame ? pFrame->m_wpOldToolbarProc : NULL;
+	return wpOld ? CallWindowProc( wpOld, hwnd, msg, wParam, lParam )
+	             : DefWindowProc( hwnd, msg, wParam, lParam );
+}
+
 
 INT_PTR CALLBACK NewProc( HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam )
 {

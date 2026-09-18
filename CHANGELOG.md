@@ -14,6 +14,26 @@ this code base:
 | `0.4.x`       | Compatibility fixes that make the original plug-in build and load correctly on modern EmEditor (v26). |
 | `0.9.0` – `0.14.x` | The HTML + Markdown dual-mode toolbar, heading towards `1.0.0`. |
 
+## [0.15.4] - 2026-09-17
+
+### Fixed
+
+- **The dropdown button's icon shifted slightly when its menu opened.**
+  Holding the button in the pressed state (0.15.3's way of keeping the
+  highlight) also makes the toolbar draw pressed icons with the classic
+  1 px down-right offset. The hover path no longer presses the button:
+  the toolbar control is now subclassed and, while a menu tracks, its
+  `WM_MOUSELEAVE` is swallowed, so the hot look simply never fades and the
+  icon stays exactly where it was. The click path is untouched.
+- **After a couple of open/close cycles hover-open stopped working.** The
+  0.15.2-0.15.3 logic was driven by `TBN_HOTITEMCHANGE`, whose exact
+  notification sequence around a modal menu proved unreliable. The whole
+  mechanism now runs on direct mouse events in the subclass:
+  `TB_HITTEST` on `WM_MOUSEMOVE` decides when to arm the hover timer, and
+  "the mouse has left the last-served button" — the condition for opening
+  its menu again — is tracked from mouse-move hit changes and
+  `WM_MOUSELEAVE` themselves, so it cannot get lost.
+
 ## [0.15.3] - 2026-09-17
 
 ### Fixed
