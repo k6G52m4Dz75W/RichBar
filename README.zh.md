@@ -7,7 +7,7 @@
 它旨在替代 EmEditor v26 内置的 HTML/Markdown 工具栏（闭源、大部分标签
 藏在下拉菜单里）。
 
-当前版本：**0.15.7 — 2026-09-17**。
+当前版本：**0.16.0 — 2026-09-18**。
 
 ## 功能
 
@@ -21,7 +21,7 @@
   删除线、行内代码、围栏代码块、引用、无序/有序（自动编号）/任务列表、
   水平线、链接、图片（文件选择器）、表格、自定义按钮。包裹类命令对已包裹
   文本再点击一次即取消。
-- **运行时绘制、主题自适应图标**：内嵌 Lucide 字体子集覆盖全部 20 个
+- **运行时绘制、主题自适应图标**：内嵌 Remix Icon 字体子集覆盖全部 20 个
   Markdown 图标和全部 48 个 HTML 槽位，按当前按钮尺寸与 DPI 直接绘制——
   两种模式共用同一套笔画语言。颜色按栏背景亮度选择浅底深字或深底浅字，
   并带热态图像列表保证深色带区下悬停可读。主题/配置变化自动重绘。
@@ -32,58 +32,59 @@
 
 ## 工具栏图标对照
 
-自 0.15.0 起，两套按钮集均绘制自 `lucide-static` **1.47.0** 的内嵌
-**Lucide** 子集——全部 48 个 HTML 槽位（25 个默认按钮 + 23 个仅自定义
+自 0.16.0 起，两套按钮集均绘制自
+[Remix Icon](https://github.com/Remix-Design/RemixIcon) **4.9.1** 的内嵌
+**Remix Icon** 子集——全部 48 个 HTML 槽位（25 个默认按钮 + 23 个仅自定义
 对话框可见的命令）与全部 20 个 Markdown 图标——不再使用旧版 HTML 彩色
 位图和 Segoe Fluent Icons / Segoe MDL2 Assets。已保存的图标槽位、自定义
-配置和命令行为保持不变，只有图形及其颜色/DPI 自适应能力发生变化。58 个
-去重名称与码位见 [`docs/lucide-font.md`](docs/lucide-font.md)；Markdown
+配置和命令行为保持不变，只有图形及其颜色/DPI 自适应能力发生变化。59 个
+去重名称与码位见 [`docs/remix-icon.md`](docs/remix-icon.md)；Markdown
 集合为：
 
-| 图标索引 | 工具栏按钮 | Lucide 子集名称 | 码位 |
+| 图标索引 | 工具栏按钮 | Remix Icon 名称 | 码位 |
 |---|---|---|---|
-| 0 | 标题 H1 | `heading-1` | U+E385 |
-| 1 | 标题 H2 | `heading-2` | U+E386 |
-| 2 | 标题 H3 | `heading-3` | U+E387 |
-| 3 | 标题 H4 | `heading-4` | U+E388 |
-| 4 | 标题 H5 | `heading-5` | U+E389 |
-| 5 | 标题 H6 | `heading-6` | U+E38A |
-| 6 | 粗体 | `bold` | U+E05D |
-| 7 | 斜体 | `italic` | U+E0FB |
-| 8 | 删除线 | `strikethrough` | U+E177 |
-| 9 | 行内代码 | `code` | U+E093 |
-| 10 | 围栏代码块 | `code-xml` | U+E206 |
-| 11 | 引用 | `quote` | U+E239 |
-| 12 | 无序列表 | `list` | U+E106 |
-| 13 | 有序列表 | `list-ordered` | U+E1D1 |
-| 14 | 任务列表 | `list-todo` | U+E4C3 |
-| 15 | 水平线 | `minus` | U+E11C |
-| 16 | 链接 | `link` | U+E102 |
-| 17 | 图片 | `image` | U+E0F6 |
-| 18 | 表格 | `table` | U+E17D |
-| 19 | 自定义 | `settings` | U+E154 |
+| 0 | 标题 H1 | `h-1` | U+EDE6 |
+| 1 | 标题 H2 | `h-2` | U+EDE7 |
+| 2 | 标题 H3 | `h-3` | U+EDE8 |
+| 3 | 标题 H4 | `h-4` | U+EDE9 |
+| 4 | 标题 H5 | `h-5` | U+EDEA |
+| 5 | 标题 H6 | `h-6` | U+EDEB |
+| 6 | 粗体 | `bold` | U+EAD1 |
+| 7 | 斜体 | `italic` | U+EE6B |
+| 8 | 删除线 | `strikethrough` | U+F1AB |
+| 9 | 行内代码 | `code-s-slash-line` | U+EBAD |
+| 10 | 围栏代码块 | `code-box-line` | U+EBA7 |
+| 11 | 引用 | `double-quotes-l` | U+EC51 |
+| 12 | 无序列表 | `list-unordered` | U+EEBE |
+| 13 | 有序列表 | `list-ordered` | U+EEBB |
+| 14 | 任务列表 | `list-check-2` | U+EEB9 |
+| 15 | 水平线 | `subtract-line` | U+F1AF |
+| 16 | 链接 | `link` | U+EEB2 |
+| 17 | 图片 | `image-line` | U+EE4B |
+| 18 | 表格 | `table-line` | U+F1DE |
+| 19 | 自定义 | `settings-line` | U+F0EE |
 
 ### 渲染与字体打包
 
-- `lucide_subset.ttf`（58 个去重图标，**21,564 字节**）以 `RCDATA` 资源内嵌
-  于 `RichBar.dll`。通过 `AddFontMemResourceEx` 直接从内存加载，仅对当前
-  进程可用：**不安装系统字体，不创建临时字体文件**。用户无需预先安装
-  Lucide 或 Segoe 图标字体。可用
-  `node tools/subset-lucide.cjs <lucide-static 字体目录>` 重新生成
-  （见 [`docs/lucide-font.md`](docs/lucide-font.md)）。
+- `remixicon_subset.ttf`（59 个去重图标，**8,712 字节**）以 `RCDATA` 资源
+  （`IDR_ICON_FONT`）内嵌于 `RichBar.dll`。通过 `AddFontMemResourceEx`
+  直接从内存加载，仅对当前进程可用：**不安装系统字体，不创建临时字体
+  文件**。用户无需预先安装 Remix Icon 或 Segoe 图标字体。可用
+  `node tools/subset-icon-font.cjs <Remix Icon 字体目录>` 重新生成
+  （见 [`docs/remix-icon.md`](docs/remix-icon.md)）。
 - 普通/大图标画布在 **96 DPI 下为 16/24 px**，随显示 DPI 缩放（例如
   150% 缩放下为 24/36 px），不额外叠加 135% 放大。
 - **H/M 模式开关保持不变**：使用 Segoe UI Bold 文字，普通/大图标在
   **96 DPI 下为 14/21 px**，随画布缩放。这些数值是像素字符高度，不是磅值。
-  H/M 不属于 Lucide 子集。
-- **Markdown 回退**：内嵌字体无法加载时，Markdown 集合回退为旧版字母/形状
-  绘制；HTML 槽位的字形不可用时绘制加粗 `?` 标记，不会显示错误图标。
+  H/M 不属于 Remix Icon 子集。
+- **没有回退图形**：0.16.0 起旧版 Markdown 字母/形状绘制与 HTML `?` 标记
+  已删除；字形无法解析（字体注册失败或字形不可用）的槽位保持空白——
+  这是明确的简化，字体随 DLL 一起发布。
 - **旧版 HTML 彩色 BMP 不再被加载**（资源仍保留在 DLL 中，插件列表中的
-  插件入口图标仍使用自己的位图）。由于两种模式现在都绘制单色字形，
-  **悬停（热态）图像列表会对两种模式的全部按钮重新着色**，不再只针对
-  Markdown。
+  插件入口图标仍使用自己的位图）。两种模式均绘制单色字形，**悬停（热态）
+  图像列表会对两种模式的全部按钮重新着色**。
 - 字体来源、SHA256、完整子集映射及许可说明见
-  [docs/lucide-font.md](docs/lucide-font.md)。
+  [docs/remix-icon.md](docs/remix-icon.md)。
 
 ### 图标回归测试
 
@@ -93,18 +94,18 @@
 powershell -File tools/test-icon-rendering.ps1
 ```
 
-0.15.0 的测试脚本覆盖**全部 20 个 Markdown 和全部 48 个 HTML 图标、多种
-尺寸及前景色**（与直接 Lucide 绘制逐像素比对），以及两种模式的**真实普通
-与热态图像列表**（含 H/M 槽位，每场景 1,464 项比较），并包含**模拟字体
-不可用和字形缺失时的回退**子进程及字体注册/释放/重新初始化检查。这是
-离屏回归测试，不表示 EmEditor 内的目视检查已经通过。
+0.16.0 的测试脚本覆盖**全部 20 个 Markdown 图标、7 种尺寸 × 2 种前景色**
+（与直接 Remix Icon 绘制逐像素比对，共 280 项），以及两种模式的**真实普通
+与热态图像列表**（含 H/M 槽位与按下态深色副本，每场景 1,464 项比较），
+并包含**断言已映射槽位保持空白的回退**子进程及字体注册/释放/重新初始化
+检查。这是离屏回归测试，不表示 EmEditor 内的目视检查已经通过。
 
 ### Segoe 字形参考：仅作历史资料
 
 [docs/glyph-reference.html](docs/glyph-reference.html) 保留为 Segoe Fluent
 Icons / Segoe MDL2 Assets 的**历史**交互式字形目录。其中高亮映射对应
 0.14.0 之前的实现，**不代表当前工具栏**。该页面使用本机安装的 Windows
-字体渲染，不是 Lucide 预览，也不是当前映射的依据。可下载 HTML 文件后
+字体渲染，不是 Remix Icon 预览，也不是当前映射的依据。可下载 HTML 文件后
 本地打开；GitHub 默认显示源码。
 
 ## 构建与安装
@@ -160,8 +161,8 @@ Icons / Segoe MDL2 Assets 的**历史**交互式字形目录。其中高亮映�
 - **高分辨率屏幕**：自定义中（与工具栏标题显示相同的设置处）可选择
   "显示工具栏大图标"。两套图标都会按新尺寸和 DPI 直接重绘。
 - **HTML 模式的按钮样式**：HTML 与 Markdown 两套按钮集均绘制自内嵌
-  Lucide 子集、可主题自适应；HTML 集合不再使用原版彩色 BMP 工具栏资产。
-  插件列表中的插件入口图标保持不变。
+  Remix Icon 子集、可主题自适应；HTML 集合不再使用原版彩色 BMP 工具栏
+  资产。插件列表中的插件入口图标保持不变。
 
 ## 版本方案
 
@@ -169,7 +170,7 @@ Icons / Segoe MDL2 Assets 的**历史**交互式字形目录。其中高亮映�
 |---------|------|
 | `0.1.0` | 原始上游 HTMLBar 源码原样 fork，未做任何修改。 |
 | `0.4.x` | 兼容性修复，使原插件能在现代 EmEditor（v26）上编译加载。 |
-| `0.9.0` – `0.15.x` | HTML + Markdown 双模式工具栏，向 `1.0.0` 迈进。 |
+| `0.9.0` – `0.16.x` | HTML + Markdown 双模式工具栏，向 `1.0.0` 迈进。 |
 
 详细变更见 [CHANGELOG.zh.md](CHANGELOG.zh.md)（中文）/
 [CHANGELOG.md](CHANGELOG.md)（英文）。
@@ -177,7 +178,7 @@ Icons / Segoe MDL2 Assets 的**历史**交互式字形目录。其中高亮映�
 ## 许可
 
 见 [LICENSE](LICENSE)。原版代码版权归 Emurasoft 所有。
-内嵌 Lucide 子集的第三方声明见 [LICENSE.third-party](LICENSE.third-party)：
-包含完整上游 ISC 许可（Copyright 2026 Lucide Icons and Contributors），
-以及 Feather 衍生图标的署名与 MIT 许可（Copyright 2013-present Cole Bemis）。
-重新分发时必须保留这些声明。
+内嵌 Remix Icon 子集的第三方声明见 [LICENSE.third-party](LICENSE.third-party)：
+完整逐字收录 Remix Icon License v1.0（Copyright (c) 2017–2026 Remix Design），
+取自上游 [Remix Icon](https://github.com/Remix-Design/RemixIcon) 4.9.1
+发布包。重新分发时必须保留该声明。

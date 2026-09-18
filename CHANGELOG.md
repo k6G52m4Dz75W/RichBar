@@ -14,6 +14,41 @@ this code base:
 | `0.4.x`       | Compatibility fixes that make the original plug-in build and load correctly on modern EmEditor (v26). |
 | `0.9.0` – `0.14.x` | The HTML + Markdown dual-mode toolbar, heading towards `1.0.0`. |
 
+## [0.16.0] - 2026-09-18
+
+### Changed
+
+- **The bundled icon font switches from Lucide to Remix Icon for both
+  button sets.** The embedded `lucide_subset.ttf` is removed and replaced by
+  `remixicon_subset.ttf`, a subset of **Remix Icon 4.9.1** (font family
+  "remixicon") covering **59 unique icons in 8,712 bytes**. The Markdown and
+  HTML sets draw from this single source; H1–H6 use the Remix `h-1`–`h-6`
+  designs. `tools/subset-icon-font.cjs` regenerates the subset from the
+  Remix Icon fonts directory against the checked-in `tools/remix-icons.json`
+  name lists and refuses to run on other upstream versions.
+- `LICENSE.third-party` now carries the Remix Icon License v1.0 verbatim
+  (the Lucide/Feather notices are gone — no Lucide code remains).
+  `docs/remix-icon.md` replaces `docs/lucide-font.md`.
+
+### Removed
+
+- **All fallback artwork.** The legacy Markdown letter/shape drawings and
+  the HTML bold `?` marker are deleted: a slot whose glyph cannot resolve
+  (font registration failed or glyph unavailable) now stays **blank**. This
+  is an explicit simplification — the font ships inside the DLL. The unused
+  `DrawMdHeading` / `DrawMdTextAt` helpers and the `MD_CODE_HEIGHT` /
+  `MD_SUBSCRIPT_HEIGHT` constants are removed with them.
+
+### Fixed
+
+- The icon regression suite follows the new design: fallback scenarios
+  assert that mapped slots stay **blank** (not nonempty). Markdown icon
+  coverage compares against direct Remix Icon drawing (280 pixel-exact
+  comparisons at 7 sizes × 2 colors); the actual normal and hot image lists
+  for both modes, including the H/M slots and the pressed-state dark copies,
+  remain covered at 1,464 comparisons per scenario. Font
+  registration/release/reinitialization checks are unchanged.
+
 ## [0.15.7] - 2026-09-17
 
 ### Changed

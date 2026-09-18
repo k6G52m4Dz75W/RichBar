@@ -10,6 +10,37 @@
 | `0.4.x`  | 兼容性修复，使原插件能够在现代 EmEditor（v26）上正确编译和加载。 |
 | `0.9.0` – `0.14.x` | HTML + Markdown 双模式工具栏，向 `1.0.0` 迈进。 |
 
+## [0.16.0] - 2026-09-18
+
+### 变更
+
+- **内嵌图标字体由 Lucide 更换为 Remix Icon，两种按钮集统一换源。**
+  内嵌的 `lucide_subset.ttf` 已移除，替换为 **Remix Icon 4.9.1** 的子集
+  `remixicon_subset.ttf`（字体族名 "remixicon"，**59 个去重图标，
+  8,712 字节**）。Markdown 与 HTML 两套集合共用这一单一来源；H1–H6 改用
+  Remix 的 `h-1`–`h-6` 图形。`tools/subset-icon-font.cjs` 依据仓库内的
+  `tools/remix-icons.json` 名称表，从 Remix Icon 字体目录重新生成子集，
+  并在上游版本不符时拒绝运行。
+- `LICENSE.third-party` 现在完整逐字收录 Remix Icon License v1.0
+  （Lucide/Feather 声明已删除——仓库中已无 Lucide 代码）。
+  `docs/remix-icon.md` 取代 `docs/lucide-font.md`。
+
+### 移除
+
+- **全部回退图形。** 旧版 Markdown 字母/形状绘制与 HTML 加粗 `?` 标记
+  均已删除：字形无法解析（字体注册失败或字形不可用）的槽位现在保持
+  **空白**。这是明确的简化——字体随 DLL 一起发布。随之删除的还有不再
+  使用的 `DrawMdHeading` / `DrawMdTextAt` 辅助函数与 `MD_CODE_HEIGHT` /
+  `MD_SUBSCRIPT_HEIGHT` 常量。
+
+### 修复
+
+- 图标回归测试套件同步新设计：回退场景断言已映射槽位保持**空白**
+  （而非非空）。Markdown 图标覆盖改为与直接 Remix Icon 绘制比对
+  （7 种尺寸 × 2 种前景色共 280 项像素一致比较）；两种模式的真实普通
+  与热态图像列表（含 H/M 槽位与按下态深色副本）继续以每场景 1,464 项
+  比较覆盖。字体注册/释放/重新初始化检查保持不变。
+
 ## [0.15.7] - 2026-09-17
 
 ### 变更

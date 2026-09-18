@@ -7,7 +7,7 @@ toolbar, forked from the official Emurasoft HTMLBar plug-in source
 (`19.5.0`). It is meant to replace the HTML/Markdown toolbar built into
 EmEditor v26 (closed source, with most tags hidden inside dropdown menus).
 
-Current release: **0.15.7 — 2026-09-17**.
+Current release: **0.16.0 — 2026-09-18**.
 
 ## Features
 
@@ -24,12 +24,12 @@ Current release: **0.15.7 — 2026-09-17**.
   bullet / numbered (auto numbering) / task lists, horizontal rule, link,
   image (file picker), table, customize. Wrapping commands toggle off when
   applied twice.
-- **Runtime-drawn, theme-adaptive icons**: the bundled Lucide font subset
-  supplies all 20 Markdown icons and all 48 HTML slots, rendered directly at
-  the current button size and DPI — both modes share one stroke language.
-  Background luminance selects dark glyphs on light bars or light glyphs on
-  dark bars; a hot image list keeps hovered buttons readable in dark-band
-  modes. Theme and configuration changes re-render automatically.
+- **Runtime-drawn, theme-adaptive icons**: the bundled Remix Icon font
+  subset supplies all 20 Markdown icons and all 48 HTML slots, rendered
+  directly at the current button size and DPI — both modes share one stroke
+  language. Background luminance selects dark glyphs on light bars or light
+  glyphs on dark bars; a hot image list keeps hovered buttons readable in
+  dark-band modes. Theme and configuration changes re-render automatically.
 - **MUI**: satellite resource DLLs (`mui\1033` English, `mui\2052` Simplified
   Chinese).
 - **Settings via the official channel**: `EE_REG_SET_VALUE` /
@@ -39,61 +39,62 @@ Current release: **0.15.7 — 2026-09-17**.
 
 ## Toolbar icon reference
 
-Since 0.15.0 both button sets draw from the bundled **Lucide** subset of
-`lucide-static` **1.47.0** — all 48 HTML slots (25 default buttons plus 23
-customization-only commands) and all 20 Markdown icons — instead of the
-legacy colored HTML bitmaps and Segoe Fluent Icons / Segoe MDL2 Assets.
-Persisted icon slots, saved customizations and command behavior are
-unchanged; only the artwork and its color/DPI adaptivity changed. The 58
-unique names and codepoints are mapped in [`docs/lucide-font.md`](docs/lucide-font.md);
-the Markdown set is:
+Since 0.16.0 both button sets draw from the bundled **Remix Icon** subset of
+[Remix Icon](https://github.com/Remix-Design/RemixIcon) **4.9.1** — all 48
+HTML slots (25 default buttons plus 23 customization-only commands) and all
+20 Markdown icons — instead of the legacy colored HTML bitmaps and Segoe
+Fluent Icons / Segoe MDL2 Assets. Persisted icon slots, saved customizations
+and command behavior are unchanged; only the artwork and its color/DPI
+adaptivity changed. The 59 unique names and codepoints are mapped in
+[`docs/remix-icon.md`](docs/remix-icon.md); the Markdown set is:
 
-| Icon index | Toolbar button | Lucide subset name | Codepoint |
+| Icon index | Toolbar button | Remix Icon name | Codepoint |
 |---|---|---|---|
-| 0 | Heading H1 | `heading-1` | U+E385 |
-| 1 | Heading H2 | `heading-2` | U+E386 |
-| 2 | Heading H3 | `heading-3` | U+E387 |
-| 3 | Heading H4 | `heading-4` | U+E388 |
-| 4 | Heading H5 | `heading-5` | U+E389 |
-| 5 | Heading H6 | `heading-6` | U+E38A |
-| 6 | Bold | `bold` | U+E05D |
-| 7 | Italic | `italic` | U+E0FB |
-| 8 | Strikethrough | `strikethrough` | U+E177 |
-| 9 | Inline code | `code` | U+E093 |
-| 10 | Fenced code block | `code-xml` | U+E206 |
-| 11 | Block quote | `quote` | U+E239 |
-| 12 | Bullet list | `list` | U+E106 |
-| 13 | Numbered list | `list-ordered` | U+E1D1 |
-| 14 | Task list | `list-todo` | U+E4C3 |
-| 15 | Horizontal rule | `minus` | U+E11C |
-| 16 | Link | `link` | U+E102 |
-| 17 | Image | `image` | U+E0F6 |
-| 18 | Table | `table` | U+E17D |
-| 19 | Customize | `settings` | U+E154 |
+| 0 | Heading H1 | `h-1` | U+EDE6 |
+| 1 | Heading H2 | `h-2` | U+EDE7 |
+| 2 | Heading H3 | `h-3` | U+EDE8 |
+| 3 | Heading H4 | `h-4` | U+EDE9 |
+| 4 | Heading H5 | `h-5` | U+EDEA |
+| 5 | Heading H6 | `h-6` | U+EDEB |
+| 6 | Bold | `bold` | U+EAD1 |
+| 7 | Italic | `italic` | U+EE6B |
+| 8 | Strikethrough | `strikethrough` | U+F1AB |
+| 9 | Inline code | `code-s-slash-line` | U+EBAD |
+| 10 | Fenced code block | `code-box-line` | U+EBA7 |
+| 11 | Block quote | `double-quotes-l` | U+EC51 |
+| 12 | Bullet list | `list-unordered` | U+EEBE |
+| 13 | Numbered list | `list-ordered` | U+EEBB |
+| 14 | Task list | `list-check-2` | U+EEB9 |
+| 15 | Horizontal rule | `subtract-line` | U+F1AF |
+| 16 | Link | `link` | U+EEB2 |
+| 17 | Image | `image-line` | U+EE4B |
+| 18 | Table | `table-line` | U+F1DE |
+| 19 | Customize | `settings-line` | U+F0EE |
 
 ### Rendering and font packaging
 
-- `lucide_subset.ttf` (58 unique icons, **21,564 bytes**) is embedded in
-  `RichBar.dll` as an `RCDATA` resource. It is loaded directly into
-  process-private memory with `AddFontMemResourceEx`: **no system font
-  installation and no temporary font files**. Users do not need Lucide or
-  the Segoe icon fonts installed. Regenerate it with
-  `node tools/subset-lucide.cjs <lucide-static font directory>` (see
-  [`docs/lucide-font.md`](docs/lucide-font.md)).
+- `remixicon_subset.ttf` (59 unique icons, **8,712 bytes**) is embedded in
+  `RichBar.dll` as an `RCDATA` resource (`IDR_ICON_FONT`). It is loaded
+  directly into process-private memory with `AddFontMemResourceEx`: **no
+  system font installation and no temporary font files**. Users do not need
+  Remix Icon or the Segoe icon fonts installed. Regenerate it with
+  `node tools/subset-icon-font.cjs <Remix Icon fonts directory>` (see
+  [`docs/remix-icon.md`](docs/remix-icon.md)).
 - Normal/large icon canvases are **16/24 px at 96 DPI**, scaled with display
   DPI (for example, 24/36 px at 150%). There is no extra 135% enlargement.
 - The **H/M mode switch is unchanged**: Segoe UI Bold text, **14/21 px at
   96 DPI** for normal/large icons, scaled with the canvas. These are pixel
-  character heights, not points. H/M is not part of the Lucide subset.
-- **Markdown fallback**: if the bundled font cannot be loaded, the Markdown
-  set falls back to the legacy letter/shape drawings. An HTML slot whose
-  glyph is unavailable draws a bold `?` marker instead of a wrong icon.
+  character heights, not points. H/M is not part of the Remix Icon subset.
+- **No fallback artwork**: since 0.16.0 the legacy Markdown letter/shape
+  drawings and the HTML `?` marker are removed. A slot whose glyph cannot
+  resolve (font registration failed or glyph unavailable) stays blank — an
+  explicit simplification, since the font ships inside the DLL.
 - The **legacy colored HTML BMPs are no longer loaded** (their resources
   remain in the DLL, and the plug-in entry icon still uses its own bitmap).
-  Because both modes now draw monochrome glyphs, the **hover (hot) image
-  list recolors every button in both modes**, not just the Markdown one.
+  Because both modes draw monochrome glyphs, the **hover (hot) image list
+  recolors every button in both modes**.
 - Font provenance, SHA256, the complete subset mapping and license details
-  are recorded in [docs/lucide-font.md](docs/lucide-font.md).
+  are recorded in [docs/remix-icon.md](docs/remix-icon.md).
 
 ### Icon regression tests
 
@@ -103,13 +104,14 @@ On Windows with the Visual C++ build tools, the test command is:
 powershell -File tools/test-icon-rendering.ps1
 ```
 
-The 0.15.0 test script covers **all 20 Markdown and all 48 HTML icons across
-multiple sizes and foreground colors** (pixel-compared against direct Lucide
+The 0.16.0 test script covers **all 20 Markdown icons across 7 sizes and 2
+foreground colors** (280 pixel-exact comparisons against direct Remix Icon
 drawing), the **actual normal and hot image lists** for both modes including
-the H/M slots (1,464 comparisons per scenario), plus **simulated
-unavailable-font and missing-glyph fallback** subprocesses, and font
-registration/release/reinitialization checks. This is offscreen
-regression coverage, not a claim that an EmEditor visual check has passed.
+the H/M slots and the pressed-state dark copies (1,464 comparisons per
+scenario), **fallback subprocesses that assert the mapped slots stay
+blank**, and font registration/release/reinitialization checks. This is
+offscreen regression coverage, not a claim that an EmEditor visual check
+has passed.
 
 ### Historical Segoe reference only
 
@@ -117,7 +119,7 @@ regression coverage, not a claim that an EmEditor visual check has passed.
 **historical** interactive catalog of Segoe Fluent Icons / Segoe MDL2 Assets.
 Its highlighted mappings describe the pre-0.14.0 implementation, **not the
 current toolbar**. It renders from installed Windows fonts and is not a
-Lucide preview or a source for the current mapping. Download and open the
+Remix Icon preview or a source for the current mapping. Download and open the
 HTML file locally; GitHub displays its source by default.
 
 ## Build & install
@@ -181,8 +183,8 @@ Run the build commands from the repository root.
   title option) can enable large toolbar icons. Both icon sets re-draw at
   the new size and DPI.
 - **HTML mode button style**: both the HTML and Markdown sets are
-  runtime-drawn from the bundled Lucide subset and theme-adaptive; the HTML
-  set no longer uses the original colored BMP toolbar assets. The
+  runtime-drawn from the bundled Remix Icon subset and theme-adaptive; the
+  HTML set no longer uses the original colored BMP toolbar assets. The
   plug-in's own entry icon in the Plug-ins list is unchanged.
 
 ## Version scheme
@@ -191,7 +193,7 @@ Run the build commands from the repository root.
 |-------|---------|
 | `0.1.0` | The original upstream HTMLBar source as forked, unmodified. |
 | `0.4.x` | Compatibility fixes to build and load on modern EmEditor (v26). |
-| `0.9.0` – `0.15.x` | The HTML + Markdown dual-mode toolbar, heading towards `1.0.0`. |
+| `0.9.0` – `0.16.x` | The HTML + Markdown dual-mode toolbar, heading towards `1.0.0`. |
 
 See [CHANGELOG.md](CHANGELOG.md) (English) /
 [CHANGELOG.zh.md](CHANGELOG.zh.md) (Chinese) for details.
@@ -199,8 +201,8 @@ See [CHANGELOG.md](CHANGELOG.md) (English) /
 ## License
 
 See [LICENSE](LICENSE). Original code copyright Emurasoft.
-The bundled Lucide subset has separate third-party notices in
-[LICENSE.third-party](LICENSE.third-party): the complete upstream ISC license
-(Copyright 2026 Lucide Icons and Contributors), including Feather-derived icon
-attribution and the MIT license (Copyright 2013-present Cole Bemis).
-Redistributions must retain these notices.
+The bundled Remix Icon subset has a separate third-party notice in
+[LICENSE.third-party](LICENSE.third-party): the complete Remix Icon License
+v1.0 (Copyright (c) 2017–2026 Remix Design), reproduced verbatim from the
+[Remix Icon](https://github.com/Remix-Design/RemixIcon) 4.9.1 release.
+Redistributions must retain this notice.

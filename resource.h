@@ -13,7 +13,7 @@
 #define IDB_TOOLBAR                     134
 #define IDB_BITMAP1                     148
 #define IDB_TOOLBAR_LARGE               148
-#define IDR_LUCIDE_FONT                 200
+#define IDR_ICON_FONT                   200
 
 // Next default values for new objects
 // 

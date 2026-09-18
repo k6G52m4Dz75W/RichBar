@@ -165,8 +165,6 @@ WCHAR OctToDec( LPWSTR& p )
 
 // Pixel heights relative to a 16-pixel icon canvas; large icons use 24.
 #define MD_TEXT_HEIGHT		14
-#define MD_CODE_HEIGHT		12
-#define MD_SUBSCRIPT_HEIGHT	8
 
 #define MODE_HTML				0
 #define MODE_MD					1
@@ -1216,7 +1214,15 @@ public:
 		}
 	}
 
-	// Shared by all frames; release only on normal plug-in shutdown, outside DllMain.
+	// The bundled Remix Icon subset (59 glyphs, ~9 KB) is the single source
+	// for every Markdown and HTML toolbar icon, so the whole bar shares one
+	// stroke language. The font is registered once per process from the
+	// DLL's RCDATA resource (AddFontMemResourceEx; private to this process,
+	// no temp files, nothing installed system-wide). Registration is
+	// released on normal plug-in shutdown, outside DllMain. There is no
+	// fallback artwork: the font ships inside the DLL, and if registration
+	// or a glyph ever failed the slot stays blank rather than switching to
+	// a different design language.
 	static HANDLE& MdIconFontResource()
 	{
 		static HANDLE s_hFontResource = NULL;
@@ -1230,7 +1236,7 @@ public:
 			return true;
 		}
 		HINSTANCE hInstance = EEGetInstanceHandle();
-		HRSRC hres = FindResource( hInstance, MAKEINTRESOURCE( IDR_LUCIDE_FONT ), RT_RCDATA );
+		HRSRC hres = FindResource( hInstance, MAKEINTRESOURCE( IDR_ICON_FONT ), RT_RCDATA );
 		if( !hres ){
 			return false;
 		}
@@ -1267,7 +1273,7 @@ public:
 		if( !MdIconFontInstall() ) return NULL;
 		return CreateFontW( -cx, 0, 0, 0, FW_NORMAL, FALSE, FALSE, FALSE,
 			DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS, ANTIALIASED_QUALITY,
-			FF_DONTCARE, L"Lucide" );
+			FF_DONTCARE, L"remixicon" );
 	}
 
 	void DrawMdText( HDC hdc, int cx, LPCWSTR pszText, int nBaseHeight, int nWeight, bool bItalic, COLORREF crFg )
@@ -1283,66 +1289,7 @@ public:
 		DeleteObject( hfont );
 	}
 
-	void DrawMdTextAt( HDC hdc, int x, int y, LPCWSTR pszText, int nHeight, int nWeight, COLORREF crFg )
-	{
-		HFONT hfont = CreateFontW( -nHeight, 0, 0, 0, nWeight, FALSE, FALSE, FALSE,
-			DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS, ANTIALIASED_QUALITY, FF_DONTCARE, L"Segoe UI" );
-		HFONT hfontOld = (HFONT)SelectObject( hdc, hfont );
-		SetBkMode( hdc, TRANSPARENT );
-		SetTextColor( hdc, crFg );
-		TextOutW( hdc, x, y, pszText, (int)wcslen( pszText ) );
-		SelectObject( hdc, hfontOld );
-		DeleteObject( hfont );
-	}
-
-	void DrawMdHeading( HDC hdc, int cx, int nLevel, COLORREF crFg )
-	{
-		HFONT fonts[2] = {
-			CreateFontW( -MulDiv( MD_TEXT_HEIGHT, cx, 16 ), 0, 0, 0, FW_BOLD, FALSE, FALSE, FALSE,
-				DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS, ANTIALIASED_QUALITY, FF_DONTCARE, L"Segoe UI" ),
-			CreateFontW( -MulDiv( MD_SUBSCRIPT_HEIGHT, cx, 16 ), 0, 0, 0, FW_BOLD, FALSE, FALSE, FALSE,
-				DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS, ANTIALIASED_QUALITY, FF_DONTCARE, L"Segoe UI" )
-		};
-		WCHAR chars[2] = { L'H', (WCHAR)( L'0' + nLevel ) };
-		GLYPHMETRICS metrics[2] = {};
-		MAT2 transform = {};
-		transform.eM11.value = transform.eM22.value = 1;
-		BOOL measured = fonts[0] && fonts[1];
-		for( int i = 0; i < 2 && measured; i++ ){
-			HFONT old = (HFONT)SelectObject( hdc, fonts[i] );
-			measured = GetGlyphOutlineW( hdc, chars[i], GGO_METRICS, &metrics[i], 0, NULL, &transform ) != GDI_ERROR;
-			SelectObject( hdc, old );
-		}
-		if( measured ){
-			int gap = max( 1, MulDiv( 1, cx, 16 ) );
-			int drop = MulDiv( 2, cx, 16 );
-			int width = metrics[0].gmBlackBoxX + gap + metrics[1].gmBlackBoxX;
-			int height = metrics[0].gmBlackBoxY + drop;
-			int x = ( cx - width ) / 2;
-			int y = ( cx - height ) / 2;
-			UINT oldAlign = SetTextAlign( hdc, TA_LEFT | TA_BASELINE | TA_NOUPDATECP );
-			SetBkMode( hdc, TRANSPARENT );
-			SetTextColor( hdc, crFg );
-			// Center the combined ink bounds, not the fonts' different line boxes.
-			for( int i = 0; i < 2; i++ ){
-				HFONT old = (HFONT)SelectObject( hdc, fonts[i] );
-				int top = i ? y + height - metrics[i].gmBlackBoxY : y;
-				TextOutW( hdc, x - metrics[i].gmptGlyphOrigin.x, top + metrics[i].gmptGlyphOrigin.y, &chars[i], 1 );
-				SelectObject( hdc, old );
-				x += metrics[i].gmBlackBoxX + gap;
-			}
-			SetTextAlign( hdc, oldAlign );
-		}
-		else {
-			WCHAR text[] = { chars[0], chars[1], 0 };
-			DrawMdText( hdc, cx, text, MD_CODE_HEIGHT, FW_BOLD, FALSE, crFg );
-		}
-		for( int i = 0; i < 2; i++ ){
-			if( fonts[i] ) DeleteObject( fonts[i] );
-		}
-	}
-
-	BOOL DrawLucideGlyph( HDC hdc, int cx, WCHAR ch, COLORREF crFg )
+	BOOL DrawIconGlyph( HDC hdc, int cx, WCHAR ch, COLORREF crFg )
 	{
 		HFONT hfontIcon = GetMdIconFont( cx );
 		if( !hfontIcon ) return FALSE;
@@ -1351,7 +1298,7 @@ public:
 		if( old && old != (HFONT)HGDI_ERROR ){
 			WCHAR face[LF_FACESIZE] = {};
 			WORD index = 0xFFFF;
-			if( GetTextFaceW( hdc, _countof( face ), face ) && lstrcmpiW( face, L"Lucide" ) == 0 &&
+			if( GetTextFaceW( hdc, _countof( face ), face ) && lstrcmpiW( face, L"remixicon" ) == 0 &&
 				GetGlyphIndicesW( hdc, &ch, 1, &index, GGI_MARK_NONEXISTING_GLYPHS ) != GDI_ERROR &&
 				index != 0 && index != 0xFFFF ){
 				SetBkMode( hdc, TRANSPARENT );
@@ -1367,171 +1314,63 @@ public:
 
 	void DrawMdIcon( HDC hdc, int cx, int iIcon, COLORREF crFg )
 	{
-		HPEN hpen = CreatePen( PS_SOLID, max( 1, cx / 16 ), crFg );
-		HPEN hpenOld = (HPEN)SelectObject( hdc, hpen );
-		HBRUSH hbrOld = (HBRUSH)SelectObject( hdc, GetStockObject( NULL_BRUSH ) );
-
-		// Codepoints are tied to the bundled Lucide subset; see docs/lucide-font.md.
+		// Codepoints are tied to the bundled Remix Icon subset; the full
+		// name mapping lives in tools/remix-icons.json and docs/remix-icon.md.
 		struct IconGlyph { int iIcon; wchar_t wch; };
 		static const IconGlyph c_aIconGlyphs[] = {
-			{ 0, 0xE385 },		// heading-1
-			{ 1, 0xE386 },		// heading-2
-			{ 2, 0xE387 },		// heading-3
-			{ 3, 0xE388 },		// heading-4
-			{ 4, 0xE389 },		// heading-5
-			{ 5, 0xE38A },		// heading-6
-			{ 6, 0xE05D },		// bold
-			{ 7, 0xE0FB },		// italic
-			{ 8, 0xE177 },		// strikethrough
-			{ 9, 0xE093 },		// code
-			{ 10, 0xE206 },		// code-xml (code block)
-			{ 11, 0xE239 },		// quote
-			{ 12, 0xE106 },		// list (bullet)
-			{ 13, 0xE1D1 },		// list-ordered
-			{ 14, 0xE4C3 },		// list-todo
-			{ 15, 0xE11C },		// minus (horizontal rule)
-			{ 16, 0xE102 },		// link
-			{ 17, 0xE0F6 },		// image
-			{ 18, 0xE17D },		// table
-			{ 19, 0xE154 },		// settings (customize)
+			{ 0, 0xEDE6 },		// h-1
+			{ 1, 0xEDE7 },		// h-2
+			{ 2, 0xEDE8 },		// h-3
+			{ 3, 0xEDE9 },		// h-4
+			{ 4, 0xEDEA },		// h-5
+			{ 5, 0xEDEB },		// h-6
+			{ 6, 0xEAD1 },		// bold
+			{ 7, 0xEE6B },		// italic
+			{ 8, 0xF1AB },		// strikethrough
+			{ 9, 0xEBAD },		// code-s-slash-line (inline code)
+			{ 10, 0xEBA7 },		// code-box-line (fenced code block)
+			{ 11, 0xEC51 },		// double-quotes-l (block quote)
+			{ 12, 0xEEBE },		// list-unordered (bullet list)
+			{ 13, 0xEEBB },		// list-ordered
+			{ 14, 0xEEB9 },		// list-check-2 (task list)
+			{ 15, 0xF1AF },		// subtract-line (horizontal rule)
+			{ 16, 0xEEB2 },		// link
+			{ 17, 0xEE4B },		// image-line
+			{ 18, 0xF1DE },		// table-line
+			{ 19, 0xF0EE },		// settings-line (customize)
 		};
-		BOOL bGlyphDrawn = FALSE;
+		if( iIcon >= MD_ICON_MODE_H ){
+			// the [H][M] mode switch stays Segoe UI lettering; the icon font
+			// carries pictograms only
+			DrawMdText( hdc, cx, iIcon == MD_ICON_MODE_H ? L"H" : L"M", MD_TEXT_HEIGHT, FW_BOLD, FALSE, crFg );
+			return;
+		}
 		for( int g = 0; g < (int)_countof( c_aIconGlyphs ); g++ ){
-			if( c_aIconGlyphs[g].iIcon != iIcon ) continue;
-			bGlyphDrawn = DrawLucideGlyph( hdc, cx, c_aIconGlyphs[g].wch, crFg );
-			break;
+			if( c_aIconGlyphs[g].iIcon == iIcon ){
+				DrawIconGlyph( hdc, cx, c_aIconGlyphs[g].wch, crFg );
+				break;
+			}
 		}
-		if( !bGlyphDrawn ){
-		switch( iIcon ){
-		int y1, y2;
-		case 0: case 1: case 2: case 3: case 4: case 5:		// H1 - H6
-			DrawMdHeading( hdc, cx, iIcon + 1, crFg );
-			break;
-		case 6:		// bold
-			DrawMdText( hdc, cx, L"B", MD_TEXT_HEIGHT, FW_BOLD, FALSE, crFg );
-			break;
-		case 7:		// italic
-			DrawMdText( hdc, cx, L"I", MD_TEXT_HEIGHT, FW_NORMAL, TRUE, crFg );
-			break;
-		case 8:		// strikethrough
-			DrawMdText( hdc, cx, L"S", MD_TEXT_HEIGHT, FW_BOLD, FALSE, crFg );
-			MoveToEx( hdc, cx * 22 / 100, cx / 2, NULL );
-			LineTo( hdc, cx * 78 / 100, cx / 2 );
-			break;
-		case 9:		// inline code
-			DrawMdText( hdc, cx, L"</>", 10, FW_NORMAL, FALSE, crFg );
-			break;
-		case 10:	// code block
-			DrawMdText( hdc, cx, L"{ }", MD_CODE_HEIGHT, FW_BOLD, FALSE, crFg );
-			break;
-		case 11:	// quote
-			DrawMdText( hdc, cx, L"\x275D", MD_TEXT_HEIGHT, FW_NORMAL, FALSE, crFg );
-			break;
-		case 12:	// bullet list
-		case 13:	// numbered list
-		case 14:	// task list
-			y1 = cx * 28 / 100;
-			y2 = cx * 22 / 100;
-			for( int r = 0; r < 3; r++ ){
-				int y = y1 + r * y2;
-				MoveToEx( hdc, cx * 38 / 100, y, NULL );
-				LineTo( hdc, cx * 84 / 100, y );
-			}
-			if( iIcon == 12 ){
-				HBRUSH hbr = CreateSolidBrush( crFg );
-				HBRUSH hbrOld2 = (HBRUSH)SelectObject( hdc, hbr );
-				for( int r = 0; r < 3; r++ ){
-					int y = y1 + r * y2;
-					Ellipse( hdc, cx * 12 / 100 - cx / 14, y - cx / 14, cx * 12 / 100 + cx / 14, y + cx / 14 );
-				}
-				SelectObject( hdc, hbrOld2 );
-				DeleteObject( hbr );
-			}
-			else if( iIcon == 13 ){
-				for( int r = 0; r < 3; r++ ){
-					WCHAR szDigit[2];
-					StringPrintf( szDigit, _countof( szDigit ), L"%d", r + 1 );
-					DrawMdTextAt( hdc, cx * 8 / 100, y1 + r * y2 - cx * 15 / 100, szDigit, MulDiv( 6, cx, 16 ), FW_NORMAL, crFg );
-				}
-			}
-			else {
-				for( int r = 0; r < 3; r++ ){
-					int y = y1 + r * y2;
-					Rectangle( hdc, cx * 8 / 100, y - cx * 9 / 100, cx * 8 / 100 + cx * 18 / 100, y + cx * 9 / 100 );
-				}
-			}
-			break;
-		case 15:	// horizontal line
-			MoveToEx( hdc, cx * 12 / 100, cx / 2, NULL );
-			LineTo( hdc, cx * 88 / 100, cx / 2 );
-			break;
-		case 16:	// link
-			RoundRect( hdc, cx * 8 / 100, cx * 42 / 100, cx * 52 / 100, cx * 70 / 100, cx * 20 / 100, cx * 20 / 100 );
-			RoundRect( hdc, cx * 48 / 100, cx * 30 / 100, cx * 92 / 100, cx * 58 / 100, cx * 20 / 100, cx * 20 / 100 );
-			break;
-		case 17:	// image
-			Rectangle( hdc, cx * 10 / 100, cx * 20 / 100, cx * 90 / 100, cx * 80 / 100 );
-			{
-				HBRUSH hbr = CreateSolidBrush( crFg );
-				HBRUSH hbrOld2 = (HBRUSH)SelectObject( hdc, hbr );
-				POINT aptSun[4] = {
-					{ cx * 34 / 100, cx * 30 / 100 }, { cx * 42 / 100, cx * 38 / 100 },
-					{ cx * 34 / 100, cx * 46 / 100 }, { cx * 26 / 100, cx * 38 / 100 } };
-				Polygon( hdc, aptSun, 4 );
-				POINT aptMountain[3] = {
-					{ cx * 16 / 100, cx * 72 / 100 }, { cx * 42 / 100, cx * 42 / 100 },
-					{ cx * 62 / 100, cx * 72 / 100 } };
-				Polygon( hdc, aptMountain, 3 );
-				POINT aptMountain2[4] = {
-					{ cx * 50 / 100, cx * 72 / 100 }, { cx * 66 / 100, cx * 52 / 100 },
-					{ cx * 84 / 100, cx * 72 / 100 }, { cx * 50 / 100, cx * 72 / 100 } };
-				Polygon( hdc, aptMountain2, 4 );
-				SelectObject( hdc, hbrOld2 );
-				DeleteObject( hbr );
-			}
-			break;
-		case 18:	// table
-			Rectangle( hdc, cx * 10 / 100, cx * 22 / 100, cx * 90 / 100, cx * 78 / 100 );
-			MoveToEx( hdc, cx * 10 / 100, cx / 2, NULL );
-			LineTo( hdc, cx * 90 / 100, cx / 2 );
-			MoveToEx( hdc, cx * 37 / 100, cx * 22 / 100, NULL );
-			LineTo( hdc, cx * 37 / 100, cx * 78 / 100 );
-			MoveToEx( hdc, cx * 63 / 100, cx * 22 / 100, NULL );
-			LineTo( hdc, cx * 63 / 100, cx * 78 / 100 );
-			break;
-		case 19:	// customize (gear)
-			DrawMdText( hdc, cx, L"\x2699", MD_TEXT_HEIGHT, FW_NORMAL, FALSE, crFg );
-			break;
-		case MD_ICON_MODE_H:	// mode switch: HTML
-			DrawMdText( hdc, cx, L"H", MD_TEXT_HEIGHT, FW_BOLD, FALSE, crFg );
-			break;
-		case MD_ICON_MODE_M:	// mode switch: Markdown
-			DrawMdText( hdc, cx, L"M", MD_TEXT_HEIGHT, FW_BOLD, FALSE, crFg );
-			break;
-		}
-		}
-		SelectObject( hdc, hbrOld );
-		SelectObject( hdc, hpenOld );
-		DeleteObject( hpen );
+		// no fallback artwork by design: the subset ships inside this DLL, so
+		// a failed registration or glyph simply leaves the slot blank
 	}
 
 	void DrawHtmlIcon( HDC hdc, int cx, int iIcon, COLORREF crFg )
 	{
 		// Preserve all 48 persisted HTML icon slots, including customization-only icons.
 		static const WCHAR glyphs[] = {
-			0xE384, 0xE3A3, 0xE0A1, 0xE05D, 0xE0FB, 0xE19A, // heading, paragraph, break, bold, italic, underline
-			0xE198, 0xE1DD, 0xE0F6, 0xE102, 0xE17D, 0xE11C, // font, color, image, link, table, rule
-			0xE56C, 0xE185, 0xE182, 0xE183, 0xE184, 0xE1D1, // comment, alignment, ordered list
-			0xE106, 0xE107, 0xE239, 0xE0F4, 0xE285, 0xE12C, // list, unindent, quote, highlight, font color, form
-			0xE154, 0xE086, 0xE265, 0xE4A3, 0xE6EA, 0xE559, // settings, form element, text, password, textarea, checkbox
-			0xE345, 0xE464, 0xE438, 0xE59B, 0xE21F, 0xE202, // radio, group, select, listbox, buttons
-			0xE0BB, 0xE061, 0xE064, 0xE0AF, 0xE258, 0xE141, // hidden, object, camera, disc, scanner, printer
-			0xE22D, 0xE084, 0xE193, 0xE0F9, 0xE0D1, 0xE1AB  // function, error, warning, info, flag, sound
+			0xEE03, 0xEFC8, 0xF200, 0xEAD1, 0xEE6B, 0xF244, // heading, paragraph, break, bold, italic, underline
+			0xED8C, 0xEFC5, 0xEE4B, 0xEEB2, 0xF1DE, 0xF1AF, // font, color, image, link, table, rule
+			0xEAEB, 0xEA27, 0xEA25, 0xEA28, 0xEA26, 0xEEBB, // comment/tags, alignment, ordered list
+			0xEEBE, 0xEE54, 0xEE55, 0xEF1C, 0xEFC2, 0xECEF, // list, unindent, indent, highlight, fill, forms
+			0xF0EE, 0xECED, 0xEE5E, 0xEED0, 0xECDB, 0xEB85, // settings, form, text, password, textarea, checkbox
+			0xF050, 0xEA7A, 0xF327, 0xF39A, 0xEC0A, 0xEAE9, // radio, group box, select, listbox, buttons
+			0xECB7, 0xF2F5, 0xEB31, 0xEC36, 0xF0BB, 0xF029, // hidden, object, camera, disc, scanner, printer
+			0xED9E, 0xEB97, 0xEA21, 0xEE59, 0xED3B, 0xEF83  // function, error, warning, info, flag, sound
 		};
 		if( iIcon < 0 || iIcon >= (int)_countof( glyphs ) ) return;
-		if( !DrawLucideGlyph( hdc, cx, glyphs[iIcon], crFg ) ){
-			DrawMdText( hdc, cx, L"?", MD_TEXT_HEIGHT, FW_BOLD, FALSE, crFg );
-		}
+		DrawIconGlyph( hdc, cx, glyphs[iIcon], crFg );
+		// no fallback artwork by design: the subset ships inside this DLL
 	}
 
 	COLORREF GetBarGlyphColor()

@@ -2,7 +2,7 @@ $ErrorActionPreference = 'Stop'
 $root = Split-Path $PSScriptRoot -Parent
 $header = [IO.File]::ReadAllText((Join-Path $root 'RichBar.h'))
 $start = $header.IndexOf('static HANDLE& MdIconFontResource()')
-if ($start -lt 0) { throw 'Lucide font helpers not found; core implementation must be ready first' }
+if ($start -lt 0) { throw 'Icon font helpers not found; core implementation must be ready first' }
 $end = $header.IndexOf('COLORREF GetBarGlyphColor()', $start)
 if ($end -lt 0) { throw 'Drawing methods end not found' }
 $methods = $header.Substring($start, $end - $start)
@@ -29,17 +29,9 @@ $prefix = @'
 #include <cwchar>
 #include <vector>
 #define StringPrintf StringCchPrintfW
-#define IDR_LUCIDE_FONT 200
+#define IDR_ICON_FONT 200
 static HINSTANCE EEGetInstanceHandle() { return GetModuleHandle(NULL); }
 static bool failAdd = false, missingGlyph = false, htmlTests = false;
-static const WCHAR htmlExpected[] = {
-    0xE384,0xE3A3,0xE0A1,0xE05D,0xE0FB,0xE19A,0xE198,0xE1DD,
-    0xE0F6,0xE102,0xE17D,0xE11C,0xE56C,0xE185,0xE182,0xE183,
-    0xE184,0xE1D1,0xE106,0xE107,0xE239,0xE0F4,0xE285,0xE12C,
-    0xE154,0xE086,0xE265,0xE4A3,0xE6EA,0xE559,0xE345,0xE464,
-    0xE438,0xE59B,0xE21F,0xE202,0xE0BB,0xE061,0xE064,0xE0AF,
-    0xE258,0xE141,0xE22D,0xE084,0xE193,0xE0F9,0xE0D1,0xE1AB
-};
 static int addCalls = 0, added = 0, removeCalls = 0, probes = 0, faceCalls = 0, puaDraws = 0;
 static int currentIcon = -1, currentSize = 0;
 static COLORREF currentColor = 0;
@@ -54,10 +46,18 @@ static void Check(bool ok, const char* what) {
 // Independent oracle: never derive this mapping from the extracted production methods.
 struct ExpectedGlyph { int icon; wchar_t ch; };
 static const ExpectedGlyph expected[] = {
-    {0, 0xE385}, {1, 0xE386}, {2, 0xE387}, {3, 0xE388}, {4, 0xE389},
-    {5, 0xE38A}, {6, 0xE05D}, {7, 0xE0FB}, {8, 0xE177}, {9, 0xE093},
-    {10, 0xE206}, {11, 0xE239}, {12, 0xE106}, {13, 0xE1D1}, {14, 0xE4C3},
-    {15, 0xE11C}, {16, 0xE102}, {17, 0xE0F6}, {18, 0xE17D}, {19, 0xE154}
+    {0, 0xEDE6}, {1, 0xEDE7}, {2, 0xEDE8}, {3, 0xEDE9}, {4, 0xEDEA},
+    {5, 0xEDEB}, {6, 0xEAD1}, {7, 0xEE6B}, {8, 0xF1AB}, {9, 0xEBAD},
+    {10, 0xEBA7}, {11, 0xEC51}, {12, 0xEEBE}, {13, 0xEEBB}, {14, 0xEEB9},
+    {15, 0xF1AF}, {16, 0xEEB2}, {17, 0xEE4B}, {18, 0xF1DE}, {19, 0xF0EE}
+};
+static const WCHAR htmlExpected[] = {
+    0xEE03,0xEFC8,0xF200,0xEAD1,0xEE6B,0xF244,0xED8C,0xEFC5,
+    0xEE4B,0xEEB2,0xF1DE,0xF1AF,0xEAEB,0xEA27,0xEA25,0xEA28,
+    0xEA26,0xEEBB,0xEEBE,0xEE54,0xEE55,0xEF1C,0xEFC2,0xECEF,
+    0xF0EE,0xECED,0xEE5E,0xEED0,0xECDB,0xEB85,0xF050,0xEA7A,
+    0xF327,0xF39A,0xEC0A,0xEAE9,0xECB7,0xF2F5,0xEB31,0xEC36,
+    0xF0BB,0xF029,0xED9E,0xEB97,0xEA21,0xEE59,0xED3B,0xEF83
 };
 static bool HasPua(LPCWSTR s, int n) {
     if (n < 0) n = (int)wcslen(s);
@@ -66,11 +66,11 @@ static bool HasPua(LPCWSTR s, int n) {
 }
 static void ValidateGlyph(HDC dc, wchar_t ch) {
     wchar_t face[LF_FACESIZE] = {};
-    Check(GetTextFaceW(dc, LF_FACESIZE, face) > 0 && lstrcmpiW(face, L"lucide") == 0,
-        "actual selected font is not Lucide");
+    Check(GetTextFaceW(dc, LF_FACESIZE, face) > 0 && lstrcmpiW(face, L"remixicon") == 0,
+        "actual selected font is not remixicon");
     WORD index = 0xFFFF;
     Check(GetGlyphIndicesW(dc, &ch, 1, &index, GGI_MARK_NONEXISTING_GLYPHS) != GDI_ERROR &&
-        index != 0 && index != 0xFFFF, "Lucide glyph index is invalid");
+        index != 0 && index != 0xFFFF, "Remix icon glyph index is invalid");
 }
 static HANDLE AddFont(PVOID data, DWORD size, PVOID reserved, DWORD* count) {
     ++addCalls;
@@ -163,7 +163,7 @@ static std::vector<DWORD> Render(int size, COLORREF fg, int icon, bool direct = 
         Check(icon >= 0 && icon < 20 && expected[icon].icon == icon, "invalid oracle entry");
         HFONT font = CreateFontW(-size, 0, 0, 0, FW_NORMAL, FALSE, FALSE, FALSE,
             DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS, ANTIALIASED_QUALITY,
-            FF_DONTCARE, L"lucide");
+            FF_DONTCARE, L"remixicon");
         Check(font != NULL, "reference CreateFontW failed");
         HGDIOBJ oldFont = SelectObject(dc, font);
         Check(oldFont && oldFont != HGDI_ERROR, "reference SelectObject failed");
@@ -177,13 +177,15 @@ static std::vector<DWORD> Render(int size, COLORREF fg, int icon, bool direct = 
     }
     GdiFlush();
     std::vector<DWORD> pixels((DWORD*)bits, (DWORD*)bits + size*size);
-    bool ink = false;
-    for (auto& p : pixels) { p &= 0xFFFFFF; if (p != 0xFF00FF) ink = true; }
-    Check(ink, "empty icon bitmap");
+    for (auto& p : pixels) { p &= 0xFFFFFF; }
     SelectObject(dc, oldBmp);
     DeleteObject(bmp);
     DeleteDC(dc);
     return pixels;
+}
+static bool HasInk(const std::vector<DWORD>& pixels) {
+    for (auto p : pixels) if (p != 0xFF00FF) return true;
+    return false;
 }
 static void Sweep(bool fallback) {
     int comparisons = 0, cases = 0;
@@ -193,20 +195,23 @@ static void Sweep(bool fallback) {
                 int drawsBefore = puaDraws, probesBefore = probes, facesBefore = faceCalls;
                 auto actual = Render(size, fg, icon);
                 bool mapped = icon < 20;
+                bool expectInk = !fallback || !mapped;
+                Check(HasInk(actual) == expectInk,
+                    expectInk ? "empty icon bitmap" : "fallback mapped slot must stay blank");
                 Check(puaDraws - drawsBefore == ((!fallback && mapped) ? 1 : 0), "incorrect PUA draw count");
                 if (mapped && !failAdd) {
                     Check(probes == probesBefore + 1 && faceCalls == facesBefore + 1,
                         "each glyph must check actual face and glyph index");
                 }
                 if (!fallback && mapped) {
-                    Check(actual == Render(size, fg, icon, true), "pixels differ from direct Lucide drawing");
+                    Check(actual == Render(size, fg, icon, true), "pixels differ from direct Remix drawing");
                     ++comparisons;
                 }
                 ++cases;
             }
         }
     }
-    printf("%s: nonempty=%d/308 exact-Lucide=%d/%d PUA-draws=%d\n",
+    printf("%s: nonempty=%d/308 exact-Remix=%d/%d PUA-draws=%d\n",
         fallback ? "fallback" : "normal", cases, comparisons, fallback ? 0 : 280, puaDraws);
 }
 static void ReleaseAndCheck() {
@@ -233,6 +238,34 @@ static void TestImageLists(bool fallback) {
                 Check(hot && ImageList_GetImageCount(hot) == count+2, "wrong hot image-list count");
                 for (int state = 0; state < 2; ++state) {
                     COLORREF color = state ? RGB(48,48,48) : fg;
+                    // Reads the stored image's alpha channel straight from the
+                    // icon's color bitmap; DrawIconEx would paint an all-zero-
+                    // alpha (blank) icon opaque black and mask this case.
+                    auto slotHasInk = [&](HIMAGELIST li, int iconIdx) {
+                        HICON hi = ImageList_GetIcon(li, iconIdx, ILD_TRANSPARENT);
+                        Check(hi != NULL, "ImageList_GetIcon failed");
+                        ICONINFO ii = {};
+                        Check(GetIconInfo(hi, &ii), "GetIconInfo failed");
+                        bool ink = false;
+                        if (ii.hbmColor) {
+                            HDC dc2 = CreateCompatibleDC(NULL);
+                            BITMAPINFO info2 = {};
+                            info2.bmiHeader.biSize = sizeof(BITMAPINFOHEADER);
+                            info2.bmiHeader.biWidth = size;
+                            info2.bmiHeader.biHeight = -size;
+                            info2.bmiHeader.biPlanes = 1;
+                            info2.bmiHeader.biBitCount = 32;
+                            std::vector<DWORD> px(size*size);
+                            if (GetDIBits(dc2, ii.hbmColor, 0, size, px.data(), &info2, DIB_RGB_COLORS)) {
+                                for (DWORD q : px) if ((q & 0xFF000000) != 0) { ink = true; break; }
+                            }
+                            DeleteDC(dc2);
+                            DeleteObject(ii.hbmColor);
+                        }
+                        if (ii.hbmMask) DeleteObject(ii.hbmMask);
+                        DestroyIcon(hi);
+                        return ink;
+                    };
                     for (int icon = 0; icon < count+2; ++icon) {
                         // Diagnostic tag: MD=100+, HTML=200+, +50 for the hot list.
                         currentIcon = icon + (mode == MODE_MD ? 100 : 200) + (state ? 50 : 0);
@@ -247,25 +280,29 @@ static void TestImageLists(bool fallback) {
                         if (hicon) DestroyIcon(hicon);
                         GdiFlush();
                         std::vector<DWORD> actual((DWORD*)bits, (DWORD*)bits+size*size);
-                        bool ink = false;
-                        for (auto& p : actual) { p &= 0xFFFFFF; ink |= p != 0xFF00FF; }
-                        Check(ink, "empty image-list slot");
+                        for (auto& p : actual) p &= 0xFFFFFF;
+                        bool mapped = icon < count;
+                        if (mapped && fallback) {
+                            // no fallback artwork: the stored slot must be blank
+                            Check(!slotHasInk(state ? hot : list, icon), "fallback mapped slot must stay blank");
+                            ++comparisons;
+                            SelectObject(dc,old); DeleteObject(bmp); DeleteDC(dc);
+                            continue;
+                        }
+                        Check(HasInk(actual), "empty image-list slot");
                         for (int p=0; p<size*size; ++p) ((DWORD*)bits)[p] = 0xFF00FF;
                         if (icon >= count) {
-                            renderer.DrawMdIcon(dc, size, 20+icon-count, color);                        } else if (!fallback) {
+                            renderer.DrawMdIcon(dc, size, 20+icon-count, color);
+                        } else {
                             WCHAR ch = mode == MODE_HTML ? htmlExpected[icon] : expected[icon].ch;
                             HFONT font = CreateFontW(-size,0,0,0,FW_NORMAL,FALSE,FALSE,FALSE,DEFAULT_CHARSET,
-                                OUT_DEFAULT_PRECIS,CLIP_DEFAULT_PRECIS,ANTIALIASED_QUALITY,FF_DONTCARE,L"lucide");
+                                OUT_DEFAULT_PRECIS,CLIP_DEFAULT_PRECIS,ANTIALIASED_QUALITY,FF_DONTCARE,L"remixicon");
                             HGDIOBJ oldFont = SelectObject(dc,font);
                             ValidateGlyph(dc,ch);
                             SetBkMode(dc,TRANSPARENT); SetTextColor(dc,color);
                             RECT rc = {0,0,size,size};
                             Check(DrawTextW(dc,&ch,1,&rc,DT_CENTER|DT_VCENTER|DT_SINGLELINE), "direct list reference draw failed");
                             SelectObject(dc,oldFont); DeleteObject(font);
-                        } else if (mode == MODE_HTML) {
-                            renderer.DrawMdText(dc,size,L"?",14,FW_BOLD,FALSE,color);
-                        } else {
-                            renderer.DrawMdIcon(dc,size,icon,color);
                         }
                         GdiFlush();
                         std::vector<DWORD> reference((DWORD*)bits,(DWORD*)bits+size*size);
@@ -289,12 +326,13 @@ static void TestImageLists(bool fallback) {
         }
     }
     Renderer::ReleaseMdIconFont();
-    printf("PASS actual HTML/MD normal+hot image lists, H/M slots, HTML-MD-HTML rebuilds: %d pixel comparisons (%s)\n", comparisons, fallback ? "fallback" : "Lucide");
+    printf("PASS actual HTML/MD normal+hot image lists, H/M slots, HTML-MD-HTML rebuilds: %d pixel comparisons (%s)\n", comparisons, fallback ? "fallback" : "Remix");
 }
 static void TestPressedCopies() {
     // Mirrors DisplayBar's pressed-state mechanism: on a dark band the normal
     // list is built with a second, dark-drawn copy of every image appended
     // after the light ones; each dark copy must equal the hot list's image.
+    failAdd = false; missingGlyph = false;   // this test needs a working font
     Renderer renderer;
     renderer.m_iMode = MODE_HTML;
     const int size = 16;
@@ -380,8 +418,8 @@ $temp = Join-Path ([IO.Path]::GetTempPath()) ('richbar-icon-test-' + [guid]::New
 New-Item -ItemType Directory $temp | Out-Null
 [IO.File]::WriteAllText((Join-Path $temp 'test.cpp'), ($prefix + "`n" + $defines + "`n" + $methods + $suffix))
 # Copy the actual checked-in subset, not a system font or a generated stand-in.
-Copy-Item (Join-Path $root 'lucide_subset.ttf') (Join-Path $temp 'lucide_subset.ttf')
-[IO.File]::WriteAllText((Join-Path $temp 'test.rc'), "200 RCDATA `"lucide_subset.ttf`"`r`n")
+Copy-Item (Join-Path $root 'remixicon_subset.ttf') (Join-Path $temp 'remixicon_subset.ttf')
+[IO.File]::WriteAllText((Join-Path $temp 'test.rc'), "200 RCDATA `"remixicon_subset.ttf`"`r`n")
 $vswhere = "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe"
 $install = & $vswhere -latest -products '*' -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath
 if (!$install) { throw 'Visual C++ build tools not found' }
@@ -401,4 +439,4 @@ try {
     Pop-Location
     Write-Output "Test artifacts: $temp"
 }
-Write-Output 'PASS: all Lucide rendering scenarios'
+Write-Output 'PASS: all Remix icon rendering scenarios'

@@ -436,7 +436,7 @@
   </ItemGroup>
   <ItemGroup>
     <None Include="RichBar.def" />
-    <None Include="lucide_subset.ttf" />
+    <None Include="remixicon_subset.ttf" />
     <None Include="LICENSE.third-party" />
     <None Include="htmlbar_16c_16.bmp" />
     <None Include="htmlbar_16c_24.bmp" />
