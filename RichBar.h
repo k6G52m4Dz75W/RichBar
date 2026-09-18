@@ -1340,6 +1340,28 @@ public:
 		// a failed registration or glyph simply leaves the slot blank
 	}
 
+	void DrawDropdownArrow( HDC hdc, int cx, COLORREF crFg )
+	{
+		// The dropdown affordance is baked into the icon itself: the control
+		// draws its own theme arrow in an uncontrolled color (black on the
+		// black band). A small filled triangle at the bottom-right corner
+		// follows the bar's foreground/hot/pressed colors automatically.
+		POINT apt[3] = {
+			{ cx * 62 / 100, cx * 68 / 100 },
+			{ cx * 92 / 100, cx * 68 / 100 },
+			{ cx * 77 / 100, cx * 88 / 100 }
+		};
+		HBRUSH hbr = CreateSolidBrush( crFg );
+		HPEN hpen = CreatePen( PS_SOLID, 1, crFg );
+		HBRUSH hbrOld = (HBRUSH)SelectObject( hdc, hbr );
+		HPEN hpenOld = (HPEN)SelectObject( hdc, hpen );
+		Polygon( hdc, apt, 3 );
+		SelectObject( hdc, hbrOld );
+		SelectObject( hdc, hpenOld );
+		DeleteObject( hpen );
+		DeleteObject( hbr );
+	}
+
 	void DrawHtmlIcon( HDC hdc, int cx, int iIcon, COLORREF crFg )
 	{
 		// Preserve all 48 persisted HTML icon slots, including customization-only icons.
@@ -1354,7 +1376,13 @@ public:
 			0xED9E, 0xEB97, 0xEA21, 0xEE59, 0xED3B, 0xEF83  // function, error, warning, info, flag, sound
 		};
 		if( iIcon < 0 || iIcon >= (int)_countof( glyphs ) ) return;
-		DrawIconGlyph( hdc, cx, glyphs[iIcon], crFg );
+		if( DrawIconGlyph( hdc, cx, glyphs[iIcon], crFg ) ){
+			// the three in-bar dropdowns get a themed-color arrow baked in;
+			// like the glyph, it only appears when the font is available
+			if( iIcon == 0 || iIcon == 6 || iIcon == 23 ){
+				DrawDropdownArrow( hdc, cx, crFg );
+			}
+		}
 		// no fallback artwork by design: the subset ships inside this DLL
 	}
 
@@ -1479,7 +1507,12 @@ public:
 
 			//int cx = g_metrics.ScaleY( m_bLargeToolbar ? BUTTON_SIZE_LARGE : BUTTON_SIZE_SMALL );
 			DWORD dwStyle = TBSTYLE_TOOLTIPS | TBSTYLE_TRANSPARENT | WS_CHILD | WS_CLIPCHILDREN | WS_CLIPSIBLINGS | CCS_NODIVIDER | CCS_NORESIZE | WS_VISIBLE | TBSTYLE_FLAT | CCS_NOPARENTALIGN | CCS_NOMOVEY;
-			DWORD dwExStyle = TBSTYLE_EX_HIDECLIPPEDBUTTONS | TBSTYLE_EX_DRAWDDARROWS;
+			// No TBSTYLE_EX_DRAWDDARROWS: the control's theme-drawn dropdown
+			// arrow ignores the bar's colors (black on the black band). The
+			// affordance is baked into the icons of the three dropdown
+			// buttons instead; click/hover still open via TBN_DROPDOWN and
+			// the OnDlgCommand safety net.
+			DWORD dwExStyle = TBSTYLE_EX_HIDECLIPPEDBUTTONS;
 			HWND hwndToolbar = CreateWindowEx( 0, TOOLBARCLASSNAME, NULL, dwStyle,
 				0, 0, 0, cxButtonSize, m_hDlg, (HMENU)(INT_PTR)100, NULL, NULL );
 			m_hwndToolbar = hwndToolbar;
@@ -2376,6 +2409,13 @@ public:
 			OnModeSwitch( ( wParam == ID_MODE_MD ) ? MODE_MD : MODE_HTML );
 			return;
 		}
+		if( IsDropdownCommand( (UINT)wParam ) ){
+			// Safety net for the dropdown buttons: TBN_DROPDOWN normally
+			// serves them, but without TBSTYLE_EX_DRAWDDARROWS some common
+			// control versions deliver a plain WM_COMMAND instead.
+			ShowDropdownMenu( (UINT)wParam, true );
+			return;
+		}
 		if( wParam >= ID_COMMAND_BASE && wParam < ID_COMMAND_BASE + Cmds().size() ) {
 			CCmd& cmd = Cmds()[wParam - ID_COMMAND_BASE];
 			if( cmd.m_iCmd == CMD_TAGS ){
@@ -2752,7 +2792,7 @@ public:
 
 	// Runs inside the toolbar subclass. Returns true when the message is
 	// swallowed.
-	bool OnToolbarMessage( HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam )
+	bool OnToolbarMessage( HWND hwnd, UINT msg, WPARAM /*wParam*/, LPARAM lParam )
 	{
 		if( msg == WM_MOUSELEAVE && m_bInDropdownMenu ){
 			// the menu loop captured the mouse; the button must keep its hot
