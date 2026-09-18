@@ -36,6 +36,30 @@ this code base:
   superseded by this release; the hover highlight on dark bands is now the
   dark-mode subtle fill instead of the light system highlight.
 
+## [0.17.4] - 2026-09-18
+
+### Fixed
+
+- **The dropdown arrows are now fully self-managed.** The toolbar control
+  draws its wholedropdown arrows in fixed system theme colors that never
+  follow EmEditor's bar colors, and neither the Windows dark-mode theme
+  (0.17.4's `DarkMode_Explorer` attempt) nor geometry tweaks (0.17.1-0.17.3)
+  could make them match. The three in-bar dropdown buttons (heading, font,
+  form) are therefore plain buttons — the control draws no arrow at all —
+  and the affordance is a small filled triangle baked into their icon
+  bitmaps, drawn with the bar's foreground color so it is correct in every
+  theme, hover and pressed state. Clicks arrive as plain `WM_COMMAND` and
+  `OnDlgCommand` opens the dropdown; hover-open and `TBN_DROPDOWN` handling
+  are kept. With the control's light hover fill gone, the dark-band
+  `DarkMode_Explorer` theme remains and the hover hot image list and
+  pressed-state dark copies are no longer needed and are removed.
+
+### Changed
+
+- All arrow-color attempts of 0.17.1-0.17.3 are superseded by this
+  self-managed design; on hover the button now shows the dark-mode subtle
+  fill instead of the light system highlight.
+
 ## [0.17.0] - 2026-09-18
 
 ### Changed

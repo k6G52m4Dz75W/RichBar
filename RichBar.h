@@ -1147,13 +1147,12 @@ public:
 			if( it->m_iCmd == CMD_SEPARATOR ){
 				atb[i + 3].fsStyle = TBSTYLE_SEP;
 			}
-			// Every in-bar dropdown is a whole-button dropdown. The split
-			// BTNS_DROPDOWN style (font button) renders its arrow region with
-			// pressed-state drawing, which pulls from the normal image list
-			// and washes the glyph out on a dark band's light hover fill.
-			if( it->m_iCmd == CMD_FONT || it->m_iCmd == CMD_DROPDOWN_HEADER || it->m_iCmd == CMD_DROPDOWN_FORM ){
-				atb[i + 3].fsStyle = BTNS_WHOLEDROPDOWN;
-			}
+			// The dropdown commands stay plain buttons: every dropdown style
+			// (BTNS_DROPDOWN, BTNS_WHOLEDROPDOWN) makes the control draw its
+			// own theme arrow, whose color ignores EmEditor's bar colors. The
+			// affordance is baked into those icons instead (DrawDropdownArrow),
+			// hover opens the menu via the subclass, and a plain click arrives
+			// as WM_COMMAND, handled in OnDlgCommand.
 
 		}
 
@@ -1339,6 +1338,28 @@ public:
 		// a failed registration or glyph simply leaves the slot blank
 	}
 
+	// The dropdown affordance for the three in-bar menu buttons is baked
+	// into their icons: a small filled triangle at the bottom-right corner.
+	// It is drawn with the same foreground color as the rest of the artwork,
+	// so it is always correct in every theme, hover and pressed state.
+	void DrawDropdownArrow( HDC hdc, int cx, COLORREF crFg )
+	{
+		POINT apt[3] = {
+			{ cx * 62 / 100, cx * 70 / 100 },
+			{ cx * 92 / 100, cx * 70 / 100 },
+			{ cx * 77 / 100, cx * 90 / 100 }
+		};
+		HBRUSH hbr = CreateSolidBrush( crFg );
+		HPEN hpen = CreatePen( PS_SOLID, 1, crFg );
+		HBRUSH hbrOld = (HBRUSH)SelectObject( hdc, hbr );
+		HPEN hpenOld = (HPEN)SelectObject( hdc, hpen );
+		Polygon( hdc, apt, 3 );
+		SelectObject( hdc, hbrOld );
+		SelectObject( hdc, hpenOld );
+		DeleteObject( hpen );
+		DeleteObject( hbr );
+	}
+
 	void DrawHtmlIcon( HDC hdc, int cx, int iIcon, COLORREF crFg )
 	{
 		// Preserve all 48 persisted HTML icon slots, including customization-only icons.
@@ -1354,6 +1375,10 @@ public:
 		};
 		if( iIcon < 0 || iIcon >= (int)_countof( glyphs ) ) return;
 		DrawIconGlyph( hdc, cx, glyphs[iIcon], crFg );
+		// the three in-bar dropdowns carry a themed-color arrow baked in
+		if( iIcon == 0 || iIcon == 6 || iIcon == 23 ){
+			DrawDropdownArrow( hdc, cx, crFg );
+		}
 		// no fallback artwork by design: the subset ships inside this DLL
 	}
 
@@ -1468,7 +1493,10 @@ public:
 
 			//int cx = g_metrics.ScaleY( m_bLargeToolbar ? BUTTON_SIZE_LARGE : BUTTON_SIZE_SMALL );
 			DWORD dwStyle = TBSTYLE_TOOLTIPS | TBSTYLE_TRANSPARENT | WS_CHILD | WS_CLIPCHILDREN | WS_CLIPSIBLINGS | CCS_NODIVIDER | CCS_NORESIZE | WS_VISIBLE | TBSTYLE_FLAT | CCS_NOPARENTALIGN | CCS_NOMOVEY;
-			DWORD dwExStyle = TBSTYLE_EX_HIDECLIPPEDBUTTONS | TBSTYLE_EX_DRAWDDARROWS;
+			// No TBSTYLE_EX_DRAWDDARROWS and no dropdown button styles: the
+			// control draws no arrows of its own, so nothing with a foreign
+			// color appears on the bar.
+			DWORD dwExStyle = TBSTYLE_EX_HIDECLIPPEDBUTTONS;
 			HWND hwndToolbar = CreateWindowEx( 0, TOOLBARCLASSNAME, NULL, dwStyle,
 				0, 0, 0, cxButtonSize, m_hDlg, (HMENU)(INT_PTR)100, NULL, NULL );
 			m_hwndToolbar = hwndToolbar;
@@ -2357,6 +2385,13 @@ public:
 	{
 		if( wParam == ID_MODE_HTML || wParam == ID_MODE_MD ){
 			OnModeSwitch( ( wParam == ID_MODE_MD ) ? MODE_MD : MODE_HTML );
+			return;
+		}
+		if( IsDropdownCommand( (UINT)wParam ) ){
+			// The dropdown buttons are plain buttons (no dropdown style, so
+			// the control draws no arrow of its own); their click arrives as
+			// a plain WM_COMMAND. Open the dropdown menu for it.
+			ShowDropdownMenu( (UINT)wParam );
 			return;
 		}
 		if( wParam >= ID_COMMAND_BASE && wParam < ID_COMMAND_BASE + Cmds().size() ) {

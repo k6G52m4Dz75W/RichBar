@@ -30,7 +30,7 @@ Current release: **0.17.4 — 2026-09-18**.
   DPI — the whole bar shares one stroke language. Background luminance
   selects dark glyphs on light bars or light glyphs on dark bars, and on
   dark bars the control switches to the system dark toolbar theme
-  (`DarkMode_Explorer`) so its own hover fills and dropdown arrows match.
+  (`DarkMode_Explorer`) so its own hover and pressed fills match the band.
   Theme and configuration changes re-render automatically.
 - **MUI**: satellite resource DLLs (`mui\1033` English, `mui\2052` Simplified
   Chinese).
@@ -92,6 +92,12 @@ adaptivity changed. The 59 unique names and codepoints are mapped in
   drawings and the HTML `?` marker are removed. A slot whose glyph cannot
   resolve (font registration failed or glyph unavailable) stays blank — an
   explicit simplification, since the font ships inside the DLL.
+- **Dropdown affordance is baked in**: the three in-bar dropdown buttons
+  (heading, font, form) carry a small filled triangle inside their icon
+  bitmaps, drawn with the same foreground color as everything else. The
+  toolbar control draws no arrows of its own, so no foreign colors can
+  appear. The buttons are plain buttons; clicking them delivers a plain
+  `WM_COMMAND` that opens the menu, and hovering opens it too.
 - The **legacy colored HTML BMPs are no longer loaded** (their resources
   remain in the DLL, and the plug-in entry icon still uses its own bitmap).
   Because both modes draw monochrome glyphs, the **hover (hot) image list

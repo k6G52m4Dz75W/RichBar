@@ -280,8 +280,19 @@ static void TestImageLists(bool fallback) {
                     std::vector<DWORD> actual((DWORD*)bits, (DWORD*)bits+size*size);
                     for (auto& p : actual) p &= 0xFFFFFF;
                     if (fallback) {
-                        // no fallback artwork: every stored slot must be blank
-                        Check(!slotHasInk(list, icon), "fallback slot must stay blank");
+                        bool isDropdown = mode == MODE_HTML && (icon == 0 || icon == 6 || icon == 23);
+                        if (isDropdown) {
+                            // the affordance arrow is chrome: it always draws
+                            for (int p=0; p<size*size; ++p) ((DWORD*)bits)[p] = 0xFF00FF;
+                            renderer.DrawDropdownArrow(dc, size, fg);
+                            GdiFlush();
+                            std::vector<DWORD> arrow((DWORD*)bits,(DWORD*)bits+size*size);
+                            for (auto& p : arrow) p &= 0xFFFFFF;
+                            for (int p=0; p<size*size; ++p) ((DWORD*)bits)[p] = 0xFF00FF;
+                            Check(actual == arrow, "fallback dropdown slot must contain exactly the arrow");
+                        } else {
+                            Check(!slotHasInk(list, icon), "fallback command slot must stay blank");
+                        }
                         ++comparisons;
                         SelectObject(dc,old); DeleteObject(bmp); DeleteDC(dc);
                         continue;
@@ -298,6 +309,10 @@ static void TestImageLists(bool fallback) {
                     RECT rc = {0,0,size,size};
                     Check(DrawTextW(dc,&ch,1,&rc,DT_CENTER|DT_VCENTER|DT_SINGLELINE), "direct list reference draw failed");
                     SelectObject(dc,oldFont); DeleteObject(font);
+                    if (mode == MODE_HTML && (icon == 0 || icon == 6 || icon == 23)) {
+                        // dropdown slots carry the baked-in affordance arrow
+                        renderer.DrawDropdownArrow(dc, size, fg);
+                    }
                     GdiFlush();
                     std::vector<DWORD> reference((DWORD*)bits,(DWORD*)bits+size*size);
                     for (auto& p : reference) p &= 0xFFFFFF;
