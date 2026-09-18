@@ -7,7 +7,7 @@ toolbar, forked from the official Emurasoft HTMLBar plug-in source
 (`19.5.0`). It is meant to replace the HTML/Markdown toolbar built into
 EmEditor v26 (closed source, with most tags hidden inside dropdown menus).
 
-Current release: **0.17.0 — 2026-09-18**.
+Current release: **0.17.4 — 2026-09-18**.
 
 ## Features
 
@@ -25,11 +25,13 @@ Current release: **0.17.0 — 2026-09-18**.
   image (file picker), table, customize. Wrapping commands toggle off when
   applied twice.
 - **Runtime-drawn, theme-adaptive icons**: the bundled Remix Icon font
-  subset supplies all 20 Markdown icons and all 48 HTML slots, rendered
-  directly at the current button size and DPI — both modes share one stroke
-  language. Background luminance selects dark glyphs on light bars or light
-  glyphs on dark bars; a hot image list keeps hovered buttons readable in
-  dark-band modes. Theme and configuration changes re-render automatically.
+  subset supplies all 20 Markdown icons, all 48 HTML slots and the two
+  [H][M] switch glyphs, rendered directly at the current button size and
+  DPI — the whole bar shares one stroke language. Background luminance
+  selects dark glyphs on light bars or light glyphs on dark bars, and on
+  dark bars the control switches to the system dark toolbar theme
+  (`DarkMode_Explorer`) so its own hover fills and dropdown arrows match.
+  Theme and configuration changes re-render automatically.
 - **MUI**: satellite resource DLLs (`mui\1033` English, `mui\2052` Simplified
   Chinese).
 - **Settings via the official channel**: `EE_REG_SET_VALUE` /
@@ -105,13 +107,12 @@ On Windows with the Visual C++ build tools, the test command is:
 powershell -File tools/test-icon-rendering.ps1
 ```
 
-The 0.17.0 test script covers **all 20 Markdown icons plus the H/M glyphs
+The 0.17.x test script covers **all 20 Markdown icons plus the H/M glyphs
 across 7 sizes and 2 foreground colors** (280 pixel-exact comparisons
 against direct Remix Icon drawing for the 20 command icons), the **actual
-normal and hot image lists** for both modes including the H/M slots and
-the pressed-state dark copies (1,464 comparisons per scenario), **fallback
-subprocesses that assert every slot stays blank**, and font
-registration/release/reinitialization checks. This is
+image lists** for both modes including the H/M slots (732 comparisons per
+scenario), **fallback subprocesses that assert every slot stays blank**,
+and font registration/release/reinitialization checks. This is
 offscreen regression coverage, not a claim that an EmEditor visual check
 has passed.
 

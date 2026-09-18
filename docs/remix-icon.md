@@ -157,8 +157,8 @@ only; it makes no claim about EmEditor UI verification.
 
 - All 20 Markdown icons: **280 pixel-exact comparisons** against direct
   Remix Icon drawing at **7 sizes × 2 colors**.
-- The **actual normal and hot image lists** for both modes, including the
-  H/M slots and the pressed-state dark copies: **1,464 comparisons per
+- The **actual image lists** for both modes, including the
+  H/M slots: **732 comparisons per
   scenario**.
 - Fallback scenarios assert that mapped slots stay **blank** (not
   nonempty).

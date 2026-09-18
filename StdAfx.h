@@ -12,9 +12,12 @@
 #include <malloc.h>
 #include <crtdbg.h>
 #include <commctrl.h>
+#include <uxtheme.h>
 #include <olectl.h>
 #include <shlwapi.h>
 #include <commdlg.h>
+
+#pragma comment(lib, "uxtheme.lib")
 
 #ifdef _DEBUG
 #define VERIFY(f)          _ASSERTE(f)

@@ -14,6 +14,28 @@ this code base:
 | `0.4.x`       | Compatibility fixes that make the original plug-in build and load correctly on modern EmEditor (v26). |
 | `0.9.0` – `0.17.x` | The HTML + Markdown dual-mode toolbar, heading towards `1.0.0`. |
 
+## [0.17.4] - 2026-09-18
+
+### Fixed
+
+- **Reverts 0.17.3** (the shift-the-glyph-left attempt — withdrawn).
+- **The dropdown arrows are drawn by the toolbar control in fixed theme
+  colors (dark gray), which never followed EmEditor's bar colors.** On a
+  dark band the arrows therefore sat nearly invisible, and against the new
+  wider Remix artwork they looked plainly wrong. The toolbar now switches
+  to the system dark toolbar theme (`SetWindowTheme DarkMode_Explorer`)
+  whenever the band is dark, so the control itself draws arrows, hover and
+  pressed fills in dark-mode colors that match the band — the standard
+  dark-toolbar mechanism, still no custom artwork. With the dark-theme
+  fills the hover hot image list and the pressed-state dark copies became
+  unnecessary and are removed; light bands are unchanged.
+
+### Changed
+
+- All 0.17.1/0.17.2/0.17.3 intermediate attempts at the arrow color are
+  superseded by this release; the hover highlight on dark bands is now the
+  dark-mode subtle fill instead of the light system highlight.
+
 ## [0.17.0] - 2026-09-18
 
 ### Changed

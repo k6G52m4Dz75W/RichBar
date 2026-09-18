@@ -236,142 +236,90 @@ static void TestImageLists(bool fallback) {
             for (COLORREF fg : {RGB(48,48,48), RGB(224,224,224)}) {
                 HIMAGELIST list = renderer.BuildToolbarImageList(size, fg, mode);
                 Check(list && ImageList_GetImageCount(list) == count+2, "wrong command image-list count (commands + H/M)");
-                HIMAGELIST hot = renderer.BuildHotImageList(size);
-                Check(hot && ImageList_GetImageCount(hot) == count+2, "wrong hot image-list count");
-                for (int state = 0; state < 2; ++state) {
-                    COLORREF color = state ? RGB(48,48,48) : fg;
-                    // Reads the stored image's alpha channel straight from the
-                    // icon's color bitmap; DrawIconEx would paint an all-zero-
-                    // alpha (blank) icon opaque black and mask this case.
-                    auto slotHasInk = [&](HIMAGELIST li, int iconIdx) {
-                        HICON hi = ImageList_GetIcon(li, iconIdx, ILD_TRANSPARENT);
-                        Check(hi != NULL, "ImageList_GetIcon failed");
-                        ICONINFO ii = {};
-                        Check(GetIconInfo(hi, &ii), "GetIconInfo failed");
-                        bool ink = false;
-                        if (ii.hbmColor) {
-                            HDC dc2 = CreateCompatibleDC(NULL);
-                            BITMAPINFO info2 = {};
-                            info2.bmiHeader.biSize = sizeof(BITMAPINFOHEADER);
-                            info2.bmiHeader.biWidth = size;
-                            info2.bmiHeader.biHeight = -size;
-                            info2.bmiHeader.biPlanes = 1;
-                            info2.bmiHeader.biBitCount = 32;
-                            std::vector<DWORD> px(size*size);
-                            if (GetDIBits(dc2, ii.hbmColor, 0, size, px.data(), &info2, DIB_RGB_COLORS)) {
-                                for (DWORD q : px) if ((q & 0xFF000000) != 0) { ink = true; break; }
-                            }
-                            DeleteDC(dc2);
-                            DeleteObject(ii.hbmColor);
+                // Reads the stored image's alpha channel straight from the
+                // icon's color bitmap; DrawIconEx would paint an all-zero-
+                // alpha (blank) icon opaque black and mask this case.
+                auto slotHasInk = [&](HIMAGELIST li, int iconIdx) {
+                    HICON hi = ImageList_GetIcon(li, iconIdx, ILD_TRANSPARENT);
+                    Check(hi != NULL, "ImageList_GetIcon failed");
+                    ICONINFO ii = {};
+                    Check(GetIconInfo(hi, &ii), "GetIconInfo failed");
+                    bool ink = false;
+                    if (ii.hbmColor) {
+                        HDC dc2 = CreateCompatibleDC(NULL);
+                        BITMAPINFO info2 = {};
+                        info2.bmiHeader.biSize = sizeof(BITMAPINFOHEADER);
+                        info2.bmiHeader.biWidth = size;
+                        info2.bmiHeader.biHeight = -size;
+                        info2.bmiHeader.biPlanes = 1;
+                        info2.bmiHeader.biBitCount = 32;
+                        std::vector<DWORD> px(size*size);
+                        if (GetDIBits(dc2, ii.hbmColor, 0, size, px.data(), &info2, DIB_RGB_COLORS)) {
+                            for (DWORD q : px) if ((q & 0xFF000000) != 0) { ink = true; break; }
                         }
-                        if (ii.hbmMask) DeleteObject(ii.hbmMask);
-                        DestroyIcon(hi);
-                        return ink;
-                    };
-                    for (int icon = 0; icon < count+2; ++icon) {
-                        // Diagnostic tag: MD=100+, HTML=200+, +50 for the hot list.
-                        currentIcon = icon + (mode == MODE_MD ? 100 : 200) + (state ? 50 : 0);
-                        currentSize = size; currentColor = color;
-                        HDC dc = CreateCompatibleDC(NULL);
-                        void* bits = NULL;
-                        HBITMAP bmp = renderer.CreateMdIconBitmap(size, &bits);
-                        Check(dc && bmp && bits, "list test bitmap allocation failed");
-                        HGDIOBJ old = SelectObject(dc, bmp);
-                        HICON hicon = ImageList_GetIcon(state ? hot : list, icon, ILD_TRANSPARENT);
-                        Check(hicon && DrawIconEx(dc, 0, 0, hicon, size, size, 0, NULL, DI_NORMAL), "icon draw failed");
-                        if (hicon) DestroyIcon(hicon);
-                        GdiFlush();
-                        std::vector<DWORD> actual((DWORD*)bits, (DWORD*)bits+size*size);
-                        for (auto& p : actual) p &= 0xFFFFFF;
-                        if (fallback) {
-                            // no fallback artwork: every stored slot must be blank
-                            Check(!slotHasInk(state ? hot : list, icon), "fallback slot must stay blank");
-                            ++comparisons;
-                            SelectObject(dc,old); DeleteObject(bmp); DeleteDC(dc);
-                            continue;
-                        }
-                        Check(HasInk(actual), "empty image-list slot");
-                        for (int p=0; p<size*size; ++p) ((DWORD*)bits)[p] = 0xFF00FF;
-                        WCHAR ch = icon >= count ? modeExpected[icon - count]
-                                 : (mode == MODE_HTML ? htmlExpected[icon] : expected[icon].ch);
-                        HFONT font = CreateFontW(-size,0,0,0,FW_NORMAL,FALSE,FALSE,FALSE,DEFAULT_CHARSET,
-                            OUT_DEFAULT_PRECIS,CLIP_DEFAULT_PRECIS,ANTIALIASED_QUALITY,FF_DONTCARE,L"remixicon");
-                        HGDIOBJ oldFont = SelectObject(dc,font);
-                        ValidateGlyph(dc,ch);
-                        SetBkMode(dc,TRANSPARENT); SetTextColor(dc,color);
-                        RECT rc = {0,0,size,size};
-                        Check(DrawTextW(dc,&ch,1,&rc,DT_CENTER|DT_VCENTER|DT_SINGLELINE), "direct list reference draw failed");
-                        SelectObject(dc,oldFont); DeleteObject(font);
-                        GdiFlush();
-                        std::vector<DWORD> reference((DWORD*)bits,(DWORD*)bits+size*size);
-                        for (auto& p : reference) p &= 0xFFFFFF;
-                        if (actual != reference) {
-                            for (int p = 0; p < size*size; ++p) {
-                                if (actual[p] != reference[p]) {
-                                    fprintf(stderr, "DIFF px(%d,%d) list=%06lx ref=%06lx tag=%d\n",
-                                        p % size, p / size, actual[p], reference[p], currentIcon);
-                                    break;
-                                }
-                            }
-                        }
-                        Check(actual == reference, "image-list pixels differ from expected glyph/foreground/fallback");
+                        DeleteDC(dc2);
+                        DeleteObject(ii.hbmColor);
+                    }
+                    if (ii.hbmMask) DeleteObject(ii.hbmMask);
+                    DestroyIcon(hi);
+                    return ink;
+                };
+                for (int icon = 0; icon < count+2; ++icon) {
+                    // Diagnostic tag: MD=100+, HTML=200+.
+                    currentIcon = icon + (mode == MODE_MD ? 100 : 200);
+                    currentSize = size; currentColor = fg;
+                    HDC dc = CreateCompatibleDC(NULL);
+                    void* bits = NULL;
+                    HBITMAP bmp = renderer.CreateMdIconBitmap(size, &bits);
+                    Check(dc && bmp && bits, "list test bitmap allocation failed");
+                    HGDIOBJ old = SelectObject(dc, bmp);
+                    HICON hicon = ImageList_GetIcon(list, icon, ILD_TRANSPARENT);
+                    Check(hicon && DrawIconEx(dc, 0, 0, hicon, size, size, 0, NULL, DI_NORMAL), "icon draw failed");
+                    if (hicon) DestroyIcon(hicon);
+                    GdiFlush();
+                    std::vector<DWORD> actual((DWORD*)bits, (DWORD*)bits+size*size);
+                    for (auto& p : actual) p &= 0xFFFFFF;
+                    if (fallback) {
+                        // no fallback artwork: every stored slot must be blank
+                        Check(!slotHasInk(list, icon), "fallback slot must stay blank");
                         ++comparisons;
                         SelectObject(dc,old); DeleteObject(bmp); DeleteDC(dc);
+                        continue;
                     }
+                    Check(HasInk(actual), "empty image-list slot");
+                    for (int p=0; p<size*size; ++p) ((DWORD*)bits)[p] = 0xFF00FF;
+                    WCHAR ch = icon >= count ? modeExpected[icon - count]
+                             : (mode == MODE_HTML ? htmlExpected[icon] : expected[icon].ch);
+                    HFONT font = CreateFontW(-size,0,0,0,FW_NORMAL,FALSE,FALSE,FALSE,DEFAULT_CHARSET,
+                        OUT_DEFAULT_PRECIS,CLIP_DEFAULT_PRECIS,ANTIALIASED_QUALITY,FF_DONTCARE,L"remixicon");
+                    HGDIOBJ oldFont = SelectObject(dc,font);
+                    ValidateGlyph(dc,ch);
+                    SetBkMode(dc,TRANSPARENT); SetTextColor(dc,fg);
+                    RECT rc = {0,0,size,size};
+                    Check(DrawTextW(dc,&ch,1,&rc,DT_CENTER|DT_VCENTER|DT_SINGLELINE), "direct list reference draw failed");
+                    SelectObject(dc,oldFont); DeleteObject(font);
+                    GdiFlush();
+                    std::vector<DWORD> reference((DWORD*)bits,(DWORD*)bits+size*size);
+                    for (auto& p : reference) p &= 0xFFFFFF;
+                    if (actual != reference) {
+                        for (int p = 0; p < size*size; ++p) {
+                            if (actual[p] != reference[p]) {
+                                fprintf(stderr, "DIFF px(%d,%d) list=%06lx ref=%06lx tag=%d\n",
+                                    p % size, p / size, actual[p], reference[p], currentIcon);
+                                break;
+                            }
+                        }
+                    }
+                    Check(actual == reference, "image-list pixels differ from expected glyph/foreground/fallback");
+                    ++comparisons;
+                    SelectObject(dc,old); DeleteObject(bmp); DeleteDC(dc);
                 }
-                ImageList_Destroy(hot); ImageList_Destroy(list);
+                ImageList_Destroy(list);
             }
         }
     }
     Renderer::ReleaseMdIconFont();
-    printf("PASS actual HTML/MD normal+hot image lists, H/M slots, HTML-MD-HTML rebuilds: %d pixel comparisons (%s)\n", comparisons, fallback ? "fallback" : "Remix");
-}
-static void TestPressedCopies() {
-    // Mirrors DisplayBar's pressed-state mechanism: on a dark band the normal
-    // list is built with a second, dark-drawn copy of every image appended
-    // after the light ones; each dark copy must equal the hot list's image.
-    failAdd = false; missingGlyph = false;   // this test needs a working font
-    Renderer renderer;
-    renderer.m_iMode = MODE_HTML;
-    const int size = 16;
-    const COLORREF fg = RGB(224,224,224), hotFg = RGB(48,48,48);
-    auto drawPixels = [&](HIMAGELIST list, int icon) {
-        HDC dc = CreateCompatibleDC(NULL);
-        BITMAPINFO info = {};
-        info.bmiHeader.biSize = sizeof(BITMAPINFOHEADER);
-        info.bmiHeader.biWidth = size; info.bmiHeader.biHeight = -size;
-        info.bmiHeader.biPlanes = 1; info.bmiHeader.biBitCount = 32;
-        void* bits = NULL;
-        HBITMAP bmp = CreateDIBSection(dc, &info, DIB_RGB_COLORS, &bits, NULL, 0);
-        Check(dc && bmp && bits, "pressed-copy test bitmap failed");
-        HGDIOBJ old = SelectObject(dc, bmp);
-        RECT rc = {0, 0, size, size};
-        HBRUSH bg = CreateSolidBrush(RGB(255, 0, 255));
-        FillRect(dc, &rc, bg);
-        DeleteObject(bg);
-        HICON hicon = ImageList_GetIcon(list, icon, ILD_TRANSPARENT);
-        Check(hicon && DrawIconEx(dc, 0, 0, hicon, size, size, 0, NULL, DI_NORMAL), "pressed-copy icon draw failed");
-        if (hicon) DestroyIcon(hicon);
-        GdiFlush();
-        std::vector<DWORD> pixels((DWORD*)bits, (DWORD*)bits + size*size);
-        for (auto& p : pixels) p &= 0xFFFFFF;
-        SelectObject(dc, old);
-        DeleteObject(bmp);
-        DeleteDC(dc);
-        return pixels;
-    };
-    HIMAGELIST normal = renderer.BuildToolbarImageList(size, fg, MODE_HTML, 2);
-    int light = ImageList_GetImageCount(normal) / 2;
-    Check(light == 50, "normal list with dark copies has unexpected count");
-    HIMAGELIST hot = renderer.BuildToolbarImageList(size, hotFg, MODE_HTML);
-    Check(ImageList_GetImageCount(hot) == light, "hot list must mirror the light images");
-    for (int i = 0; i < light; ++i)
-        Check(drawPixels(normal, light + i) == drawPixels(hot, i), "dark copy differs from its hot image");
-    Check(drawPixels(normal, 0) != drawPixels(normal, light), "dark copy must differ from the light glyph");
-    ImageList_Destroy(hot);
-    ImageList_Destroy(normal);
-    renderer.ReleaseMdIconFont();
-    printf("PASS pressed-state dark copies drawn into the normal list: %d images verified\n", light);
+    printf("PASS actual HTML/MD image lists, H/M slots, HTML-MD-HTML rebuilds: %d pixel comparisons (%s)\n", comparisons, fallback ? "fallback" : "Remix");
 }
 int main(int argc, char** argv) {
     Check(argc == 2, "expected normal, add-fail or missing-glyph argument");
@@ -408,7 +356,6 @@ int main(int argc, char** argv) {
     failAdd = strcmp(argv[1], "add-fail") == 0;
     missingGlyph = strcmp(argv[1], "missing-glyph") == 0;
     TestImageLists(failAdd || missingGlyph);
-    TestPressedCopies();
     return 0;
 }
 '@

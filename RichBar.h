@@ -377,9 +377,8 @@ public:
 	CCmd* m_pcmdProp;
 	HWND m_hwndToolbar;
 	HIMAGELIST m_himageToolbar;
-	HIMAGELIST m_himageToolbarHot;
 	WNDPROC m_wpOldToolbarProc;	// toolbar subclass chain
-	int m_nLightIcons;	// images before the pressed-state dark copies appended below them
+	int m_nLightIcons;	// image count: command icons plus the two [H][M] glyphs
 	UINT m_nHoverMenuCmd;		// dropdown command waiting for the hover-open timer
 	UINT m_nLastMenuCmd;		// dropdown whose menu closed last; reopen only after the mouse leaves it
 	bool m_bLastMenuLeft;		// the mouse has left m_nLastMenuCmd since its menu closed
@@ -1407,45 +1406,35 @@ public:
 		}
 	}
 
-	HIMAGELIST BuildToolbarImageList( int cx, COLORREF crFg, int mode, int nCopies = 1 )
+	HIMAGELIST BuildToolbarImageList( int cx, COLORREF crFg, int mode )
 	{
 		int count = mode == MODE_MD ? 20 : 48;
-		HIMAGELIST himl = ImageList_Create( cx, cx, ILC_COLOR32, ( count + 2 ) * nCopies, 2 );
+		HIMAGELIST himl = ImageList_Create( cx, cx, ILC_COLOR32, count + 2, 2 );
 		if( !himl ){
 			return NULL;
 		}
-		// Each copy repeats every command image plus the two [H][M] glyphs.
-		// The first copy uses the bar's foreground; any further copies are
-		// drawn dark, giving pressed dropdown buttons a readable glyph on
-		// the light pressed fill (pressed drawing always uses this list).
-		for( int c = 0; c < nCopies; c++ ){
-			COLORREF crCopyFg = c ? GLYPH_COLOR_DARK : crFg;
-			for( int i = 0; i < count; i++ ){
-				void* pvBits = NULL;
-				HBITMAP hbm = CreateMdIconBitmap( cx, &pvBits );
-				if( !hbm ){
-					break;
-				}
-				HDC hdc = CreateCompatibleDC( NULL );
-				HBITMAP hbmOld = (HBITMAP)SelectObject( hdc, hbm );
-				if( mode == MODE_MD ) DrawMdIcon( hdc, cx, i, crCopyFg );
-				else DrawHtmlIcon( hdc, cx, i, crCopyFg );
-				SelectObject( hdc, hbmOld );
-				DeleteDC( hdc );
-				MdKeyOutBackground( cx, pvBits );
-				ImageList_Add( himl, hbm, NULL );
-				DeleteObject( hbm );
+		// Every command image plus the two [H][M] switch glyphs, drawn in the
+		// bar's foreground color. On a dark band the DarkMode_Explorer theme
+		// keeps hover/pressed fills dark, so the light glyphs stay readable
+		// in every state without extra copies.
+		for( int i = 0; i < count; i++ ){
+			void* pvBits = NULL;
+			HBITMAP hbm = CreateMdIconBitmap( cx, &pvBits );
+			if( !hbm ){
+				break;
 			}
-			AddModeSwitchIcons( himl, cx, crCopyFg );
+			HDC hdc = CreateCompatibleDC( NULL );
+			HBITMAP hbmOld = (HBITMAP)SelectObject( hdc, hbm );
+			if( mode == MODE_MD ) DrawMdIcon( hdc, cx, i, crFg );
+			else DrawHtmlIcon( hdc, cx, i, crFg );
+			SelectObject( hdc, hbmOld );
+			DeleteDC( hdc );
+			MdKeyOutBackground( cx, pvBits );
+			ImageList_Add( himl, hbm, NULL );
+			DeleteObject( hbm );
 		}
+		AddModeSwitchIcons( himl, cx, crFg );
 		return himl;
-	}
-
-	HIMAGELIST BuildHotImageList( int cx )
-	{
-		// hover fills buttons with the light system highlight, so the hot list
-		// mirrors the normal list with dark glyphs to stay readable on it
-		return BuildToolbarImageList( cx, GLYPH_COLOR_DARK, m_iMode );
 	}
 
 	void DisplayBar( bool bVisible )
@@ -1494,11 +1483,18 @@ public:
 
 			COLORREF crGlyphFg = GetBarGlyphColor();
 			m_crGlyphFg = crGlyphFg;
-			// On a dark band (light glyphs) request a second, dark-drawn copy
-			// of every image appended to this list; pressed dropdown buttons
-			// are pointed at their dark copy while their menu tracks.
-			const int nCopies = ( crGlyphFg == GLYPH_COLOR_LIGHT ) ? 2 : 1;
-			m_himageToolbar = BuildToolbarImageList( cxButtonSize, crGlyphFg, m_iMode, nCopies );
+			// On a dark band, switch the control to the system dark toolbar
+			// theme so everything it draws itself - the wholedropdown arrows
+			// plus the hover/pressed fills - uses dark-mode colors matching
+			// the band. This is the standard dark-toolbar mechanism: the
+			// arrow stays control-drawn, with no custom artwork.
+			const bool bDarkTheme = ( crGlyphFg == GLYPH_COLOR_LIGHT );
+			if( bDarkTheme ){
+				SetWindowTheme( hwndToolbar, L"DarkMode_Explorer", NULL );
+			}
+			_ASSERT( m_himageToolbar == NULL );
+
+			m_himageToolbar = BuildToolbarImageList( cxButtonSize, crGlyphFg, m_iMode );
 			if( !m_himageToolbar ){
 				DestroyWindow( m_hDlg );
 				m_hDlg = NULL;
@@ -1506,17 +1502,9 @@ public:
 				return;
 			}
 			_ASSERT( m_himageToolbar );
-			m_nLightIcons = ImageList_GetImageCount( m_himageToolbar ) / nCopies;
+			m_nLightIcons = ImageList_GetImageCount( m_himageToolbar );
 			SendMessage( hwndToolbar, TB_SETIMAGELIST, 0, (LPARAM)m_himageToolbar );
 
-			// on hover the toolbar fills buttons with the light system highlight;
-			// when the band is dark (light glyphs) supply a hot image list with
-			// dark glyphs so hovered buttons stay readable
-			if( nCopies == 2 ){
-				m_himageToolbarHot = BuildHotImageList( cxButtonSize );
-				SendMessage( hwndToolbar, TB_SETHOTIMAGELIST, 0, (LPARAM)m_himageToolbarHot );
-			}
-			
 			if( !LoadCmdArray( m_iMode ) ){
 				ResetCmdArray( m_iMode );
 			}
@@ -1585,10 +1573,6 @@ public:
 			if( m_himageToolbar ){
 				VERIFY( ImageList_Destroy( m_himageToolbar ) );
 				m_himageToolbar = NULL;
-			}
-			if( m_himageToolbarHot ){
-				VERIFY( ImageList_Destroy( m_himageToolbarHot ) );
-				m_himageToolbarHot = NULL;
 			}
 			_ASSERT( !IsWindow( m_hwndToolbar ) );
 			m_hwndToolbar = NULL;
@@ -1777,7 +1761,6 @@ public:
 		m_iMode = MODE_HTML;
 		m_iModeOverride = -1;
 		m_crGlyphFg = 0xFFFFFFFF;
-		m_himageToolbarHot = NULL;
 		ZERO_INIT_FIRST_MEM( CMyFrame, m_hwndToolbar );
 		m_nBand = (UINT)-1;
 	}
@@ -2602,35 +2585,9 @@ public:
 		return false;
 	}
 
-	void ShowDropdownMenu( UINT nIDCommand, bool bPressedByMouse )
+	void ShowDropdownMenu( UINT nIDCommand )
 	{
 		CCmd& cmd = Cmds()[nIDCommand - ID_COMMAND_BASE];
-		// Pressed buttons draw from the normal list, whose light glyphs wash
-		// out on the light pressed fill on a dark band. That list carries
-		// dark copies of every image after m_nLightIcons (mirroring the hot
-		// list), so point just this button at its dark variant. A menu opened
-		// by hovering never presses the button: while the menu tracks we
-		// swallow the toolbar's WM_MOUSELEAVE (see ToolbarProc), so the hot
-		// look simply never fades and the glyph never shifts.
-		int iOldImage = -1;
-		if( bPressedByMouse && m_himageToolbarHot != NULL && m_nLightIcons > 0 ){
-			int nIndex = (int)SendMessage( m_hwndToolbar, TB_COMMANDTOINDEX, nIDCommand, 0L );
-			TBBUTTON tb = {};
-			if( nIndex >= 0 && SendMessage( m_hwndToolbar, TB_GETBUTTON, nIndex, (LPARAM)&tb ) ){
-				iOldImage = tb.iBitmap;
-				int iDark = m_nLightIcons + iOldImage;
-				if( iDark < ImageList_GetImageCount( m_himageToolbar ) ){
-					TBBUTTONINFO bi = {};
-					bi.cbSize = sizeof( bi );
-					bi.dwMask = TBIF_IMAGE;
-					bi.iImage = iDark;
-					SendMessage( m_hwndToolbar, TB_SETBUTTONINFO, nIDCommand, (LPARAM)&bi );
-				}
-				else {
-					iOldImage = -1;
-				}
-			}
-		}
 		// The tooltip has had its time by now (the menu delay is the tooltip
 		// delay plus a margin); retire it so the menu owns the spot below
 		// the button instead of the two popups overlapping.
@@ -2704,13 +2661,6 @@ public:
 
 		}
 		m_bInDropdownMenu = false;
-		if( iOldImage >= 0 ){
-			TBBUTTONINFO bi = {};
-			bi.cbSize = sizeof( bi );
-			bi.dwMask = TBIF_IMAGE;
-			bi.iImage = iOldImage;
-			SendMessage( m_hwndToolbar, TB_SETBUTTONINFO, nIDCommand, (LPARAM)&bi );
-		}
 		// A menu just opened here stays quiet until the mouse has actually
 		// left the button, tracked deterministically in the mouse handlers.
 		m_nLastMenuCmd = nIDCommand;
@@ -2747,12 +2697,12 @@ public:
 		if( !GetCursorPos( &pt ) || !PtInRect( &rc, pt ) ){
 			return;
 		}
-		ShowDropdownMenu( nCmd, false );
+		ShowDropdownMenu( nCmd );
 	}
 
 	// Runs inside the toolbar subclass. Returns true when the message is
 	// swallowed.
-	bool OnToolbarMessage( HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam )
+	bool OnToolbarMessage( HWND hwnd, UINT msg, WPARAM /*wParam*/, LPARAM lParam )
 	{
 		if( msg == WM_MOUSELEAVE && m_bInDropdownMenu ){
 			// the menu loop captured the mouse; the button must keep its hot
@@ -2842,7 +2792,7 @@ public:
 				NMTOOLBAR* pToolbar = (NMTOOLBAR*)pnmh;
 				if( pToolbar->iItem >= ID_COMMAND_BASE && pToolbar->iItem < ID_COMMAND_BASE + (int)Cmds().size() ) {
 					// clicked: the button is pressed, so pass the pressed-swap flag
-					ShowDropdownMenu( (UINT)pToolbar->iItem, true );
+					ShowDropdownMenu( (UINT)pToolbar->iItem );
 				}
 			}
 			break;
