@@ -14,6 +14,20 @@ this code base:
 | `0.4.x`       | Compatibility fixes that make the original plug-in build and load correctly on modern EmEditor (v26). |
 | `0.9.0` – `0.17.x` | The HTML + Markdown dual-mode toolbar, heading towards `1.0.0`. |
 
+## [0.17.18] - 2026-09-19
+
+### Changed
+
+- **The marker is right-anchored in the strip and slightly larger.** The
+  control's internal image alignment (left vs centered) inside the wider
+  button is not externally observable, and the previous centered placement
+  left the marker's on-screen position ambiguous. The ink is now pinned to
+  the strip's right edge with a fixed margin (`max(3, strip/5)`), making
+  the on-screen position identical under either alignment, and the marker
+  font grows to 3/2 of the strip (ink = 3/4 strip: at 200% DPI 15 px wide
+  in the 20 px strip, ~4 px image margin plus the control's padding to the
+  button edge).
+
 ## [0.17.17] - 2026-09-19
 
 ### Changed

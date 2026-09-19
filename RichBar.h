@@ -1371,8 +1371,8 @@ public:
 		return drawn;
 	}
 
-	// The dropdown marker: Remix's arrow-down-s-fill glyph centered in the
-	// dedicated strip to the right of the glyph cell (Word-style split
+	// The dropdown marker: Remix's arrow-down-s-fill glyph right-anchored in
+	// the dedicated strip to the right of the glyph cell (Word-style split
 	// layout). The toolbar control draws no arrow of its own (BTNS_DROPDOWN
 	// without TBSTYLE_EX_DRAWDDARROWS), so this baked-in marker is the only
 	// arrow — and being part of the bitmap it follows the band-aware glyph
@@ -1380,10 +1380,10 @@ public:
 	void DrawDropdownMarker( HDC hdc, int cxCell, int cxImage, COLORREF crFg )
 	{
 		const WCHAR wch = 0xEA4D;	// ri-arrow-down-s-fill
-		// the glyph's ink is 0.5em wide by 0.25em tall; at 4/3 of the strip
-		// the ink fills two thirds of the strip, leaving ~1/6 strip of
-		// margin on each side
-		const int em = max( 8, ( cxImage - cxCell ) * 4 / 3 );
+		// the glyph's ink is 0.5em wide by 0.25em tall; at 3/2 of the strip
+		// the ink fills three quarters of the strip height-wise balanced by
+		// the fixed right margin below
+		const int em = max( 8, ( cxImage - cxCell ) * 3 / 2 );
 		HFONT hfontIcon = GetMdIconFont( em );
 		if( !hfontIcon ) return;
 		HFONT old = (HFONT)SelectObject( hdc, hfontIcon );
@@ -1399,11 +1399,14 @@ public:
 					gm.gmBlackBoxX > 0 && gm.gmBlackBoxY > 0 ){
 					SetBkMode( hdc, TRANSPARENT );
 					SetTextColor( hdc, crFg );
-					// center the ink in the strip horizontally and in the
-					// button vertically; TextOutW must measure from the
-					// baseline for that math
+					// right-anchor the ink in the strip with a small margin:
+					// whichever way the control aligns the wider image inside
+					// the button (left or centered), the arrow reads as
+					// sitting at the button's right side, clear of the edge.
+					// TextOutW must measure from the baseline for that math
 					SetTextAlign( hdc, TA_LEFT | TA_BASELINE | TA_NOUPDATECP );
-					int x = ( cxCell + cxImage ) / 2 - gm.gmptGlyphOrigin.x - gm.gmBlackBoxX / 2;
+					const int nMargin = max( 3, ( cxImage - cxCell ) / 5 );
+					int x = cxImage - nMargin - gm.gmBlackBoxX - gm.gmptGlyphOrigin.x;
 					int y = ( cxCell + 2 * gm.gmptGlyphOrigin.y - gm.gmBlackBoxY ) / 2;
 					TextOutW( hdc, x, y, &wch, 1 );
 				}

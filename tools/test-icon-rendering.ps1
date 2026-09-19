@@ -369,10 +369,11 @@ static void TestDropdownMarkers() {
                 "dropdown glyph cell altered (icon 17)");
         }
 
-        // the marker's em is strip*5/3; measure its ink box exactly the way
-        // DrawDropdownMarker centers it in the strip, so the allowed zone
-        // follows the real glyph metrics
-        int em = max(8, strip * 4 / 3);
+        // the marker's em is strip*3/2, right-anchored with margin
+        // max(3, strip/5); measure its ink box exactly the way
+        // DrawDropdownMarker places it, so the allowed zone follows the
+        // real glyph metrics
+        int em = max(8, strip * 3 / 2);
         HDC mdc = CreateCompatibleDC(NULL);
         Check(mdc != NULL, "marker zone DC failed");
         HFONT mf = CreateFontW(-em, 0, 0, 0, FW_NORMAL, FALSE, FALSE, FALSE,
@@ -384,7 +385,7 @@ static void TestDropdownMarkers() {
         MAT2 mat = { {0,1}, {0,0}, {0,0}, {0,1} };
         Check(GetGlyphOutlineW(mdc, markerGlyph, GGO_METRICS, &gmm, 0, NULL, &mat) != GDI_ERROR &&
             gmm.gmBlackBoxX > 0 && gmm.gmBlackBoxY > 0, "marker GGO metrics failed");
-        int inkLeft = (size + wide) / 2 - gmm.gmBlackBoxX / 2;
+        int inkLeft = wide - max(3, strip / 5) - gmm.gmBlackBoxX;
         int inkTop = (size + 2 * gmm.gmptGlyphOrigin.y - gmm.gmBlackBoxY) / 2 - gmm.gmptGlyphOrigin.y;
         SelectObject(mdc, mold);
         DeleteObject(mf);
