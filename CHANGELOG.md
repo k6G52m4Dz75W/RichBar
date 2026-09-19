@@ -14,6 +14,19 @@ this code base:
 | `0.4.x`       | Compatibility fixes that make the original plug-in build and load correctly on modern EmEditor (v26). |
 | `0.9.0` – `0.17.x` | The HTML + Markdown dual-mode toolbar, heading towards `1.0.0`. |
 
+## [0.17.20] - 2026-09-19
+
+### Fixed
+
+- **0.17.19 blew up the three dropdown buttons to garbage widths** (the
+  reported "half the bar got eaten"): refactoring dropped the
+  `m_cxImage` assignment on the bar-creation path, so `AddButtons` set
+  the button width from an uninitialized member. The assignment is
+  restored and both width members are now initialized in the constructor.
+- Custom-draw replies from a dialog proc go through `DWL_MSGRESULT`,
+  not the proc's return value — without this the live arrow could never
+  have been painted. Plumbing fixed.
+
 ## [0.17.19] - 2026-09-19
 
 ### Changed

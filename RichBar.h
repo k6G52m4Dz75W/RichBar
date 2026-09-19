@@ -1583,6 +1583,7 @@ public:
 			// of every image appended to this list; pressed dropdown buttons
 			// are pointed at their dark copy while their menu tracks.
 			const int nCopies = ( crGlyphFg == GLYPH_COLOR_LIGHT ) ? 2 : 1;
+			m_cxImage = cxImage;	// dropdown button target width (cell + arrow strip)
 			m_himageToolbar = BuildToolbarImageList( cxButtonSize, crGlyphFg, m_iMode, nCopies );
 			if( !m_himageToolbar ){
 				DestroyWindow( m_hDlg );
@@ -1942,6 +1943,8 @@ public:
 		m_crGlyphFg = 0xFFFFFFFF;
 		m_himageToolbarHot = NULL;
 		ZERO_INIT_FIRST_MEM( CMyFrame, m_hwndToolbar );
+		m_cxImage = 0;		// set on every image-list build
+		m_nButtonPad = 0;	// measured on every AddButtons
 		m_nBand = (UINT)-1;
 	}
 
@@ -3551,8 +3554,11 @@ INT_PTR CALLBACK NewProc( HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam )
 	case WM_NOTIFY:
 		{
 			CMyFrame* pFrame = static_cast<CMyFrame*>(GetFrame( hwnd ));
-			// NM_CUSTOMDRAW replies (CDRF_*) must go back as the message result
-			nResult = pFrame->OnDlgNotify( (NMHDR*)lParam );
+			// this window is a dialog: notification results (the CDRF_*
+			// replies NM_CUSTOMDRAW depends on) go back via DWL_MSGRESULT,
+			// the dialog proc's own return value is ignored for them
+			SetWindowLongPtr( hwnd, DWL_MSGRESULT, pFrame->OnDlgNotify( (NMHDR*)lParam ) );
+			nResult = TRUE;
 		}
 		break;
 	case WM_TIMER:
