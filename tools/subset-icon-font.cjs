@@ -21,7 +21,7 @@ async function main() {
   const codepoints = {};
   const re = new RegExp('\\.ri-([a-z0-9-]+):before\\s*\\{\\s*content:\\s*"\\\\([0-9a-f]+)"', 'g');
   for (const m of css.matchAll(re)) codepoints[m[1]] = parseInt(m[2], 16);
-  const names = [...new Set([...manifest.markdown, ...manifest.html, ...(manifest.modes || []), ...(manifest.marker || [])])];
+  const names = [...new Set([...manifest.markdown, ...manifest.html, ...(manifest.modes || [])])];
   const chars = names.map(name => {
     if (!Number.isInteger(codepoints[name])) throw new Error(`Missing codepoint for: ${name}`);
     return String.fromCodePoint(codepoints[name]);
