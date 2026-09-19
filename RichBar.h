@@ -3555,9 +3555,9 @@ INT_PTR CALLBACK NewProc( HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam )
 		{
 			CMyFrame* pFrame = static_cast<CMyFrame*>(GetFrame( hwnd ));
 			// this window is a dialog: notification results (the CDRF_*
-			// replies NM_CUSTOMDRAW depends on) go back via DWL_MSGRESULT,
+			// replies NM_CUSTOMDRAW depends on) go back via DWLP_MSGRESULT,
 			// the dialog proc's own return value is ignored for them
-			SetWindowLongPtr( hwnd, DWL_MSGRESULT, pFrame->OnDlgNotify( (NMHDR*)lParam ) );
+			SetWindowLongPtr( hwnd, DWLP_MSGRESULT, pFrame->OnDlgNotify( (NMHDR*)lParam ) );
 			nResult = TRUE;
 		}
 		break;
