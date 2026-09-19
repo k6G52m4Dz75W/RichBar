@@ -14,6 +14,21 @@ this code base:
 | `0.4.x`       | Compatibility fixes that make the original plug-in build and load correctly on modern EmEditor (v26). |
 | `0.9.0` – `0.17.x` | The HTML + Markdown dual-mode toolbar, heading towards `1.0.0`. |
 
+## [0.17.12] - 2026-09-19
+
+### Fixed
+
+- **The dark -> light workaround no longer depends on any notification.**
+  0.17.11's deferred recheck only armed on `WM_THEMECHANGED`, which
+  apparently never reaches the bar when leaving Very Dark — so it never
+  ran. The bar now keeps a permanent 1 s poll that compares the raw theme
+  state (`EI_IS_VERY_DARK` + `EI_GET_BAR_BACK_COLOR`) against a snapshot
+  taken when the current image lists were drawn, and re-creates the bar
+  when the state diverges *and* the derived glyph color changes with it.
+  Any in-session update of the scheme state is now picked up within a
+  second; if EmEditor keeps both values pinned until relaunch, nothing
+  queryable can detect the switch and the limitation moves upstream.
+
 ## [0.17.11] - 2026-09-19
 
 ### Fixed

@@ -158,6 +158,10 @@ WCHAR OctToDec( LPWSTR& p )
 // its WM_THEMECHANGED broadcast (the dark -> light switch is not seen by
 // any plug-in in time), so the glyph color is re-evaluated once more
 #define IDT_THEME_RECHECK		2
+// permanent 1 s poll (m_hDlg): the scheme state may never be pushed to
+// plug-ins at all when leaving Very Dark, so the raw bar state is compared
+// against what the current image lists were built with, message or not
+#define IDT_BAR_STATE_POLL		3
 // runtime-drawn glyphs appended to every toolbar image list
 #define MD_ICON_MODE_H			20
 #define MD_ICON_MODE_M			21
@@ -393,6 +397,8 @@ public:
 	UINT m_nLastMenuCmd;		// dropdown whose menu closed last; reopen only after the mouse leaves it
 	bool m_bLastMenuLeft;		// the mouse has left m_nLastMenuCmd since its menu closed
 	bool m_bInDropdownMenu;		// a dropdown menu is tracking right now
+	bool m_bBuiltVeryDark;		// Very Dark state the current image lists were built with
+	COLORREF m_crBuiltBackColor;	// bar back color the current image lists were built with
 	HWND m_hDlg;
 	TCHAR m_szOldConfig[MAX_CONFIG_NAME];
 	DWORD m_dwFindFlags;
@@ -1441,16 +1447,30 @@ public:
 		// EmEditor's reported bar text color is designed for dark bars, but its
 		// dark themes may leave the bar background light, so measuring the
 		// background and flipping the glyph color is the only reliable way.
-		COLORREF crBack = CLR_INVALID;
-		Editor_Info( m_hWnd, EI_GET_BAR_BACK_COLOR, (LPARAM)&crBack );
-		if( crBack == CLR_INVALID ){
-			crBack = RGB( 255, 255, 255 );  // unknown: assume light, as dark themes currently leave the bars light
-		}
+		COLORREF crBack = GetBarBackColor();
 		int nLum = ( 299 * GetRValue( crBack ) + 587 * GetGValue( crBack ) + 114 * GetBValue( crBack ) ) / 1000;
 		if( nLum >= 128 ){
 			return GLYPH_COLOR_DARK;   // light background -> dark glyphs
 		}
 		return GLYPH_COLOR_LIGHT;      // dark background -> light glyphs
+	}
+
+	COLORREF GetBarBackColor()
+	{
+		COLORREF crBack = CLR_INVALID;
+		Editor_Info( m_hWnd, EI_GET_BAR_BACK_COLOR, (LPARAM)&crBack );
+		if( crBack == CLR_INVALID ){
+			crBack = RGB( 255, 255, 255 );  // unknown: assume light, as dark themes currently leave the bars light
+		}
+		return crBack;
+	}
+
+	// raw theme-state snapshot the current image lists were built with; the
+	// state poll compares later probes against it
+	void SnapshotBarState()
+	{
+		m_bBuiltVeryDark = IsVeryDark() != FALSE;
+		m_crBuiltBackColor = GetBarBackColor();
 	}
 
 	BOOL IsVeryDark()
@@ -1597,6 +1617,7 @@ public:
 
 			COLORREF crGlyphFg = GetBarGlyphColor();
 			m_crGlyphFg = crGlyphFg;
+			SnapshotBarState();
 			// On a dark band (light glyphs) request a second, dark-drawn copy
 			// of every image appended to this list; pressed dropdown buttons
 			// are pointed at their dark copy while their menu tracks.
@@ -1619,6 +1640,9 @@ public:
 				m_himageToolbarHot = BuildHotImageList( cxImage, cxButtonSize );
 				SendMessage( hwndToolbar, TB_SETHOTIMAGELIST, 0, (LPARAM)m_himageToolbarHot );
 			}
+			// poll the raw bar state every second: EmEditor may never push the
+			// theme change to plug-ins (dark -> light), message or not
+			SetTimer( m_hDlg, IDT_BAR_STATE_POLL, 1000, NULL );
 
 			AddButtons( hwndToolbar );
 			// CCS_NORESIZE prevents TB_AUTOSIZE from resizing the window, so size it explicitly;
@@ -1685,6 +1709,7 @@ public:
 		int cxImage = cxButtonSize + cxStrip;
 		COLORREF crGlyphFg = GetBarGlyphColor();
 		m_crGlyphFg = crGlyphFg;
+		SnapshotBarState();
 		const int nCopies = ( crGlyphFg == GLYPH_COLOR_LIGHT ) ? 2 : 1;
 		HIMAGELIST himlNew = BuildToolbarImageList( cxImage, cxButtonSize, crGlyphFg, m_iMode, nCopies );
 		if( !himlNew ){
@@ -2534,6 +2559,30 @@ public:
 		}
 		COLORREF crFg = GetBarGlyphColor();
 		if( crFg != m_crGlyphFg ){
+			Editor_ToolbarClose( m_hWnd, m_nClientID );
+			CustomBarClosed();
+			DisplayBar( m_bVisible );
+		}
+	}
+
+	// permanent state poll: re-create the bar when the raw theme state
+	// diverges from the one the current image lists were built with and the
+	// derived glyph color changes with it. This catches scheme switches no
+	// plug-in is ever notified about (leaving Very Dark), message or not.
+	void OnBarStatePoll()
+	{
+		if( !m_hwndToolbar ){
+			KillTimer( m_hDlg, IDT_BAR_STATE_POLL );
+			return;
+		}
+		if( m_bInDropdownMenu ){
+			return;	// never tear the bar down while a menu tracks; next tick retries
+		}
+		bool bVeryDark = IsVeryDark() != FALSE;
+		COLORREF crBack = GetBarBackColor();
+		COLORREF crFg = GetBarGlyphColor();
+		if( ( bVeryDark != m_bBuiltVeryDark || crBack != m_crBuiltBackColor ) &&
+			crFg != m_crGlyphFg ){
 			Editor_ToolbarClose( m_hWnd, m_nClientID );
 			CustomBarClosed();
 			DisplayBar( m_bVisible );
@@ -3545,6 +3594,13 @@ INT_PTR CALLBACK NewProc( HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam )
 			CMyFrame* pFrame = static_cast<CMyFrame*>(GetFrame( hwnd ));
 			if( pFrame ){
 				pFrame->OnThemeRecheck();
+			}
+			return 0;
+		}
+		else if( wParam == IDT_BAR_STATE_POLL ){
+			CMyFrame* pFrame = static_cast<CMyFrame*>(GetFrame( hwnd ));
+			if( pFrame ){
+				pFrame->OnBarStatePoll();
 			}
 			return 0;
 		}
