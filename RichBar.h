@@ -390,6 +390,9 @@ public:
 	int m_nLightIcons;	// images before the pressed-state dark copies appended below them
 	int m_cxImage;		// dropdown button target: cell + arrow strip at the current DPI
 	int m_nButtonPad;	// the control's per-button padding: button width - image width
+	bool m_bCustomIconColor;	// icon color mode: false = auto (band luminance), true = user color
+	COLORREF m_crCustomIcon;	// user-picked icon color for the normal state
+	bool m_bIconColorDirty;		// a color setting was touched in the open Prop dialog
 	UINT m_nHoverMenuCmd;		// dropdown command waiting for the hover-open timer
 	UINT m_nLastMenuCmd;		// dropdown whose menu closed last; reopen only after the mouse leaves it
 	bool m_bLastMenuLeft;		// the mouse has left m_nLastMenuCmd since its menu closed
@@ -1428,6 +1431,12 @@ public:
 
 	COLORREF GetBarGlyphColor()
 	{
+		// user-picked color wins over everything; readable-on-hover is
+		// guaranteed separately by the dark hot/pressed copies, but the
+		// contrast against the band background is the user's choice
+		if( m_bCustomIconColor ){
+			return m_crCustomIcon;
+		}
 		// Very Dark mode paints the whole bar area black (officially supported
 		// via the v20.5 SDK), so the signal comes straight from the theme —
 		// more authoritative than measuring colors
@@ -1581,8 +1590,10 @@ public:
 			m_crGlyphFg = crGlyphFg;
 			// On a dark band (light glyphs) request a second, dark-drawn copy
 			// of every image appended to this list; pressed dropdown buttons
-			// are pointed at their dark copy while their menu tracks.
-			const int nCopies = ( crGlyphFg == GLYPH_COLOR_LIGHT ) ? 2 : 1;
+			// are pointed at their dark copy while their menu tracks. A
+			// custom icon color always gets the dark copies too, since the
+			// light hover/pressed fill must stay readable.
+			const int nCopies = ( crGlyphFg == GLYPH_COLOR_LIGHT || m_bCustomIconColor ) ? 2 : 1;
 			m_cxImage = cxImage;	// dropdown button target width (cell + arrow strip)
 			m_himageToolbar = BuildToolbarImageList( cxButtonSize, crGlyphFg, m_iMode, nCopies );
 			if( !m_himageToolbar ){
@@ -1667,7 +1678,7 @@ public:
 		int cxImage = cxButtonSize + cxStrip;
 		COLORREF crGlyphFg = GetBarGlyphColor();
 		m_crGlyphFg = crGlyphFg;
-		const int nCopies = ( crGlyphFg == GLYPH_COLOR_LIGHT ) ? 2 : 1;
+		const int nCopies = ( crGlyphFg == GLYPH_COLOR_LIGHT || m_bCustomIconColor ) ? 2 : 1;
 		HIMAGELIST himlNew = BuildToolbarImageList( cxButtonSize, crGlyphFg, m_iMode, nCopies );
 		if( !himlNew ){
 			return;
@@ -1945,6 +1956,9 @@ public:
 		ZERO_INIT_FIRST_MEM( CMyFrame, m_hwndToolbar );
 		m_cxImage = 0;		// set on every image-list build
 		m_nButtonPad = 0;	// measured on every AddButtons
+		m_bCustomIconColor = false;
+		m_crCustomIcon = RGB( 224, 224, 224 );
+		m_bIconColorDirty = false;
 		m_nBand = (UINT)-1;
 	}
 
@@ -2018,6 +2032,16 @@ public:
 		CenterWindow( hDlg );
 		VERIFY( CheckDlgButton( hDlg, IDC_AUTO_DISPLAY, m_bAutoDisplay ) );
 
+		// icon color: remember the pair as loaded, so OK can tell whether
+		// the bar needs a re-render
+		m_bIconColorDirty = false;
+		CheckRadioButton( hDlg, IDC_RADIO_ICON_AUTO, IDC_RADIO_ICON_CUSTOM,
+			m_bCustomIconColor ? IDC_RADIO_ICON_CUSTOM : IDC_RADIO_ICON_AUTO );
+		TCHAR szColor[16];
+		StringPrintf( szColor, _countof( szColor ), _T("#%02X%02X%02X"),
+			GetRValue( m_crCustomIcon ), GetGValue( m_crCustomIcon ), GetBValue( m_crCustomIcon ) );
+		SetDlgItemText( hDlg, IDC_BTN_ICON_COLOR, szColor );
+
 		TCHAR szText[40];
 		LoadString( EEGetLocaleInstanceHandle(), IDS_CONFIGS, szText, _countof( szText ) );
 
@@ -2065,10 +2089,19 @@ public:
 		EnableWindow( GetDlgItem( hDlg, IDC_LIST ), m_bAutoDisplay );
 	}
 
+	void UpdateIconColorButton( HWND hDlg )
+	{
+		TCHAR szColor[16];
+		StringPrintf( szColor, _countof( szColor ), _T("#%02X%02X%02X"),
+			GetRValue( m_crCustomIcon ), GetGValue( m_crCustomIcon ), GetBValue( m_crCustomIcon ) );
+		SetDlgItemText( hDlg, IDC_BTN_ICON_COLOR, szColor );
+	}
+
 	void OnPropCommand( HWND hDlg, WPARAM wParam )
 	{
 		if( wParam == IDOK ){
 			m_bAutoDisplay = !!IsDlgButtonChecked( hDlg, IDC_AUTO_DISPLAY );
+			m_bCustomIconColor = IsDlgButtonChecked( hDlg, IDC_RADIO_ICON_CUSTOM ) ? true : false;
 
 			m_AutoConfigArray.clear();
 			HWND hwndList = GetDlgItem( hDlg, IDC_LIST );
@@ -2083,6 +2116,14 @@ public:
 			}
 			SaveProfile();
 			EndDialog( hDlg, IDOK );
+
+			// the icon color changed: the bar must be re-created so the
+			// glyph color and the dark copies match the new setting
+			if( m_bIconColorDirty && m_hwndToolbar && m_bVisible ){
+				Editor_ToolbarClose( m_hWnd, m_nClientID );
+				CustomBarClosed();
+				DisplayBar( true );
+			}
 		}
 		else if( wParam == IDCANCEL ){
 			EndDialog( hDlg, IDCANCEL );
@@ -2090,6 +2131,24 @@ public:
 		else if( wParam == IDC_AUTO_DISPLAY ){
 			BOOL bEnabled = IsDlgButtonChecked( hDlg, IDC_AUTO_DISPLAY );
 			EnableWindow( GetDlgItem( hDlg, IDC_LIST ), bEnabled );
+		}
+		else if( wParam == IDC_RADIO_ICON_AUTO || wParam == IDC_RADIO_ICON_CUSTOM ){
+			m_bIconColorDirty = true;
+		}
+		else if( wParam == IDC_BTN_ICON_COLOR ){
+			CHOOSECOLOR cc = {};
+			static COLORREF acrCust[16] = {};
+			cc.lStructSize = sizeof( cc );
+			cc.hwndOwner = hDlg;
+			cc.rgbResult = m_crCustomIcon;
+			cc.lpCustColors = acrCust;
+			cc.Flags = CC_FULLOPEN | CC_RGBINIT;
+			if( ChooseColor( &cc ) ){
+				m_crCustomIcon = cc.rgbResult;
+				CheckRadioButton( hDlg, IDC_RADIO_ICON_AUTO, IDC_RADIO_ICON_CUSTOM, IDC_RADIO_ICON_CUSTOM );
+				UpdateIconColorButton( hDlg );
+				m_bIconColorDirty = true;
+			}
 		}
 		else if( wParam == IDC_CUSTOMIZE ){
 			OnCustomize( hDlg );
@@ -2157,6 +2216,8 @@ public:
 			m_bProfileLoaded = true;
 			m_bOpenStartup = !!GetProfileInt( _T("OpenStartup"), FALSE );
 			m_bAutoDisplay = !!GetProfileInt( _T("AutoDisplay"), FALSE );
+			m_bCustomIconColor = !!GetProfileInt( _T("IconColorMode"), FALSE );
+			m_crCustomIcon = (COLORREF)GetProfileInt( _T("IconColor"), (int)RGB( 224, 224, 224 ) );
 			m_cx = GetProfileInt( _T("cx"), 0 );
 			m_fStyle = GetProfileInt( _T("Style"), 0 );
 			m_nBand = GetProfileInt( _T("Band"), -1 );
@@ -2173,6 +2234,8 @@ public:
 		if( m_bUninstalling )  return;
 //		WriteProfileInt( _T("OpenStartup"), m_bOpenStartup );
 		WriteProfileInt( _T("AutoDisplay"), !!m_bAutoDisplay );
+		WriteProfileInt( _T("IconColorMode"), !!m_bCustomIconColor );
+		WriteProfileInt( _T("IconColor"), (int)m_crCustomIcon );
 		WriteProfileInt( _T("cx"), m_cx );
 		WriteProfileInt( _T("Style"), m_fStyle );
 		WriteProfileInt( _T("Band"), m_nBand );

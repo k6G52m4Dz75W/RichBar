@@ -149,6 +149,11 @@ set for every button.
 
 ## Runtime notes
 
+- **Ink color**: Auto mode picks `RGB(48,48,48)` / `RGB(224,224,224)` from
+  the band-background luminance. A user-picked custom color (plug-in
+  properties, persisted as `IconColorMode` + `IconColor`) replaces the
+  normal-state ink entirely — hover/pressed stay dark on the light
+  highlight fill, which is why custom mode always renders the dark copies.
 - The subset is embedded in `RichBar.dll` as an `RCDATA` resource
   (`IDR_ICON_FONT`, resource ID 200) and loaded into process-private memory
   with `AddFontMemResourceEx`: **no system font installation and no

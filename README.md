@@ -7,7 +7,7 @@ toolbar, forked from the official Emurasoft HTMLBar plug-in source
 (`19.5.0`). It is meant to replace the HTML/Markdown toolbar built into
 EmEditor v26 (closed source, with most tags hidden inside dropdown menus).
 
-Current release: **0.17.19 — 2026-09-19**.
+Current release: **0.18.0 — 2026-09-20**.
 
 ## Features
 
@@ -101,6 +101,12 @@ adaptivity changed. The 59 unique names and codepoints are mapped in
   toolbar omits `TBSTYLE_EX_DRAWDDARROWS`, so the control draws no arrow
   of its own and no foreign colors can appear; clicking the whole button
   delivers `TBN_DROPDOWN` and opens the menu, and hovering opens it too.
+- **Custom icon color**: the plug-in properties dialog offers *Auto*
+  (the default — ink is black or white by band-background luminance) or
+  *Custom* — any color picked in the standard color dialog, applied to
+  the glyphs and the dropdown arrow, persisted with the other settings.
+  Hover/pressed ink stays dark for readability on the light highlight
+  fill.
 - The **legacy colored HTML BMPs are no longer loaded** (their resources
   remain in the DLL, and the plug-in entry icon still uses its own bitmap).
   Because both modes draw monochrome glyphs, the **hover (hot) image list

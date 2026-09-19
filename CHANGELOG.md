@@ -14,6 +14,26 @@ this code base:
 | `0.4.x`       | Compatibility fixes that make the original plug-in build and load correctly on modern EmEditor (v26). |
 | `0.9.0` – `0.17.x` | The HTML + Markdown dual-mode toolbar, heading towards `1.0.0`. |
 
+## [0.18.0] - 2026-09-20
+
+### Added
+
+- **Custom icon color** (first feature release of the 0.18 line): the
+  plug-in properties dialog gains an *Icon color* row — **Auto** keeps the
+  established band-luminance black/white behavior, **Custom** pins the
+  glyph ink (and the live-drawn dropdown arrow) to any color picked with
+  the standard Windows color dialog. The mode and the color persist with
+  the other settings, and confirming the dialog re-renders the bar.
+  Hover/pressed ink always stays dark: those fills are the control's
+  light system highlight, so custom mode simply always builds the
+  dark-glyph copies; the contrast of the custom color against the band
+  background is the user's call.
+
+### Changed
+
+- carries the tail of the 0.17.22–0.17.23 arrow-position tuning (no
+  functional notes).
+
 ## [0.17.20] - 2026-09-19
 
 ### Fixed
