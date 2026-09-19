@@ -2381,6 +2381,17 @@ public:
 		return NULL;
 	}
 
+	LRESULT ForwardToolbarCustomDraw( WPARAM wParam, LPARAM lParam )
+	{
+		// experiment: hand the toolbar's NM_CUSTOMDRAW to EmEditor's frame,
+		// asking the program to take over the toolbar's colors the same way
+		// EI_WM_CTLCOLOR hands painting decisions to EmEditor. If EmEditor
+		// styles foreign toolbars' custom draw, its colors apply; if it
+		// ignores the notification it returns CDRF_DODEFAULT and nothing
+		// changes.
+		return SendMessage( m_hWnd, WM_NOTIFY, wParam, lParam );
+	}
+
 	void OnThemeChanged( HWND hwnd )
 	{
 		Editor_Info( hwnd, EI_WM_THEMECHANGED, (LPARAM)hwnd );
@@ -3379,6 +3390,11 @@ INT_PTR CALLBACK NewProc( HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam )
 	case WM_NOTIFY:
 		{
 			CMyFrame* pFrame = static_cast<CMyFrame*>(GetFrame( hwnd ));
+			// experiment: route the toolbar's custom-draw notifications to
+			// EmEditor first (see ForwardToolbarCustomDraw)
+			if( ((NMHDR*)lParam)->code == NM_CUSTOMDRAW && pFrame ){
+				return pFrame->ForwardToolbarCustomDraw( wParam, lParam );
+			}
 			pFrame->OnDlgNotify( (NMHDR*)lParam );
 		}
 		break;
