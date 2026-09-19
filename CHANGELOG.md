@@ -14,19 +14,6 @@ this code base:
 | `0.4.x`       | Compatibility fixes that make the original plug-in build and load correctly on modern EmEditor (v26). |
 | `0.9.0` – `0.17.x` | The HTML + Markdown dual-mode toolbar, heading towards `1.0.0`. |
 
-## [0.17.6] - 2026-09-19
-
-### Changed
-
-- **Minimal isolated experiment**: on a dark band the toolbar window now
-  switches to the system dark toolbar theme (`SetWindowTheme DarkMode_Explorer`),
-  so the control draws its own wholedropdown arrows (and hover/pressed fills)
-  with the dark variant's light colors. Nothing else changes — button styles,
-  image lists, hover logic and the pressed-state dark copies are exactly the
-  restored 0.15.7 architecture. Purpose: cleanly test, for the first time,
-  whether the control's fixed-color dropdown arrow actually follows the theme
-  class on this Windows build. Light bands are untouched.
-
 ## [0.17.5] - 2026-09-19
 
 ### Fixed
