@@ -388,6 +388,7 @@ public:
 	WNDPROC m_wpOldToolbarProc;	// toolbar subclass chain
 	int m_nLightIcons;	// images before the pressed-state dark copies appended below them
 	int m_cxImage;		// wide list canvas: cell + marker strip at the current DPI
+	int m_nButtonPad;	// the control's per-button padding: button width - image width
 	UINT m_nHoverMenuCmd;		// dropdown command waiting for the hover-open timer
 	UINT m_nLastMenuCmd;		// dropdown whose menu closed last; reopen only after the mouse leaves it
 	bool m_bLastMenuLeft;		// the mouse has left m_nLastMenuCmd since its menu closed
@@ -1173,12 +1174,34 @@ public:
 		}
 
 		SendMessage( hwndToolbar, TB_ADDBUTTONSA, (WPARAM)( nCmd + 3 ), (LPARAM)atb );
-		// dropdown buttons widen by the marker strip; everything else stays
-		// one cell wide
+		// The control sizes image buttons to image + its own padding and
+		// clips images to that padded content area, so the dropdown buttons
+		// must be wider by the strip AND the padding — otherwise the right
+		// half of the baked marker is clipped off. Measure the padding from
+		// a plain command button (its width is image + padding by design).
+		int iPlain = -1;
+		for( size_t k = 0; k < nCmd; k++ ){
+			if( m_CmdArray[m_iMode][k].m_iCmd != CMD_SEPARATOR && !IsDropdownCmdCode( m_CmdArray[m_iMode][k].m_iCmd ) ){
+				iPlain = (int)k;
+				break;
+			}
+		}
+		if( iPlain >= 0 ){
+			RECT rc = {};
+			if( SendMessage( hwndToolbar, TB_GETITEMRECT, (WPARAM)( iPlain + 3 ), (LPARAM)&rc ) ){
+				int ilcx = 0, ilcy = 0;
+				if( m_himageToolbar ){
+					ImageList_GetIconSize( m_himageToolbar, &ilcx, &ilcy );
+				}
+				m_nButtonPad = max( 0, (int)( rc.right - rc.left ) - ilcx );
+			}
+		}
+		// dropdown buttons widen by the marker strip plus the padding;
+		// everything else stays at the control's own width
 		TBBUTTONINFO bi = {};
 		bi.cbSize = sizeof( bi );
 		bi.dwMask = TBIF_SIZE;
-		bi.cx = (UINT)m_cxImage;
+		bi.cx = (UINT)( m_cxImage + m_nButtonPad );
 		for( size_t k = 0; k < nCmd; k++ ){
 			if( IsDropdownCmdCode( m_CmdArray[m_iMode][k].m_iCmd ) ){
 				SendMessage( hwndToolbar, TB_SETBUTTONINFO, (WPARAM)( k + ID_COMMAND_BASE ), (LPARAM)&bi );
@@ -1191,6 +1214,7 @@ public:
 	{
 		return m_hwndToolbar && m_bVisible;
 	}
+
 
 	void CheckToolbarSize()
 	{

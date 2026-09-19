@@ -14,6 +14,21 @@ this code base:
 | `0.4.x`       | Compatibility fixes that make the original plug-in build and load correctly on modern EmEditor (v26). |
 | `0.9.0` – `0.17.x` | The HTML + Markdown dual-mode toolbar, heading towards `1.0.0`. |
 
+## [0.17.16] - 2026-09-19
+
+### Fixed
+
+- **The mixed button widths now actually show.** The control pads every
+  image button (button width = image width + padding) and clips images to
+  that padded content area, so a dropdown button sized to exactly the wide
+  image (cell + strip) clipped the strip's right half — the vertical cut
+  through the middle of the baked triangle. Dropdown buttons are now sized
+  to image + strip + the control's own padding, with the padding measured
+  live from a plain button (DPI- and settings-proof): plain buttons stay
+  at the control's own width, the three dropdown buttons are genuinely
+  wider, and the wide image fits whole. The temporary layout diagnostics
+  from the debugging round are removed again.
+
 ## [0.17.15] - 2026-09-19
 
 ### Changed
