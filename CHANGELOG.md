@@ -14,25 +14,6 @@ this code base:
 | `0.4.x`       | Compatibility fixes that make the original plug-in build and load correctly on modern EmEditor (v26). |
 | `0.9.0` – `0.17.x` | The HTML + Markdown dual-mode toolbar, heading towards `1.0.0`. |
 
-## [0.17.7] - 2026-09-19
-
-### Changed
-
-- **0.17.6 withdrawn with an empirical result: the toolbar control's
-  wholedropdown arrow color does NOT follow the theme class.** Applying
-  `DarkMode_Explorer` to the toolbar changed nothing about the arrow on
-  this Windows build, so the arrow's color is beyond both the plug-in and
-  the theme class. (EmEditor's own toolbar arrows do invert in Very Dark,
-  so a correct result is achievable in principle.)
-- **New experiment: let EmEditor take over the toolbar's colors.** The
-  toolbar's `NM_CUSTOMDRAW` notifications are now forwarded to EmEditor's
-  frame window, asking the program to style our toolbar the same way it
-  styles its own (analogous to the official `EI_WM_CTLCOLOR` channel). If
-  EmEditor handles foreign toolbars' custom draw, the arrows and fills
-  follow Very Dark; if it ignores the notification it returns
-  `CDRF_DODEFAULT` and the appearance is unchanged. All other code is the
-  restored 0.15.7 architecture.
-
 ## [0.17.5] - 2026-09-19
 
 ### Fixed
