@@ -2371,20 +2371,6 @@ public:
 		}
 	}
 
-	COLORREF ToolbarArrowColor( bool bHot ) const
-	{
-		// The wholedropdown arrow is painted by the toolbar control itself;
-		// through TBCDRF_USECDCOLORS we only relay the color that EmEditor's
-		// measured band background implies - nothing is drawn by us. Resting
-		// on a dark band the arrow is light, on a light band it is dark. The
-		// hot/pressed states sit on the control's light highlight fill, where
-		// a dark arrow reads in both cases (matching EmEditor's own toolbar).
-		if( bHot ){
-			return GLYPH_COLOR_DARK;
-		}
-		return m_crGlyphFg;
-	}
-
 	HBRUSH GetVeryDarkBrush( HWND hwnd, HDC hdc )
 	{
 		// official Very Dark adaptation: EmEditor hands out its dark background
@@ -3393,21 +3379,6 @@ INT_PTR CALLBACK NewProc( HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam )
 	case WM_NOTIFY:
 		{
 			CMyFrame* pFrame = static_cast<CMyFrame*>(GetFrame( hwnd ));
-			// experiment: the system still paints everything itself; through
-			// TBCDRF_USECDCOLORS we only relay the color EmEditor's measured
-			// band implies, so the control's own dropdown arrows follow the bar
-			if( ((NMHDR*)lParam)->code == NM_CUSTOMDRAW && pFrame ){
-				NMTBCUSTOMDRAW* pTBCD = (NMTBCUSTOMDRAW*)lParam;
-				if( pTBCD->nmcd.dwDrawStage == CDDS_PREPAINT ){
-					return CDRF_NOTIFYITEMDRAW;
-				}
-				if( pTBCD->nmcd.dwDrawStage == CDDS_ITEMPREPAINT ){
-					const bool bHot = ( pTBCD->nmcd.uItemState & ( CDIS_HOT | CDIS_SELECTED ) ) != 0;
-					pTBCD->clrText = pFrame->ToolbarArrowColor( bHot );
-					return TBCDRF_USECDCOLORS | CDRF_DODEFAULT;
-				}
-				return CDRF_DODEFAULT;
-			}
 			pFrame->OnDlgNotify( (NMHDR*)lParam );
 		}
 		break;
