@@ -131,19 +131,21 @@ Since 0.17.0 the leftmost mode-switch pair also draws from this subset
 | 20 | Mode switch: HTML | `html5-fill` | U+EE40 |
 | 21 | Mode switch: Markdown | `markdown-fill` | U+EF1D |
 
-## Dropdown arrow marker (since 0.17.9)
+## Dropdown arrow marker (since 0.17.9, Word-style split layout since 0.17.10)
 
 | Purpose | Remix Icon name | Codepoint |
 |---|---|---|
 | Dropdown arrows on the heading / font / form buttons | `arrow-down-s-fill` | U+EA4D |
 
 The toolbar sets no `TBSTYLE_EX_DRAWDDARROWS`, so the common control draws
-no dropdown arrows of its own. `DrawDropdownMarker` instead anchors this
-glyph's ink to the bottom-right corner of the dropdown buttons' icon
-bitmaps (`GGO_METRICS` gives the exact ink box), in the band-aware glyph
-color. Icons belonging to dropdown commands are resolved from the current
-command array, so the marker follows icon customization, and it rides the
-normal/hot/pressed image-list states like every other glyph.
+no dropdown arrows of its own. Every image is one glyph cell plus a
+dedicated arrow strip on the right; `DrawDropdownMarker` centers this
+glyph's ink in the strip (`GGO_METRICS` gives the exact ink box), in the
+band-aware glyph color, leaving the glyph cell pixel-identical. Icons
+belonging to dropdown commands are resolved from the current command array
+(loaded before the image lists are built), so the marker follows icon
+customization, and it rides the normal/hot/pressed image-list states like
+every other glyph.
 
 ## Runtime notes
 

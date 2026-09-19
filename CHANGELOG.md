@@ -14,6 +14,32 @@ this code base:
 | `0.4.x`       | Compatibility fixes that make the original plug-in build and load correctly on modern EmEditor (v26). |
 | `0.9.0` – `0.17.x` | The HTML + Markdown dual-mode toolbar, heading towards `1.0.0`. |
 
+## [0.17.10] - 2026-09-19
+
+### Fixed
+
+- **0.17.9 shipped without a single marker** — the command array is loaded
+  *after* the image lists are built in `DisplayBar`, so `IsDropdownIconIndex`
+  found nothing at bake time and no bitmap ever got an arrow (the system
+  arrow was already gone, hence "no triangle at all"). `LoadCmdArray` now
+  runs before the image-list build.
+- **The bottom-right corner overlay could not stay legible anyway**: at
+  16 px the heading / font / form glyphs' ink reaches into the bottom-right
+  corner, and a same-colored marker merges with it (the exact "merged into
+  one glyph" failure of 0.17.5, confirmed by pixel-level ink maps). The
+  layout is now Word-style split images: every image is one glyph cell plus
+  a dedicated 6 px (96 DPI, DPI-scaled) arrow strip on the right, the glyph
+  cell is rendered pixel-identical to before, and the `arrow-down-s-fill`
+  marker is centered in the strip. Buttons widen accordingly
+  (`TB_SETBUTTONSIZE`); bar width follows via `TB_GETMAXSIZE` as before.
+
+### Changed
+
+- `tools/test-icon-rendering.ps1` asserts the stronger guarantees: the
+  glyph cell is pixel-identical with and without the marker, the marker
+  ink stays confined to the strip (validated against `GGO_METRICS`), and
+  only dropdown-command icons carry it.
+
 ## [0.17.9] - 2026-09-18
 
 ### Fixed

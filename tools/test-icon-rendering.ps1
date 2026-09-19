@@ -241,7 +241,7 @@ static void TestImageLists(bool fallback) {
             renderer.m_iMode = mode;
             int count = mode == MODE_HTML ? 48 : 20;
             for (COLORREF fg : {RGB(48,48,48), RGB(224,224,224)}) {
-                HIMAGELIST list = renderer.BuildToolbarImageList(size, fg, mode);
+                HIMAGELIST list = renderer.BuildToolbarImageList(size + 6, size, fg, mode);
                 Check(list && ImageList_GetImageCount(list) == count+2, "wrong command image-list count (commands + H/M)");
                 for (int icon = 0; icon < count+2; ++icon) {
                     currentIcon = icon + (mode == MODE_MD ? 100 : 200);
@@ -249,7 +249,7 @@ static void TestImageLists(bool fallback) {
                     HDC dc = CreateCompatibleDC(NULL);
                     BITMAPINFO info = {};
                     info.bmiHeader.biSize = sizeof(BITMAPINFOHEADER);
-                    info.bmiHeader.biWidth = size; info.bmiHeader.biHeight = -size;
+                    info.bmiHeader.biWidth = size + 6; info.bmiHeader.biHeight = -size;
                     info.bmiHeader.biPlanes = 1; info.bmiHeader.biBitCount = 32;
                     void* bits = NULL;
                     HBITMAP bmp = CreateDIBSection(dc, &info, DIB_RGB_COLORS, &bits, NULL, 0);
@@ -257,12 +257,12 @@ static void TestImageLists(bool fallback) {
                     HGDIOBJ old = SelectObject(dc, bmp);
                     HICON hicon = ImageList_GetIcon(list, icon, ILD_TRANSPARENT);
                     Check(hicon != NULL, "ImageList_GetIcon failed");
-                    Check(DrawIconEx(dc, 0, 0, hicon, size, size, 0, NULL, DI_NORMAL), "DrawIconEx failed");
+                    Check(DrawIconEx(dc, 0, 0, hicon, size + 6, size, 0, NULL, DI_NORMAL), "DrawIconEx failed");
                     if (hicon) DestroyIcon(hicon);
                     GdiFlush();
                     DWORD* px = (DWORD*)bits;
                     bool ink = false;
-                    for (int p = 0; p < size*size; ++p) if ((px[p] & 0xFFFFFF) != 0xFF00FF) ink = true;
+                    for (int p = 0; p < (size + 6)*size; ++p) if ((px[p] & 0xFFFFFF) != 0xFF00FF) ink = true;
                     Check(ink == !fallback, "image-list slot ink state wrong");
                     ++comparisons;
                     SelectObject(dc, old); DeleteObject(bmp); DeleteDC(dc);
@@ -276,27 +276,27 @@ static void TestImageLists(bool fallback) {
     sprintf(msg, "PASS actual HTML/MD image lists: %d slot checks (%s)\n", comparisons, fallback ? "fallback" : "Remix");
     fputs(msg, stdout);
 }
-static std::vector<DWORD> SlotPixels(HIMAGELIST list, int icon, int size) {
+static std::vector<DWORD> SlotPixels(HIMAGELIST list, int icon, int w, int h) {
     HDC dc = CreateCompatibleDC(NULL);
     Check(dc != NULL, "CreateCompatibleDC failed");
     BITMAPINFO info = {};
     info.bmiHeader.biSize = sizeof(BITMAPINFOHEADER);
-    info.bmiHeader.biWidth = size; info.bmiHeader.biHeight = -size;
+    info.bmiHeader.biWidth = w; info.bmiHeader.biHeight = -h;
     info.bmiHeader.biPlanes = 1; info.bmiHeader.biBitCount = 32;
     void* bits = NULL;
     HBITMAP bmp = CreateDIBSection(dc, &info, DIB_RGB_COLORS, &bits, NULL, 0);
     Check(bmp && bits, "slot bitmap allocation failed");
     HGDIOBJ old = SelectObject(dc, bmp);
-    RECT rc = {0, 0, size, size};
+    RECT rc = {0, 0, w, h};
     HBRUSH bg = CreateSolidBrush(RGB(255, 0, 255));
     FillRect(dc, &rc, bg);
     DeleteObject(bg);
     HICON hicon = ImageList_GetIcon(list, icon, ILD_TRANSPARENT);
     Check(hicon != NULL, "ImageList_GetIcon failed");
-    Check(DrawIconEx(dc, 0, 0, hicon, size, size, 0, NULL, DI_NORMAL), "DrawIconEx failed");
+    Check(DrawIconEx(dc, 0, 0, hicon, w, h, 0, NULL, DI_NORMAL), "DrawIconEx failed");
     if (hicon) DestroyIcon(hicon);
     GdiFlush();
-    std::vector<DWORD> px((DWORD*)bits, (DWORD*)bits + size*size);
+    std::vector<DWORD> px((DWORD*)bits, (DWORD*)bits + (size_t)w*h);
     SelectObject(dc, old);
     DeleteObject(bmp);
     DeleteDC(dc);
@@ -306,37 +306,47 @@ static void TestDropdownMarkers() {
     htmlTests = true;
     expectMarker = true;
     currentColor = RGB(224, 224, 224);
+    const int strip = 6;    // harness runs at 96 DPI
     for (int size : {16, 24}) {
+        int wide = size + strip;
         Renderer marked;
         marked.m_iMode = MODE_HTML;
         marked.m_CmdArray[MODE_HTML] = { {6, 777}, {17, 777}, {1, 555} };
-        HIMAGELIST list = marked.BuildToolbarImageList(size, RGB(224,224,224), MODE_HTML);
+        HIMAGELIST list = marked.BuildToolbarImageList(wide, size, RGB(224,224,224), MODE_HTML);
         Check(list && ImageList_GetImageCount(list) == 50, "wrong command image-list count");
         currentSize = size;
         currentIcon = 6;
-        auto with6 = SlotPixels(list, 6, size);
+        auto with6 = SlotPixels(list, 6, wide, size);
         currentIcon = 17;
-        auto with17 = SlotPixels(list, 17, size);
+        auto with17 = SlotPixels(list, 17, wide, size);
         currentIcon = 1;
-        auto with1 = SlotPixels(list, 1, size);
+        auto with1 = SlotPixels(list, 1, wide, size);
         ImageList_Destroy(list);
 
         Renderer plain;
         plain.m_iMode = MODE_HTML;
-        HIMAGELIST bare = plain.BuildToolbarImageList(size, RGB(224,224,224), MODE_HTML);
+        HIMAGELIST bare = plain.BuildToolbarImageList(wide, size, RGB(224,224,224), MODE_HTML);
         currentIcon = 6; currentSize = size;
-        auto bare6 = SlotPixels(bare, 6, size);
+        auto bare6 = SlotPixels(bare, 6, wide, size);
         currentIcon = 17;
-        auto bare17 = SlotPixels(bare, 17, size);
+        auto bare17 = SlotPixels(bare, 17, wide, size);
         currentIcon = 1;
-        auto bare1 = SlotPixels(bare, 1, size);
+        auto bare1 = SlotPixels(bare, 1, wide, size);
         ImageList_Destroy(bare);
 
-        // the marker's ink is pinned to the bitmap's bottom-right corner; its
-        // em is cx*12/16 and the ink spans 0.5em x 0.25em of that
-        int em = max(8, size * 12 / 16);
-        // measure the marker's ink box exactly the way DrawDropdownMarker
-        // places it, so the allowed zone follows the real glyph metrics
+        // the glyph cell itself must stay untouched: the marker lives only
+        // in the strip to the right of it
+        for (int y = 0; y < size; ++y) for (int x = 0; x < size; ++x) {
+            Check(with6[(size_t)y*wide + x] == bare6[(size_t)y*wide + x],
+                "marker leaked into the glyph cell (icon 6)");
+            Check(with17[(size_t)y*wide + x] == bare17[(size_t)y*wide + x],
+                "marker leaked into the glyph cell (icon 17)");
+        }
+
+        // the marker's em is strip*5/3; measure its ink box exactly the way
+        // DrawDropdownMarker centers it in the strip, so the allowed zone
+        // follows the real glyph metrics
+        int em = max(8, strip * 5 / 3);
         HDC mdc = CreateCompatibleDC(NULL);
         Check(mdc != NULL, "marker zone DC failed");
         HFONT mf = CreateFontW(-em, 0, 0, 0, FW_NORMAL, FALSE, FALSE, FALSE,
@@ -348,17 +358,17 @@ static void TestDropdownMarkers() {
         MAT2 mat = { {0,1}, {0,0}, {0,0}, {0,1} };
         Check(GetGlyphOutlineW(mdc, markerGlyph, GGO_METRICS, &gmm, 0, NULL, &mat) != GDI_ERROR &&
             gmm.gmBlackBoxX > 0 && gmm.gmBlackBoxY > 0, "marker GGO metrics failed");
-        int inkLeft = size - 1 - gmm.gmptGlyphOrigin.x - gmm.gmBlackBoxX;
-        int inkTop = size - 1 - gmm.gmBlackBoxY;
+        int inkLeft = (size + wide) / 2 - gmm.gmBlackBoxX / 2;
+        int inkTop = (size + 2 * gmm.gmptGlyphOrigin.y - gmm.gmBlackBoxY) / 2 - gmm.gmptGlyphOrigin.y;
         SelectObject(mdc, mold);
         DeleteObject(mf);
         DeleteDC(mdc);
         int zx = inkLeft - 2, zy = inkTop - 2;
         auto ZoneDiff = [&](const std::vector<DWORD>& a, const std::vector<DWORD>& b) {
             int diff = 0;
-            for (int y = 0; y < size; ++y) for (int x = 0; x < size; ++x) {
-                if (a[(size_t)y*size + x] != b[(size_t)y*size + x]) {
-                    Check(x >= zx && y >= zy, "marker render changed pixels outside the corner zone");
+            for (int y = 0; y < size; ++y) for (int x = 0; x < wide; ++x) {
+                if (a[(size_t)y*wide + x] != b[(size_t)y*wide + x]) {
+                    Check(x >= zx && y >= zy, "marker render changed pixels outside the strip zone");
                     ++diff;
                 }
             }
@@ -371,7 +381,7 @@ static void TestDropdownMarkers() {
     }
     Check(markerDraws == 4, "marker glyph draw count wrong");
     Renderer::ReleaseMdIconFont();
-    printf("PASS dropdown marker: corner-anchored on dropdown icons only\n");
+    printf("PASS dropdown marker: strip-centered, glyph cell untouched, dropdown icons only\n");
 }
 int main(int argc, char** argv) {
     Check(argc == 2, "expected normal, add-fail or missing-glyph argument");
