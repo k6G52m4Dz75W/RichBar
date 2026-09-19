@@ -1705,7 +1705,7 @@ public:
 		const int nDPI = (int)Editor_DocInfo( m_hWnd, 0, EI_GET_DPI, 0 );
 		COLORREF crFg = ( uItemState & ( CDIS_HOT | CDIS_SELECTED ) ) ? GLYPH_COLOR_DARK : m_crGlyphFg;
 		const int em = MulDiv( 13, nDPI, DEFAULT_DPI );	// ink ≈ 6.5 logical px wide
-		const int nMargin = MulDiv( 2, nDPI, DEFAULT_DPI );
+		const int nMargin = MulDiv( 1, nDPI, DEFAULT_DPI );
 		HFONT hfontIcon = GetMdIconFont( em );
 		if( !hfontIcon ) return;
 		HFONT old = (HFONT)SelectObject( hdc, hfontIcon );
