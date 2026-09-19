@@ -241,7 +241,7 @@ static void TestImageLists(bool fallback) {
             renderer.m_iMode = mode;
             int count = mode == MODE_HTML ? 48 : 20;
             for (COLORREF fg : {RGB(48,48,48), RGB(224,224,224)}) {
-                HIMAGELIST list = renderer.BuildToolbarImageList(size + 6, size, fg, mode);
+                HIMAGELIST list = renderer.BuildToolbarImageList(size, size, fg, mode, 1, false);
                 Check(list && ImageList_GetImageCount(list) == count+2, "wrong command image-list count (commands + H/M)");
                 for (int icon = 0; icon < count+2; ++icon) {
                     currentIcon = icon + (mode == MODE_MD ? 100 : 200);
@@ -249,7 +249,7 @@ static void TestImageLists(bool fallback) {
                     HDC dc = CreateCompatibleDC(NULL);
                     BITMAPINFO info = {};
                     info.bmiHeader.biSize = sizeof(BITMAPINFOHEADER);
-                    info.bmiHeader.biWidth = size + 6; info.bmiHeader.biHeight = -size;
+                    info.bmiHeader.biWidth = size; info.bmiHeader.biHeight = -size;
                     info.bmiHeader.biPlanes = 1; info.bmiHeader.biBitCount = 32;
                     void* bits = NULL;
                     HBITMAP bmp = CreateDIBSection(dc, &info, DIB_RGB_COLORS, &bits, NULL, 0);
@@ -257,12 +257,12 @@ static void TestImageLists(bool fallback) {
                     HGDIOBJ old = SelectObject(dc, bmp);
                     HICON hicon = ImageList_GetIcon(list, icon, ILD_TRANSPARENT);
                     Check(hicon != NULL, "ImageList_GetIcon failed");
-                    Check(DrawIconEx(dc, 0, 0, hicon, size + 6, size, 0, NULL, DI_NORMAL), "DrawIconEx failed");
+                    Check(DrawIconEx(dc, 0, 0, hicon, size, size, 0, NULL, DI_NORMAL), "DrawIconEx failed");
                     if (hicon) DestroyIcon(hicon);
                     GdiFlush();
                     DWORD* px = (DWORD*)bits;
                     bool ink = false;
-                    for (int p = 0; p < (size + 6)*size; ++p) if ((px[p] & 0xFFFFFF) != 0xFF00FF) ink = true;
+                    for (int p = 0; p < size*size; ++p) if ((px[p] & 0xFFFFFF) != 0xFF00FF) ink = true;
                     Check(ink == !fallback, "image-list slot ink state wrong");
                     ++comparisons;
                     SelectObject(dc, old); DeleteObject(bmp); DeleteDC(dc);
@@ -336,7 +336,7 @@ static void TestDropdownMarkers() {
         Renderer marked;
         marked.m_iMode = MODE_HTML;
         marked.m_CmdArray[MODE_HTML] = { {6, 777}, {17, 777}, {1, 555} };
-        HIMAGELIST list = marked.BuildToolbarImageList(wide, size, RGB(224,224,224), MODE_HTML);
+        HIMAGELIST list = marked.BuildToolbarImageList(wide, size, RGB(224,224,224), MODE_HTML, 1, true);
         Check(list && ImageList_GetImageCount(list) == 50, "wrong command image-list count");
         currentSize = size;
         currentIcon = 6;
@@ -349,7 +349,7 @@ static void TestDropdownMarkers() {
 
         Renderer plain;
         plain.m_iMode = MODE_HTML;
-        HIMAGELIST bare = plain.BuildToolbarImageList(wide, size, RGB(224,224,224), MODE_HTML);
+        HIMAGELIST bare = plain.BuildToolbarImageList(wide, size, RGB(224,224,224), MODE_HTML, 1, true);
         currentIcon = 1; currentSize = size;
         auto bare1 = SlotPixels(bare, 1, wide, size);
         ImageList_Destroy(bare);

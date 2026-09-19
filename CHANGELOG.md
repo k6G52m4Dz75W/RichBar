@@ -14,6 +14,21 @@ this code base:
 | `0.4.x`       | Compatibility fixes that make the original plug-in build and load correctly on modern EmEditor (v26). |
 | `0.9.0` – `0.17.x` | The HTML + Markdown dual-mode toolbar, heading towards `1.0.0`. |
 
+## [0.17.15] - 2026-09-19
+
+### Changed
+
+- **Buttons no longer share one width: plain buttons are back to one cell,
+  only dropdown buttons widen by the marker strip.** The toolbar now uses
+  two image lists selected per button with the documented multiple-image-
+  list mechanism (`CCM_SETVERSION 5`, `iBitmap = MAKELONG(index, id)`,
+  verified against live comctl32 including hot-image-list IDs): list 0
+  carries 16 px (cell-wide) images with the glyph centered — exactly what
+  plain buttons showed before 0.17.10 — and list 1 carries the wide
+  cell + strip images for the heading / font / form buttons, whose width
+  is set per button (`TBIF_SIZE`). Dark bands get matching hot lists for
+  both sizes, and the pressed-state dark-copy swap stays within list 1.
+
 ## [0.17.14] - 2026-09-19
 
 ### Fixed

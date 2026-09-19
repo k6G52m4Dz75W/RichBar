@@ -7,7 +7,7 @@ toolbar, forked from the official Emurasoft HTMLBar plug-in source
 (`19.5.0`). It is meant to replace the HTML/Markdown toolbar built into
 EmEditor v26 (closed source, with most tags hidden inside dropdown menus).
 
-Current release: **0.17.14 — 2026-09-19**.
+Current release: **0.17.15 — 2026-09-19**.
 
 ## Features
 
@@ -92,13 +92,13 @@ adaptivity changed. The 59 unique names and codepoints are mapped in
   drawings and the HTML `?` marker are removed. A slot whose glyph cannot
   resolve (font registration failed or glyph unavailable) stays blank — an
   explicit simplification, since the font ships inside the DLL.
-- **Dropdown affordance is baked in, Word-style**: dropdown images are one
-  glyph cell plus a dedicated arrow strip on the right, and the three
-  in-bar dropdown buttons (heading, font, form) carry a small filled
-  triangle centered in that strip, drawn with the same foreground color as
-  everything else — the glyph cell itself is untouched. All other buttons
-  center their glyph on the full image width, exactly where a plain
-  cell-width image put it. The buttons keep
+- **Dropdown affordance is baked in, Word-style**: the toolbar keeps two
+  image lists — plain cell-width images for every button, and wide
+  cell + strip images used only by the three in-bar dropdown buttons
+  (heading, font, form), which widen by the strip and carry a small filled
+  triangle centered in it, drawn with the same foreground color as
+  everything else. The glyph cell itself is untouched, and plain buttons
+  keep their exact pre-strip look and width. The dropdown buttons keep
   the `BTNS_DROPDOWN` style while the toolbar omits
   `TBSTYLE_EX_DRAWDDARROWS`, so the control draws no arrow of its own and
   no foreign colors can appear; clicking the whole button delivers

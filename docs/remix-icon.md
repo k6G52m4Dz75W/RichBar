@@ -138,11 +138,13 @@ Since 0.17.0 the leftmost mode-switch pair also draws from this subset
 | Dropdown arrows on the heading / font / form buttons | `arrow-down-s-fill` | U+EA4D |
 
 The toolbar sets no `TBSTYLE_EX_DRAWDDARROWS`, so the common control draws
-no dropdown arrows of its own. Dropdown images are one glyph cell plus a
-dedicated arrow strip on the right; `DrawDropdownMarker` centers this
+no dropdown arrows of its own. It keeps two image lists: a plain
+cell-width list for every button, and a wide list (glyph cell + marker
+strip) used only by the dropdown buttons, whose width grows by the strip
+(`CCM_SETVERSION 5` + `MAKELONG(index, list)` per-button image lists, with
+matching hot lists on dark bands). `DrawDropdownMarker` centers this
 glyph's ink in the strip (`GGO_METRICS` gives the exact ink box), in the
-band-aware glyph color, leaving the glyph cell pixel-identical. All other
-icons draw the same-size glyph centered on the full image width. Icons
+band-aware glyph color, leaving the glyph cell pixel-identical. Icons
 belonging to dropdown commands are resolved from the current command array
 (loaded before the image lists are built), so the marker follows icon
 customization, and it rides the normal/hot/pressed image-list states like
