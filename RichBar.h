@@ -1153,12 +1153,13 @@ public:
 			if( it->m_iCmd == CMD_SEPARATOR ){
 				atb[i + 3].fsStyle = TBSTYLE_SEP;
 			}
-			// Every in-bar dropdown is a whole-button dropdown. The split
-			// BTNS_DROPDOWN style (font button) renders its arrow region with
-			// pressed-state drawing, which pulls from the normal image list
-			// and washes the glyph out on a dark band's light hover fill.
+			// Dropdown commands keep the dropdown behavior: the whole button
+			// sends TBN_DROPDOWN. The toolbar deliberately lacks
+			// TBSTYLE_EX_DRAWDDARROWS, so the control draws no arrow — the
+			// arrow is the Remix marker baked into the bitmap instead
+			// (see DrawDropdownMarker).
 			if( it->m_iCmd == CMD_FONT || it->m_iCmd == CMD_DROPDOWN_HEADER || it->m_iCmd == CMD_DROPDOWN_FORM ){
-				atb[i + 3].fsStyle = BTNS_WHOLEDROPDOWN;
+				atb[i + 3].fsStyle = BTNS_DROPDOWN;
 			}
 
 		}
@@ -1318,6 +1319,45 @@ public:
 		return drawn;
 	}
 
+	// The dropdown marker: Remix's arrow-down-s-fill glyph anchored to the
+	// bitmap's bottom-right corner. The toolbar control draws no arrow of its
+	// own (BTNS_DROPDOWN without TBSTYLE_EX_DRAWDDARROWS), so this baked-in
+	// marker is the only arrow — and being part of the bitmap it follows the
+	// band-aware glyph color and every normal/hot/pressed image state.
+	void DrawDropdownMarker( HDC hdc, int cx, COLORREF crFg )
+	{
+		const WCHAR wch = 0xEA4D;	// ri-arrow-down-s-fill
+		// the glyph's ink is 0.5em wide by 0.25em tall; this em size yields a
+		// ~6x3px triangle in a 16px cell, scaling with the button size
+		const int em = max( 8, cx * 12 / 16 );
+		HFONT hfontIcon = GetMdIconFont( em );
+		if( !hfontIcon ) return;
+		HFONT old = (HFONT)SelectObject( hdc, hfontIcon );
+		if( old && old != (HFONT)HGDI_ERROR ){
+			WCHAR face[LF_FACESIZE] = {};
+			WORD index = 0xFFFF;
+			if( GetTextFaceW( hdc, _countof( face ), face ) && lstrcmpiW( face, L"remixicon" ) == 0 &&
+				GetGlyphIndicesW( hdc, &wch, 1, &index, GGI_MARK_NONEXISTING_GLYPHS ) != GDI_ERROR &&
+				index != 0 && index != 0xFFFF ){
+				GLYPHMETRICS gm = {};
+				MAT2 mat = { { 0, 1 }, { 0, 0 }, { 0, 0 }, { 0, 1 } };
+				if( GetGlyphOutlineW( hdc, wch, GGO_METRICS, &gm, 0, NULL, &mat ) != GDI_ERROR &&
+					gm.gmBlackBoxX > 0 && gm.gmBlackBoxY > 0 ){
+					SetBkMode( hdc, TRANSPARENT );
+					SetTextColor( hdc, crFg );
+					// pin the ink's bottom-right corner one pixel inside the
+					// cell; TextOutW must measure from the baseline for that
+					SetTextAlign( hdc, TA_LEFT | TA_BASELINE | TA_NOUPDATECP );
+					int x = cx - 1 - gm.gmptGlyphOrigin.x - gm.gmBlackBoxX;
+					int y = cx - 1 + gm.gmptGlyphOrigin.y - gm.gmBlackBoxY;
+					TextOutW( hdc, x, y, &wch, 1 );
+				}
+			}
+			SelectObject( hdc, old );
+		}
+		DeleteObject( hfontIcon );
+	}
+
 	void DrawMdIcon( HDC hdc, int cx, int iIcon, COLORREF crFg )
 	{
 		HPEN hpen = CreatePen( PS_SOLID, max( 1, cx / 16 ), crFg );
@@ -1455,6 +1495,9 @@ public:
 				HBITMAP hbmOld = (HBITMAP)SelectObject( hdc, hbm );
 				if( mode == MODE_MD ) DrawMdIcon( hdc, cx, i, crCopyFg );
 				else DrawHtmlIcon( hdc, cx, i, crCopyFg );
+				if( IsDropdownIconIndex( i ) ){
+					DrawDropdownMarker( hdc, cx, crCopyFg );
+				}
 				SelectObject( hdc, hbmOld );
 				DeleteDC( hdc );
 				MdKeyOutBackground( cx, pvBits );
@@ -1471,6 +1514,19 @@ public:
 		// hover fills buttons with the light system highlight, so the hot list
 		// mirrors the normal list with dark glyphs to stay readable on it
 		return BuildToolbarImageList( cx, GLYPH_COLOR_DARK, m_iMode );
+	}
+
+	// icons whose button is a dropdown carry the arrow marker inside their
+	// bitmap; resolved against the current mode's command array so the marker
+	// follows icon customization
+	bool IsDropdownIconIndex( int iIcon )
+	{
+		for( const auto& cmd : m_CmdArray[m_iMode] ){
+			if( cmd.m_iIcon == iIcon && IsDropdownCmdCode( cmd.m_iCmd ) ){
+				return true;
+			}
+		}
+		return false;
 	}
 
 	void DisplayBar( bool bVisible )
@@ -1504,7 +1560,11 @@ public:
 
 			//int cx = g_metrics.ScaleY( m_bLargeToolbar ? BUTTON_SIZE_LARGE : BUTTON_SIZE_SMALL );
 			DWORD dwStyle = TBSTYLE_TOOLTIPS | TBSTYLE_TRANSPARENT | WS_CHILD | WS_CLIPCHILDREN | WS_CLIPSIBLINGS | CCS_NODIVIDER | CCS_NORESIZE | WS_VISIBLE | TBSTYLE_FLAT | CCS_NOPARENTALIGN | CCS_NOMOVEY;
-			DWORD dwExStyle = TBSTYLE_EX_HIDECLIPPEDBUTTONS | TBSTYLE_EX_DRAWDDARROWS;
+			// No TBSTYLE_EX_DRAWDDARROWS: the control-drawn dropdown arrow's
+			// color is fixed by the theme and cannot follow the band, so
+			// dropdown buttons get no system arrow; the marker is baked into
+			// the button bitmaps instead (see DrawDropdownMarker).
+			DWORD dwExStyle = TBSTYLE_EX_HIDECLIPPEDBUTTONS;
 			HWND hwndToolbar = CreateWindowEx( 0, TOOLBARCLASSNAME, NULL, dwStyle,
 				0, 0, 0, cxButtonSize, m_hDlg, (HMENU)(INT_PTR)100, NULL, NULL );
 			m_hwndToolbar = hwndToolbar;
@@ -2613,18 +2673,23 @@ public:
 		//}
 	}
 
-	bool IsDropdownCommand( UINT nIDCommand )
+	bool IsDropdownCmdCode( int iCmd )
 	{
-		if( nIDCommand < ID_COMMAND_BASE || nIDCommand >= ID_COMMAND_BASE + Cmds().size() ){
-			return false;
-		}
-		switch( Cmds()[nIDCommand - ID_COMMAND_BASE].m_iCmd ){
+		switch( iCmd ){
 		case CMD_FONT:
 		case CMD_DROPDOWN_HEADER:
 		case CMD_DROPDOWN_FORM:
 			return true;
 		}
 		return false;
+	}
+
+	bool IsDropdownCommand( UINT nIDCommand )
+	{
+		if( nIDCommand < ID_COMMAND_BASE || nIDCommand >= ID_COMMAND_BASE + Cmds().size() ){
+			return false;
+		}
+		return IsDropdownCmdCode( Cmds()[nIDCommand - ID_COMMAND_BASE].m_iCmd );
 	}
 
 	void ShowDropdownMenu( UINT nIDCommand, bool bPressedByMouse )

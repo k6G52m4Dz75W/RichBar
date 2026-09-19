@@ -42,6 +42,8 @@ static const WCHAR htmlExpected[] = {
     0xF0BB,0xF029,0xED9E,0xEB97,0xEA21,0xEE59,0xED3B,0xEF83
 };
 static int addCalls = 0, added = 0, removeCalls = 0, probes = 0, faceCalls = 0, puaDraws = 0;
+static int markerDraws = 0;
+static bool expectMarker = false;
 static int currentIcon = -1, currentSize = 0;
 static COLORREF currentColor = 0;
 static HANDLE liveRegistration = NULL;
@@ -73,6 +75,7 @@ static void ValidateGlyph(HDC dc, wchar_t ch) {
     Check(GetGlyphIndicesW(dc, &ch, 1, &index, GGI_MARK_NONEXISTING_GLYPHS) != GDI_ERROR &&
         index != 0 && index != 0xFFFF, "Remix glyph index is invalid");
 }
+static const WCHAR markerGlyph = 0xEA4D;
 static HANDLE AddFont(PVOID data, DWORD size, PVOID reserved, DWORD* count) {
     ++addCalls;
     Check(!liveRegistration, "duplicate memory-font registration");
@@ -121,7 +124,12 @@ static int Draw(HDC dc, LPCWSTR s, int n, LPRECT r, UINT flags) {
     return DrawTextW(dc, s, n, r, flags);
 }
 static BOOL Text(HDC dc, int x, int y, LPCWSTR s, int n) {
-    Check(!HasPua(s, n), "unexpected PUA TextOutW draw");
+    if (HasPua(s, n)) {
+        // the only permitted PUA TextOutW is the dropdown marker glyph
+        Check(expectMarker && n == 1 && s[0] == markerGlyph, "unexpected PUA TextOutW draw");
+        ++markerDraws;
+        ValidateGlyph(dc, s[0]);
+    }
     return TextOutW(dc, x, y, s, n);
 }
 #define AddFontMemResourceEx AddFont
@@ -132,6 +140,10 @@ static BOOL Text(HDC dc, int x, int y, LPCWSTR s, int n) {
 #define TextOutW Text
 struct Renderer {
     int m_iMode = MODE_MD;
+    // stub of the production command array: only what IsDropdownIconIndex needs
+    struct StubCmd { int m_iIcon; int m_iCmd; };
+    std::vector<StubCmd> m_CmdArray[2];
+    static bool IsDropdownCmdCode( int iCmd ) { return iCmd == 777; }
 '@
 $suffix = @'
 };
@@ -264,6 +276,103 @@ static void TestImageLists(bool fallback) {
     sprintf(msg, "PASS actual HTML/MD image lists: %d slot checks (%s)\n", comparisons, fallback ? "fallback" : "Remix");
     fputs(msg, stdout);
 }
+static std::vector<DWORD> SlotPixels(HIMAGELIST list, int icon, int size) {
+    HDC dc = CreateCompatibleDC(NULL);
+    Check(dc != NULL, "CreateCompatibleDC failed");
+    BITMAPINFO info = {};
+    info.bmiHeader.biSize = sizeof(BITMAPINFOHEADER);
+    info.bmiHeader.biWidth = size; info.bmiHeader.biHeight = -size;
+    info.bmiHeader.biPlanes = 1; info.bmiHeader.biBitCount = 32;
+    void* bits = NULL;
+    HBITMAP bmp = CreateDIBSection(dc, &info, DIB_RGB_COLORS, &bits, NULL, 0);
+    Check(bmp && bits, "slot bitmap allocation failed");
+    HGDIOBJ old = SelectObject(dc, bmp);
+    RECT rc = {0, 0, size, size};
+    HBRUSH bg = CreateSolidBrush(RGB(255, 0, 255));
+    FillRect(dc, &rc, bg);
+    DeleteObject(bg);
+    HICON hicon = ImageList_GetIcon(list, icon, ILD_TRANSPARENT);
+    Check(hicon != NULL, "ImageList_GetIcon failed");
+    Check(DrawIconEx(dc, 0, 0, hicon, size, size, 0, NULL, DI_NORMAL), "DrawIconEx failed");
+    if (hicon) DestroyIcon(hicon);
+    GdiFlush();
+    std::vector<DWORD> px((DWORD*)bits, (DWORD*)bits + size*size);
+    SelectObject(dc, old);
+    DeleteObject(bmp);
+    DeleteDC(dc);
+    return px;
+}
+static void TestDropdownMarkers() {
+    htmlTests = true;
+    expectMarker = true;
+    currentColor = RGB(224, 224, 224);
+    for (int size : {16, 24}) {
+        Renderer marked;
+        marked.m_iMode = MODE_HTML;
+        marked.m_CmdArray[MODE_HTML] = { {6, 777}, {17, 777}, {1, 555} };
+        HIMAGELIST list = marked.BuildToolbarImageList(size, RGB(224,224,224), MODE_HTML);
+        Check(list && ImageList_GetImageCount(list) == 50, "wrong command image-list count");
+        currentSize = size;
+        currentIcon = 6;
+        auto with6 = SlotPixels(list, 6, size);
+        currentIcon = 17;
+        auto with17 = SlotPixels(list, 17, size);
+        currentIcon = 1;
+        auto with1 = SlotPixels(list, 1, size);
+        ImageList_Destroy(list);
+
+        Renderer plain;
+        plain.m_iMode = MODE_HTML;
+        HIMAGELIST bare = plain.BuildToolbarImageList(size, RGB(224,224,224), MODE_HTML);
+        currentIcon = 6; currentSize = size;
+        auto bare6 = SlotPixels(bare, 6, size);
+        currentIcon = 17;
+        auto bare17 = SlotPixels(bare, 17, size);
+        currentIcon = 1;
+        auto bare1 = SlotPixels(bare, 1, size);
+        ImageList_Destroy(bare);
+
+        // the marker's ink is pinned to the bitmap's bottom-right corner; its
+        // em is cx*12/16 and the ink spans 0.5em x 0.25em of that
+        int em = max(8, size * 12 / 16);
+        // measure the marker's ink box exactly the way DrawDropdownMarker
+        // places it, so the allowed zone follows the real glyph metrics
+        HDC mdc = CreateCompatibleDC(NULL);
+        Check(mdc != NULL, "marker zone DC failed");
+        HFONT mf = CreateFontW(-em, 0, 0, 0, FW_NORMAL, FALSE, FALSE, FALSE,
+            DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS, ANTIALIASED_QUALITY,
+            FF_DONTCARE, L"remixicon");
+        HGDIOBJ mold = SelectObject(mdc, mf);
+        Check(mold && mold != HGDI_ERROR, "marker zone font selection failed");
+        GLYPHMETRICS gmm = {};
+        MAT2 mat = { {0,1}, {0,0}, {0,0}, {0,1} };
+        Check(GetGlyphOutlineW(mdc, markerGlyph, GGO_METRICS, &gmm, 0, NULL, &mat) != GDI_ERROR &&
+            gmm.gmBlackBoxX > 0 && gmm.gmBlackBoxY > 0, "marker GGO metrics failed");
+        int inkLeft = size - 1 - gmm.gmptGlyphOrigin.x - gmm.gmBlackBoxX;
+        int inkTop = size - 1 - gmm.gmBlackBoxY;
+        SelectObject(mdc, mold);
+        DeleteObject(mf);
+        DeleteDC(mdc);
+        int zx = inkLeft - 2, zy = inkTop - 2;
+        auto ZoneDiff = [&](const std::vector<DWORD>& a, const std::vector<DWORD>& b) {
+            int diff = 0;
+            for (int y = 0; y < size; ++y) for (int x = 0; x < size; ++x) {
+                if (a[(size_t)y*size + x] != b[(size_t)y*size + x]) {
+                    Check(x >= zx && y >= zy, "marker render changed pixels outside the corner zone");
+                    ++diff;
+                }
+            }
+            return diff;
+        };
+        int diff6 = ZoneDiff(with6, bare6), diff17 = ZoneDiff(with17, bare17);
+        Check(diff6 >= 3, "dropdown icon 6: no marker ink");
+        Check(diff17 >= 3, "dropdown icon 17: no marker ink");
+        Check(with1 == bare1, "plain icon 1 must not carry a marker");
+    }
+    Check(markerDraws == 4, "marker glyph draw count wrong");
+    Renderer::ReleaseMdIconFont();
+    printf("PASS dropdown marker: corner-anchored on dropdown icons only\n");
+}
 int main(int argc, char** argv) {
     Check(argc == 2, "expected normal, add-fail or missing-glyph argument");
     failAdd = strcmp(argv[1], "add-fail") == 0;
@@ -302,6 +411,7 @@ int main(int argc, char** argv) {
     missingGlyph = false;
     ReleaseAndCheck();
     TestImageLists(false);
+    TestDropdownMarkers();
 
     return 0;
 }
@@ -331,4 +441,4 @@ try {
     Pop-Location
     Write-Output "Test artifacts: $temp"
 }
-Write-Output 'PASS: all Lucide rendering scenarios'
+Write-Output 'PASS: all Remix icon rendering scenarios'

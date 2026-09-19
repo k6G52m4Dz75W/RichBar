@@ -12,15 +12,15 @@ replaces `docs/lucide-font.md` (the Lucide subset was removed in 0.16.0).
 - The release's `remixicon.ttf` is **613,136 bytes**, SHA256
   `cdff268662c834fbe023a8d34f77e2842c50025b093bc827c9b71adefc81b256`.
 - Bundled artifact: `remixicon_subset.ttf` at the repository root —
-  **8,924 bytes**, **61 unique icons** (plus `.notdef`), SHA256
-  `762fa5a7102a881897ebd1702d5343ee598dff44f42208fb596c89e5b75bd307`.
+  **8,964 bytes**, **62 unique icons** (plus `.notdef`), SHA256
+  `ea113337d0b9b4cb0f645f13a2e1333e0fa86884f057bb30903cc0696b3d708a`.
 
 Verify the bundled subset at any time:
 
 ```powershell
-Get-Item .\remixicon_subset.ttf | Select-Object Length    # 8924
+Get-Item .\remixicon_subset.ttf | Select-Object Length    # 8964
 Get-FileHash .\remixicon_subset.ttf -Algorithm SHA256
-# 762fa5a7102a881897ebd1702d5343ee598dff44f42208fb596c89e5b75bd307
+# ea113337d0b9b4cb0f645f13a2e1333e0fa86884f057bb30903cc0696b3d708a
 ```
 
 ## Regenerating the subset
@@ -35,8 +35,8 @@ node tools/subset-icon-font.cjs <RemixIcon fonts directory>
 - The authoritative name lists (slot order) are in
   [`tools/remix-icons.json`](../tools/remix-icons.json): the `markdown`
   array fills the Markdown slots 0–19, the `html` array fills the HTML
-  slots 0–47, and the `modes` array supplies the two `[H][M]` switch
-  glyphs.
+  slots 0–47, the `modes` array supplies the two `[H][M]` switch
+  glyphs, and the `marker` array supplies the dropdown-arrow marker.
 - Codepoints are read from the release's `remixicon.css`.
 
 ## Markdown mapping (slots 0–19)
@@ -130,6 +130,20 @@ Since 0.17.0 the leftmost mode-switch pair also draws from this subset
 |---|---|---|---|
 | 20 | Mode switch: HTML | `html5-fill` | U+EE40 |
 | 21 | Mode switch: Markdown | `markdown-fill` | U+EF1D |
+
+## Dropdown arrow marker (since 0.17.9)
+
+| Purpose | Remix Icon name | Codepoint |
+|---|---|---|
+| Dropdown arrows on the heading / font / form buttons | `arrow-down-s-fill` | U+EA4D |
+
+The toolbar sets no `TBSTYLE_EX_DRAWDDARROWS`, so the common control draws
+no dropdown arrows of its own. `DrawDropdownMarker` instead anchors this
+glyph's ink to the bottom-right corner of the dropdown buttons' icon
+bitmaps (`GGO_METRICS` gives the exact ink box), in the band-aware glyph
+color. Icons belonging to dropdown commands are resolved from the current
+command array, so the marker follows icon customization, and it rides the
+normal/hot/pressed image-list states like every other glyph.
 
 ## Runtime notes
 

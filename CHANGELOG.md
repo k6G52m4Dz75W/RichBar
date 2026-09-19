@@ -14,6 +14,38 @@ this code base:
 | `0.4.x`       | Compatibility fixes that make the original plug-in build and load correctly on modern EmEditor (v26). |
 | `0.9.0` – `0.17.x` | The HTML + Markdown dual-mode toolbar, heading towards `1.0.0`. |
 
+## [0.17.9] - 2026-09-18
+
+### Fixed
+
+- **The dropdown-arrow color finally follows the band in every theme,
+  including Very Dark.** The common control's wholedropdown arrow (fixed
+  dark gray, unreachable by any plugin-side mechanism — the withdrawn
+  0.17.1–0.17.8 experiments covered button geometry, the
+  `DarkMode_Explorer` theme class, forwarding custom draw to EmEditor and
+  `TBCDRF_USECDCOLORS`) is gone for good: the three dropdown buttons keep
+  `BTNS_DROPDOWN` (the whole button still sends `TBN_DROPDOWN`), but the
+  toolbar no longer sets `TBSTYLE_EX_DRAWDDARROWS`, so the control draws
+  no arrow at all.
+- The arrow is now Remix's `arrow-down-s-fill` glyph (U+EA4D) baked into
+  the dropdown buttons' icon bitmaps at the bottom-right corner, drawn
+  with the same band-aware glyph color as everything else — mirroring the
+  mask-color replacement EmEditor itself performs on plug-in bitmaps
+  (per the `EP_GET_MASK` mechanism). The marker rides the normal/hot/
+  pressed image-list states, so it recolors and inverts with hover/press
+  automatically, and it follows icon customization (resolved per the
+  current command array).
+
+### Changed
+
+- The subset font gains the marker glyph: **62 unique icons**, 8,964
+  bytes, SHA256
+  `ea113337d0b9b4cb0f645f13a2e1333e0fa86884f057bb30903cc0696b3d708a`.
+- `tools/test-icon-rendering.ps1` verifies the marker is baked only into
+  dropdown-command icons, anchored to the bitmap's bottom-right corner
+  (ink-box placement validated against `GGO_METRICS`), and that no other
+  pixels change.
+
 ## [0.17.5] - 2026-09-19
 
 ### Fixed
