@@ -7,7 +7,7 @@ toolbar, forked from the official Emurasoft HTMLBar plug-in source
 (`19.5.0`). It is meant to replace the HTML/Markdown toolbar built into
 EmEditor v26 (closed source, with most tags hidden inside dropdown menus).
 
-Current release: **0.17.18 — 2026-09-19**.
+Current release: **0.17.19 — 2026-09-19**.
 
 ## Features
 
@@ -92,17 +92,14 @@ adaptivity changed. The 59 unique names and codepoints are mapped in
   drawings and the HTML `?` marker are removed. A slot whose glyph cannot
   resolve (font registration failed or glyph unavailable) stays blank — an
   explicit simplification, since the font ships inside the DLL.
-- **Dropdown affordance is baked in, Word-style**: the toolbar keeps two
-  image lists — plain cell-width images for every button, and wide
-  cell + strip images used only by the three in-bar dropdown buttons
-  (heading, font, form), which widen by the strip and carry a small filled
-  triangle centered in it, drawn with the same foreground color as
-  everything else. The glyph cell itself is untouched, and plain buttons
-  keep their exact pre-strip look and width. The dropdown buttons keep
-  the `BTNS_DROPDOWN` style while the toolbar omits
-  `TBSTYLE_EX_DRAWDDARROWS`, so the control draws no arrow of its own and
-  no foreign colors can appear; clicking the whole button delivers
-  `TBN_DROPDOWN` and opens the menu, and hovering opens it too.
+- **Dropdown affordance, Word-style**: the three in-bar dropdown buttons
+  (heading, font, form) are wider by a dedicated arrow strip and their
+  small filled triangle is painted directly onto the button at draw time,
+  anchored to the button's real rect and recolored with the same
+  band-aware foreground as everything else (dark on hover/pressed). The
+  toolbar omits `TBSTYLE_EX_DRAWDDARROWS`, so the control draws no arrow
+  of its own and no foreign colors can appear; clicking the whole button
+  delivers `TBN_DROPDOWN` and opens the menu, and hovering opens it too.
 - The **legacy colored HTML BMPs are no longer loaded** (their resources
   remain in the DLL, and the plug-in entry icon still uses its own bitmap).
   Because both modes draw monochrome glyphs, the **hover (hot) image list

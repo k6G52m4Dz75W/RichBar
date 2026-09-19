@@ -14,6 +14,24 @@ this code base:
 | `0.4.x`       | Compatibility fixes that make the original plug-in build and load correctly on modern EmEditor (v26). |
 | `0.9.0` – `0.17.x` | The HTML + Markdown dual-mode toolbar, heading towards `1.0.0`. |
 
+## [0.17.19] - 2026-09-19
+
+### Changed
+
+- **The dropdown arrow is no longer baked into the bitmaps at all — it is
+  drawn live at paint time, anchored to each button's ACTUAL rect**
+  (`NM_CUSTOMDRAW` item-post-paint; the same stage comctl32 itself uses for
+  its own arrows). This removes the entire class of failures from
+  0.17.9–0.17.18: whatever the control does with image placement, padding
+  or per-button width, the arrow is positioned from the real button
+  rectangle and can never be shifted or clipped by it.
+- The image lists return to one plain cell-width set for every button
+  (the dual-list / `MAKELONG` / `CCM_SETVERSION` machinery of
+  0.17.15–0.17.18 is removed); dropdown buttons are still widened by the
+  strip purely to reserve room for the arrow. The arrow is drawn in the
+  band-aware glyph color and switches to dark ink on hover/pressed,
+  matching the hot-list behavior.
+
 ## [0.17.18] - 2026-09-19
 
 ### Changed

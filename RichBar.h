@@ -385,12 +385,10 @@ public:
 	CCmd* m_pcmdProp;
 	HWND m_hwndToolbar;
 	HIMAGELIST m_himageToolbar;
-	HIMAGELIST m_himageToolbarDD;	// wide (cell + marker strip) list for dropdown buttons
 	HIMAGELIST m_himageToolbarHot;
-	HIMAGELIST m_himageToolbarHotDD;
 	WNDPROC m_wpOldToolbarProc;	// toolbar subclass chain
 	int m_nLightIcons;	// images before the pressed-state dark copies appended below them
-	int m_cxImage;		// wide list canvas: cell + marker strip at the current DPI
+	int m_cxImage;		// dropdown button target: cell + arrow strip at the current DPI
 	int m_nButtonPad;	// the control's per-button padding: button width - image width
 	UINT m_nHoverMenuCmd;		// dropdown command waiting for the hover-open timer
 	UINT m_nLastMenuCmd;		// dropdown whose menu closed last; reopen only after the mouse leaves it
@@ -1139,11 +1137,11 @@ public:
 		if( nIcons <= 0 && m_himageToolbar ){
 			nIcons = ImageList_GetImageCount( m_himageToolbar );
 		}
-		atb[0].iBitmap = MAKELONG( max( 0, nIcons - 2 ), 0 );
+		atb[0].iBitmap = max( 0, nIcons - 2 );
 		atb[0].idCommand = ID_MODE_HTML;
 		atb[0].fsState = TBSTATE_ENABLED | ( ( m_iMode == MODE_HTML ) ? TBSTATE_CHECKED : 0 );
 		atb[0].fsStyle = BTNS_CHECK | BTNS_GROUP;
-		atb[1].iBitmap = MAKELONG( max( 0, nIcons - 1 ), 0 );
+		atb[1].iBitmap = max( 0, nIcons - 1 );
 		atb[1].idCommand = ID_MODE_MD;
 		atb[1].fsState = TBSTATE_ENABLED | ( ( m_iMode == MODE_MD ) ? TBSTATE_CHECKED : 0 );
 		atb[1].fsStyle = BTNS_CHECK | BTNS_GROUP;
@@ -1153,23 +1151,18 @@ public:
 
 		int i = 0;
 		for( CCmdArray::iterator it = m_CmdArray[m_iMode].begin(); it != m_CmdArray[m_iMode].end(); it++, i++ ) {
-			// command buttons encode the image list together with the icon
-			// index: list 0 = plain cell width, list 1 = wide (cell + marker
-			// strip) images for dropdown buttons. Separators carry their
-			// width in iBitmap instead.
-			atb[i + 3].iBitmap = MAKELONG( it->m_iIcon, IsDropdownCmdCode( it->m_iCmd ) ? 1 : 0 );
+			atb[i + 3].iBitmap = it->m_iIcon;
 			atb[i + 3].idCommand = i + ID_COMMAND_BASE;
 			atb[i + 3].fsState = TBSTATE_ENABLED;
 			atb[i + 3].fsStyle = 0;
 			if( it->m_iCmd == CMD_SEPARATOR ){
-				atb[i + 3].iBitmap = it->m_iIcon;
 				atb[i + 3].fsStyle = TBSTYLE_SEP;
 			}
 			// Dropdown commands keep the dropdown behavior: the whole button
 			// sends TBN_DROPDOWN. The toolbar deliberately lacks
 			// TBSTYLE_EX_DRAWDDARROWS, so the control draws no arrow — the
-			// arrow is the Remix marker baked into the bitmap instead
-			// (see DrawDropdownMarker).
+			// arrow is drawn live at paint time, anchored to the button's
+			// actual rect (see DrawDropdownArrow / NM_CUSTOMDRAW).
 			if( it->m_iCmd == CMD_FONT || it->m_iCmd == CMD_DROPDOWN_HEADER || it->m_iCmd == CMD_DROPDOWN_FORM ){
 				atb[i + 3].fsStyle = BTNS_DROPDOWN;
 			}
@@ -1177,11 +1170,10 @@ public:
 		}
 
 		SendMessage( hwndToolbar, TB_ADDBUTTONSA, (WPARAM)( nCmd + 3 ), (LPARAM)atb );
-		// The control sizes image buttons to image + its own padding and
-		// clips images to that padded content area, so the dropdown buttons
-		// must be wider by the strip AND the padding — otherwise the right
-		// half of the baked marker is clipped off. Measure the padding from
-		// a plain command button (its width is image + padding by design).
+		// Dropdown buttons widen by the arrow strip so the live-drawn arrow
+		// has room beside the glyph; this is purely for space — the arrow
+		// itself anchors to the real button rect at paint time, so the
+		// layout stays correct even if the control rounds the width.
 		int iPlain = -1;
 		for( size_t k = 0; k < nCmd; k++ ){
 			if( m_CmdArray[m_iMode][k].m_iCmd != CMD_SEPARATOR && !IsDropdownCmdCode( m_CmdArray[m_iMode][k].m_iCmd ) ){
@@ -1199,8 +1191,6 @@ public:
 				m_nButtonPad = max( 0, (int)( rc.right - rc.left ) - ilcx );
 			}
 		}
-		// dropdown buttons widen by the marker strip plus the padding;
-		// everything else stays at the control's own width
 		TBBUTTONINFO bi = {};
 		bi.cbSize = sizeof( bi );
 		bi.dwMask = TBIF_SIZE;
@@ -1371,51 +1361,6 @@ public:
 		return drawn;
 	}
 
-	// The dropdown marker: Remix's arrow-down-s-fill glyph right-anchored in
-	// the dedicated strip to the right of the glyph cell (Word-style split
-	// layout). The toolbar control draws no arrow of its own (BTNS_DROPDOWN
-	// without TBSTYLE_EX_DRAWDDARROWS), so this baked-in marker is the only
-	// arrow — and being part of the bitmap it follows the band-aware glyph
-	// color and every normal/hot/pressed image state.
-	void DrawDropdownMarker( HDC hdc, int cxCell, int cxImage, COLORREF crFg )
-	{
-		const WCHAR wch = 0xEA4D;	// ri-arrow-down-s-fill
-		// the glyph's ink is 0.5em wide by 0.25em tall; at 3/2 of the strip
-		// the ink fills three quarters of the strip height-wise balanced by
-		// the fixed right margin below
-		const int em = max( 8, ( cxImage - cxCell ) * 3 / 2 );
-		HFONT hfontIcon = GetMdIconFont( em );
-		if( !hfontIcon ) return;
-		HFONT old = (HFONT)SelectObject( hdc, hfontIcon );
-		if( old && old != (HFONT)HGDI_ERROR ){
-			WCHAR face[LF_FACESIZE] = {};
-			WORD index = 0xFFFF;
-			if( GetTextFaceW( hdc, _countof( face ), face ) && lstrcmpiW( face, L"remixicon" ) == 0 &&
-				GetGlyphIndicesW( hdc, &wch, 1, &index, GGI_MARK_NONEXISTING_GLYPHS ) != GDI_ERROR &&
-				index != 0 && index != 0xFFFF ){
-				GLYPHMETRICS gm = {};
-				MAT2 mat = { { 0, 1 }, { 0, 0 }, { 0, 0 }, { 0, 1 } };
-				if( GetGlyphOutlineW( hdc, wch, GGO_METRICS, &gm, 0, NULL, &mat ) != GDI_ERROR &&
-					gm.gmBlackBoxX > 0 && gm.gmBlackBoxY > 0 ){
-					SetBkMode( hdc, TRANSPARENT );
-					SetTextColor( hdc, crFg );
-					// right-anchor the ink in the strip with a small margin:
-					// whichever way the control aligns the wider image inside
-					// the button (left or centered), the arrow reads as
-					// sitting at the button's right side, clear of the edge.
-					// TextOutW must measure from the baseline for that math
-					SetTextAlign( hdc, TA_LEFT | TA_BASELINE | TA_NOUPDATECP );
-					const int nMargin = max( 3, ( cxImage - cxCell ) / 5 );
-					int x = cxImage - nMargin - gm.gmBlackBoxX - gm.gmptGlyphOrigin.x;
-					int y = ( cxCell + 2 * gm.gmptGlyphOrigin.y - gm.gmBlackBoxY ) / 2;
-					TextOutW( hdc, x, y, &wch, 1 );
-				}
-			}
-			SelectObject( hdc, old );
-		}
-		DeleteObject( hfontIcon );
-	}
-
 	void DrawMdIcon( HDC hdc, int cx, int iIcon, COLORREF crFg, int cxRect = 0 )
 	{
 		HPEN hpen = CreatePen( PS_SOLID, max( 1, cx / 16 ), crFg );
@@ -1516,34 +1461,33 @@ public:
 		return Editor_Info( m_hWnd, EI_IS_VERY_DARK, 0 ) == TRUE;
 	}
 
-	void AddModeSwitchIcons( HIMAGELIST himl, int cxCanvas, int cxCell, COLORREF crFg )
+	void AddModeSwitchIcons( HIMAGELIST himl, int cx, COLORREF crFg )
 	{
-		// appends the [H][M] mode-switch glyphs to whichever image list is
-		// active; they are never dropdowns, so they center on the canvas
+		// appends the [H][M] mode-switch glyphs to whichever image list is active
 		for( int i = 0; i < 2; i++ ){
 			void* pvBits = NULL;
-			HBITMAP hbm = CreateMdIconBitmap( cxCanvas, cxCell, &pvBits );
+			HBITMAP hbm = CreateMdIconBitmap( cx, cx, &pvBits );
 			if( !hbm ){
 				break;
 			}
 			HDC hdc = CreateCompatibleDC( NULL );
 			HBITMAP hbmOld = (HBITMAP)SelectObject( hdc, hbm );
-			DrawMdIcon( hdc, cxCell, MD_ICON_MODE_H + i, crFg, cxCanvas );
+			DrawMdIcon( hdc, cx, MD_ICON_MODE_H + i, crFg, cx );
 			SelectObject( hdc, hbmOld );
 			DeleteDC( hdc );
-			MdKeyOutBackground( cxCanvas, cxCell, pvBits );
+			MdKeyOutBackground( cx, cx, pvBits );
 			ImageList_Add( himl, hbm, NULL );
 			DeleteObject( hbm );
 		}
 	}
 
-	// cxCanvas may exceed cxCell: with bDropdownLayout the dropdown slots
-	// render their glyph in the left cell plus the marker strip to the right,
-	// every other slot centers its same-size glyph on the canvas
-	HIMAGELIST BuildToolbarImageList( int cxCanvas, int cxCell, COLORREF crFg, int mode, int nCopies, bool bDropdownLayout )
+	// Every image is one square cell; the dropdown arrow is not baked into
+	// the bitmaps any more — it is drawn live at paint time, anchored to the
+	// button's actual rect (see DrawDropdownArrow).
+	HIMAGELIST BuildToolbarImageList( int cx, COLORREF crFg, int mode, int nCopies = 1 )
 	{
 		int count = mode == MODE_MD ? 20 : 48;
-		HIMAGELIST himl = ImageList_Create( cxCanvas, cxCell, ILC_COLOR32, ( count + 2 ) * nCopies, 2 );
+		HIMAGELIST himl = ImageList_Create( cx, cx, ILC_COLOR32, ( count + 2 ) * nCopies, 2 );
 		if( !himl ){
 			return NULL;
 		}
@@ -1555,41 +1499,23 @@ public:
 			COLORREF crCopyFg = c ? GLYPH_COLOR_DARK : crFg;
 			for( int i = 0; i < count; i++ ){
 				void* pvBits = NULL;
-				HBITMAP hbm = CreateMdIconBitmap( cxCanvas, cxCell, &pvBits );
+				HBITMAP hbm = CreateMdIconBitmap( cx, cx, &pvBits );
 				if( !hbm ){
 					break;
 				}
 				HDC hdc = CreateCompatibleDC( NULL );
 				HBITMAP hbmOld = (HBITMAP)SelectObject( hdc, hbm );
-				const bool bDropdown = bDropdownLayout && IsDropdownIconIndex( i );
-				const int cxRect = bDropdown ? cxCell : cxCanvas;
-				if( mode == MODE_MD ) DrawMdIcon( hdc, cxCell, i, crCopyFg, cxRect );
-				else DrawHtmlIcon( hdc, cxCell, i, crCopyFg, cxRect );
-				if( bDropdown ){
-					DrawDropdownMarker( hdc, cxCell, cxCanvas, crCopyFg );
-				}
+				if( mode == MODE_MD ) DrawMdIcon( hdc, cx, i, crCopyFg, cx );
+				else DrawHtmlIcon( hdc, cx, i, crCopyFg, cx );
 				SelectObject( hdc, hbmOld );
 				DeleteDC( hdc );
-				MdKeyOutBackground( cxCanvas, cxCell, pvBits );
+				MdKeyOutBackground( cx, cx, pvBits );
 				ImageList_Add( himl, hbm, NULL );
 				DeleteObject( hbm );
 			}
-			AddModeSwitchIcons( himl, cxCanvas, cxCell, crCopyFg );
+			AddModeSwitchIcons( himl, cx, crCopyFg );
 		}
 		return himl;
-	}
-
-	// icons whose button is a dropdown carry the arrow marker inside their
-	// bitmap; resolved against the current mode's command array so the marker
-	// follows icon customization
-	bool IsDropdownIconIndex( int iIcon )
-	{
-		for( const auto& cmd : m_CmdArray[m_iMode] ){
-			if( cmd.m_iIcon == iIcon && IsDropdownCmdCode( cmd.m_iCmd ) ){
-				return true;
-			}
-		}
-		return false;
 	}
 
 	void DisplayBar( bool bVisible )
@@ -1630,8 +1556,8 @@ public:
 			DWORD dwStyle = TBSTYLE_TOOLTIPS | TBSTYLE_TRANSPARENT | WS_CHILD | WS_CLIPCHILDREN | WS_CLIPSIBLINGS | CCS_NODIVIDER | CCS_NORESIZE | WS_VISIBLE | TBSTYLE_FLAT | CCS_NOPARENTALIGN | CCS_NOMOVEY;
 			// No TBSTYLE_EX_DRAWDDARROWS: the control-drawn dropdown arrow's
 			// color is fixed by the theme and cannot follow the band, so
-			// dropdown buttons get no system arrow; the marker is baked into
-			// the button bitmaps instead (see DrawDropdownMarker).
+			// dropdown buttons get no system arrow; the arrow is drawn live
+			// at paint time (see DrawDropdownArrow / NM_CUSTOMDRAW).
 			DWORD dwExStyle = TBSTYLE_EX_HIDECLIPPEDBUTTONS;
 			HWND hwndToolbar = CreateWindowEx( 0, TOOLBARCLASSNAME, NULL, dwStyle,
 				0, 0, 0, cxButtonSize, m_hDlg, (HMENU)(INT_PTR)100, NULL, NULL );
@@ -1641,17 +1567,12 @@ public:
 			SetWindowLongPtr( hwndToolbar, GWLP_USERDATA, (LONG_PTR)this );
 			m_wpOldToolbarProc = (WNDPROC)SetWindowLongPtr( hwndToolbar, GWLP_WNDPROC, (LONG_PTR)ToolbarProc );
 			SendMessage( hwndToolbar, TB_BUTTONSTRUCTSIZE, (WPARAM) sizeof(TBBUTTON), 0 );
-			// multiple image lists: ID 0 = plain cell-width images for every
-			// button, ID 1 = wide (cell + marker strip) images for dropdown
-			// buttons; buttons select their list via MAKELONG(index, id)
-			SendMessage( hwndToolbar, CCM_SETVERSION, 5, 0 );
 			SendMessage( hwndToolbar, TB_SETBUTTONSIZE, 0, MAKELPARAM( cxButtonSize, 0 ) );
 			SendMessage( hwndToolbar, TB_SETEXTENDEDSTYLE, 0, dwExStyle );
 			_ASSERT( m_himageToolbar == NULL );
 
 			// the command array must be loaded before the image lists: the
-			// arrow marker is baked per icon index resolved from the array,
-			// so a later load would leave the first-built lists markerless
+			// Customize dialog seeds its icon picker from the lists
 			if( !LoadCmdArray( m_iMode ) ){
 				ResetCmdArray( m_iMode );
 			}
@@ -1659,21 +1580,11 @@ public:
 			COLORREF crGlyphFg = GetBarGlyphColor();
 			m_crGlyphFg = crGlyphFg;
 			// On a dark band (light glyphs) request a second, dark-drawn copy
-			// of every image appended to these lists; pressed dropdown buttons
+			// of every image appended to this list; pressed dropdown buttons
 			// are pointed at their dark copy while their menu tracks.
 			const int nCopies = ( crGlyphFg == GLYPH_COLOR_LIGHT ) ? 2 : 1;
-			m_cxImage = cxImage;
-			m_himageToolbar = BuildToolbarImageList( cxButtonSize, cxButtonSize, crGlyphFg, m_iMode, nCopies, false );
-			m_himageToolbarDD = BuildToolbarImageList( cxImage, cxButtonSize, crGlyphFg, m_iMode, nCopies, true );
-			if( !m_himageToolbar || !m_himageToolbarDD ){
-				if( m_himageToolbar ){
-					ImageList_Destroy( m_himageToolbar );
-					m_himageToolbar = NULL;
-				}
-				if( m_himageToolbarDD ){
-					ImageList_Destroy( m_himageToolbarDD );
-					m_himageToolbarDD = NULL;
-				}
+			m_himageToolbar = BuildToolbarImageList( cxButtonSize, crGlyphFg, m_iMode, nCopies );
+			if( !m_himageToolbar ){
 				DestroyWindow( m_hDlg );
 				m_hDlg = NULL;
 				m_hwndToolbar = NULL;
@@ -1682,20 +1593,13 @@ public:
 			_ASSERT( m_himageToolbar );
 			m_nLightIcons = ImageList_GetImageCount( m_himageToolbar ) / nCopies;
 			SendMessage( hwndToolbar, TB_SETIMAGELIST, 0, (LPARAM)m_himageToolbar );
-			SendMessage( hwndToolbar, TB_SETIMAGELIST, 1, (LPARAM)m_himageToolbarDD );
 
 			// on hover the toolbar fills buttons with the light system highlight;
-			// when the band is dark (light glyphs) supply hot image lists with
+			// when the band is dark (light glyphs) supply a hot image list with
 			// dark glyphs so hovered buttons stay readable
 			if( nCopies == 2 ){
-				m_himageToolbarHot = BuildToolbarImageList( cxButtonSize, cxButtonSize, GLYPH_COLOR_DARK, m_iMode, 1, false );
-				m_himageToolbarHotDD = BuildToolbarImageList( cxImage, cxButtonSize, GLYPH_COLOR_DARK, m_iMode, 1, true );
-				if( m_himageToolbarHot ){
-					SendMessage( hwndToolbar, TB_SETHOTIMAGELIST, 0, (LPARAM)m_himageToolbarHot );
-				}
-				if( m_himageToolbarHotDD ){
-					SendMessage( hwndToolbar, TB_SETHOTIMAGELIST, 1, (LPARAM)m_himageToolbarHotDD );
-				}
+				m_himageToolbarHot = BuildToolbarImageList( cxButtonSize, GLYPH_COLOR_DARK, m_iMode );
+				SendMessage( hwndToolbar, TB_SETHOTIMAGELIST, 0, (LPARAM)m_himageToolbarHot );
 			}
 
 			AddButtons( hwndToolbar );
@@ -1748,10 +1652,9 @@ public:
 		}
 	}
 
-	// re-render the image lists against the current command array; used
-	// after the Customize dialog closes, which edits buttons live but leaves
-	// the marker baking (which icons carry the dropdown arrow) to the next
-	// full rebuild
+	// re-render the image list against the current command array; used after
+	// the Customize dialog closes, which edits buttons live but never
+	// rebuilds the lists
 	void RebuildToolbarImages()
 	{
 		if( !m_hwndToolbar || !m_himageToolbar ){
@@ -1764,28 +1667,17 @@ public:
 		COLORREF crGlyphFg = GetBarGlyphColor();
 		m_crGlyphFg = crGlyphFg;
 		const int nCopies = ( crGlyphFg == GLYPH_COLOR_LIGHT ) ? 2 : 1;
-		HIMAGELIST himlNew = BuildToolbarImageList( cxButtonSize, cxButtonSize, crGlyphFg, m_iMode, nCopies, false );
-		HIMAGELIST himlNewDD = BuildToolbarImageList( cxImage, cxButtonSize, crGlyphFg, m_iMode, nCopies, true );
-		if( !himlNew || !himlNewDD ){
-			if( himlNew ){
-				ImageList_Destroy( himlNew );
-			}
-			if( himlNewDD ){
-				ImageList_Destroy( himlNewDD );
-			}
+		HIMAGELIST himlNew = BuildToolbarImageList( cxButtonSize, crGlyphFg, m_iMode, nCopies );
+		if( !himlNew ){
 			return;
 		}
 		m_cxImage = cxImage;
 		SendMessage( m_hwndToolbar, TB_SETIMAGELIST, 0, (LPARAM)himlNew );
 		ImageList_Destroy( m_himageToolbar );
 		m_himageToolbar = himlNew;
-		SendMessage( m_hwndToolbar, TB_SETIMAGELIST, 1, (LPARAM)himlNewDD );
-		ImageList_Destroy( m_himageToolbarDD );
-		m_himageToolbarDD = himlNewDD;
 		m_nLightIcons = ImageList_GetImageCount( m_himageToolbar ) / nCopies;
 		if( nCopies == 2 ){
-			HIMAGELIST himlHot = BuildToolbarImageList( cxButtonSize, cxButtonSize, GLYPH_COLOR_DARK, m_iMode, 1, false );
-			HIMAGELIST himlHotDD = BuildToolbarImageList( cxImage, cxButtonSize, GLYPH_COLOR_DARK, m_iMode, 1, true );
+			HIMAGELIST himlHot = BuildToolbarImageList( cxButtonSize, GLYPH_COLOR_DARK, m_iMode );
 			if( himlHot ){
 				SendMessage( m_hwndToolbar, TB_SETHOTIMAGELIST, 0, (LPARAM)himlHot );
 				if( m_himageToolbarHot ){
@@ -1793,26 +1685,53 @@ public:
 				}
 				m_himageToolbarHot = himlHot;
 			}
-			if( himlHotDD ){
-				SendMessage( m_hwndToolbar, TB_SETHOTIMAGELIST, 1, (LPARAM)himlHotDD );
-				if( m_himageToolbarHotDD ){
-					ImageList_Destroy( m_himageToolbarHotDD );
-				}
-				m_himageToolbarHotDD = himlHotDD;
-			}
 		}
-		else {
+		else if( m_himageToolbarHot ){
 			SendMessage( m_hwndToolbar, TB_SETHOTIMAGELIST, 0, (LPARAM)NULL );
-			SendMessage( m_hwndToolbar, TB_SETHOTIMAGELIST, 1, (LPARAM)NULL );
-			if( m_himageToolbarHot ){
-				ImageList_Destroy( m_himageToolbarHot );
-				m_himageToolbarHot = NULL;
-			}
-			if( m_himageToolbarHotDD ){
-				ImageList_Destroy( m_himageToolbarHotDD );
-				m_himageToolbarHotDD = NULL;
-			}
+			ImageList_Destroy( m_himageToolbarHot );
+			m_himageToolbarHot = NULL;
 		}
+	}
+
+	// The dropdown arrow, drawn live in NM_CUSTOMDRAW's item-post-paint
+	// stage: right-anchored inside the button's ACTUAL rect, so the control's
+	// image placement and any width rounding cannot shift or clip it. The
+	// glyph is the bundled Remix arrow-down-s-fill; on hover/pressed the
+	// light fill needs dark ink, mirroring the hot image list.
+	void DrawDropdownArrow( HDC hdc, const RECT& rc, UINT uItemState )
+	{
+		const WCHAR wch = 0xEA4D;	// ri-arrow-down-s-fill
+		const int nDPI = (int)Editor_DocInfo( m_hWnd, 0, EI_GET_DPI, 0 );
+		COLORREF crFg = ( uItemState & ( CDIS_HOT | CDIS_SELECTED ) ) ? GLYPH_COLOR_DARK : m_crGlyphFg;
+		const int em = MulDiv( 13, nDPI, DEFAULT_DPI );	// ink ≈ 6.5 logical px wide
+		const int nMargin = MulDiv( 3, nDPI, DEFAULT_DPI );
+		HFONT hfontIcon = GetMdIconFont( em );
+		if( !hfontIcon ) return;
+		HFONT old = (HFONT)SelectObject( hdc, hfontIcon );
+		if( old && old != (HFONT)HGDI_ERROR ){
+			WCHAR face[LF_FACESIZE] = {};
+			WORD index = 0xFFFF;
+			if( GetTextFaceW( hdc, _countof( face ), face ) && lstrcmpiW( face, L"remixicon" ) == 0 &&
+				GetGlyphIndicesW( hdc, &wch, 1, &index, GGI_MARK_NONEXISTING_GLYPHS ) != GDI_ERROR &&
+				index != 0 && index != 0xFFFF ){
+				GLYPHMETRICS gm = {};
+				MAT2 mat = { { 0, 1 }, { 0, 0 }, { 0, 0 }, { 0, 1 } };
+				if( GetGlyphOutlineW( hdc, wch, GGO_METRICS, &gm, 0, NULL, &mat ) != GDI_ERROR &&
+					gm.gmBlackBoxX > 0 && gm.gmBlackBoxY > 0 ){
+					SetBkMode( hdc, TRANSPARENT );
+					SetTextColor( hdc, crFg );
+					// TextOutW positions by the baseline: right edge of the
+					// ink sits nMargin inside the button's right edge, the
+					// ink is centered vertically in the button
+					SetTextAlign( hdc, TA_LEFT | TA_BASELINE | TA_NOUPDATECP );
+					int x = rc.right - nMargin - gm.gmBlackBoxX - gm.gmptGlyphOrigin.x;
+					int y = ( rc.top + rc.bottom + 2 * gm.gmptGlyphOrigin.y - gm.gmBlackBoxY ) / 2;
+					TextOutW( hdc, x, y, &wch, 1 );
+				}
+			}
+			SelectObject( hdc, old );
+		}
+		DeleteObject( hfontIcon );
 	}
 
 	void OnCommand( HWND /*hwndView*/ )
@@ -1830,17 +1749,9 @@ public:
 				VERIFY( ImageList_Destroy( m_himageToolbar ) );
 				m_himageToolbar = NULL;
 			}
-			if( m_himageToolbarDD ){
-				VERIFY( ImageList_Destroy( m_himageToolbarDD ) );
-				m_himageToolbarDD = NULL;
-			}
 			if( m_himageToolbarHot ){
 				VERIFY( ImageList_Destroy( m_himageToolbarHot ) );
 				m_himageToolbarHot = NULL;
-			}
-			if( m_himageToolbarHotDD ){
-				VERIFY( ImageList_Destroy( m_himageToolbarHotDD ) );
-				m_himageToolbarHotDD = NULL;
 			}
 			_ASSERT( !IsWindow( m_hwndToolbar ) );
 			m_hwndToolbar = NULL;
@@ -2880,21 +2791,21 @@ public:
 		// swallow the toolbar's WM_MOUSELEAVE (see ToolbarProc), so the hot
 		// look simply never fades and the glyph never shifts.
 		int iOldImage = -1;
-		if( bPressedByMouse && m_himageToolbarHotDD != NULL && m_nLightIcons > 0 ){
-			// point the pressed button at its dark copy in the wide list;
-			// values stay MAKELONG(index, list)-encoded like AddButtons set
-			// them (list 1 = wide cell + marker strip images)
+		if( bPressedByMouse && m_himageToolbarHot != NULL && m_nLightIcons > 0 ){
 			int nIndex = (int)SendMessage( m_hwndToolbar, TB_COMMANDTOINDEX, nIDCommand, 0L );
-			if( nIndex >= 0 ){
-				const int iIcon = Cmds()[nIDCommand - ID_COMMAND_BASE].m_iIcon;
-				const int iDark = MAKELONG( m_nLightIcons + iIcon, 1 );
-				if( m_nLightIcons + iIcon < ImageList_GetImageCount( m_himageToolbarDD ) ){
+			TBBUTTON tb = {};
+			if( nIndex >= 0 && SendMessage( m_hwndToolbar, TB_GETBUTTON, nIndex, (LPARAM)&tb ) ){
+				iOldImage = tb.iBitmap;
+				int iDark = m_nLightIcons + iOldImage;
+				if( iDark < ImageList_GetImageCount( m_himageToolbar ) ){
 					TBBUTTONINFO bi = {};
 					bi.cbSize = sizeof( bi );
 					bi.dwMask = TBIF_IMAGE;
 					bi.iImage = iDark;
 					SendMessage( m_hwndToolbar, TB_SETBUTTONINFO, nIDCommand, (LPARAM)&bi );
-					iOldImage = MAKELONG( iIcon, 1 );
+				}
+				else {
+					iOldImage = -1;
 				}
 			}
 		}
@@ -3092,9 +3003,27 @@ public:
 		}
 	}
 
-	void OnDlgNotify( NMHDR* pnmh )
+	LRESULT OnDlgNotify( NMHDR* pnmh )
 	{
 		switch( pnmh->code ){
+		case NM_CUSTOMDRAW:
+			{
+				// let the control paint everything, then draw the dropdown
+				// arrow anchored to the item's real rect
+				LPNMTBCUSTOMDRAW pTBCD = (LPNMTBCUSTOMDRAW)pnmh;
+				if( pTBCD->nmcd.dwDrawStage == CDDS_PREPAINT ){
+					return CDRF_NOTIFYITEMDRAW;
+				}
+				if( pTBCD->nmcd.dwDrawStage == CDDS_ITEMPREPAINT ){
+					return CDRF_NOTIFYPOSTPAINT;
+				}
+				if( pTBCD->nmcd.dwDrawStage == CDDS_ITEMPOSTPAINT ){
+					if( IsDropdownCommand( (UINT)pTBCD->nmcd.dwItemSpec ) ){
+						DrawDropdownArrow( pTBCD->nmcd.hdc, pTBCD->nmcd.rc, pTBCD->nmcd.uItemState );
+					}
+				}
+				return CDRF_DODEFAULT;
+			}
 		case TTN_GETDISPINFO:
 			{
 				NMTTDISPINFO* pDispInfo = (NMTTDISPINFO*)pnmh;
@@ -3114,6 +3043,7 @@ public:
 			}
 			break;
 		}
+		return 0;
 	}
 
 	void OnTableInitDialog( HWND hDlg )
@@ -3621,10 +3551,10 @@ INT_PTR CALLBACK NewProc( HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam )
 	case WM_NOTIFY:
 		{
 			CMyFrame* pFrame = static_cast<CMyFrame*>(GetFrame( hwnd ));
-			pFrame->OnDlgNotify( (NMHDR*)lParam );
+			// NM_CUSTOMDRAW replies (CDRF_*) must go back as the message result
+			nResult = pFrame->OnDlgNotify( (NMHDR*)lParam );
 		}
 		break;
-
 	case WM_TIMER:
 		if( wParam == IDT_HOVER_MENU ){
 			CMyFrame* pFrame = static_cast<CMyFrame*>(GetFrame( hwnd ));

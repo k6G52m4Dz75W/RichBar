@@ -131,25 +131,21 @@ Since 0.17.0 the leftmost mode-switch pair also draws from this subset
 | 20 | Mode switch: HTML | `html5-fill` | U+EE40 |
 | 21 | Mode switch: Markdown | `markdown-fill` | U+EF1D |
 
-## Dropdown arrow marker (since 0.17.9, Word-style split layout since 0.17.10)
+## Dropdown arrow marker (since 0.17.9; live-drawn since 0.17.19)
 
 | Purpose | Remix Icon name | Codepoint |
 |---|---|---|
 | Dropdown arrows on the heading / font / form buttons | `arrow-down-s-fill` | U+EA4D |
 
 The toolbar sets no `TBSTYLE_EX_DRAWDDARROWS`, so the common control draws
-no dropdown arrows of its own. It keeps two image lists: a plain
-cell-width list for every button, and a wide list (glyph cell + marker
-strip) used only by the dropdown buttons, whose width grows by the strip
-(`CCM_SETVERSION 5` + `MAKELONG(index, list)` per-button image lists, with
-matching hot lists on dark bands). `DrawDropdownMarker` right-anchors this
-glyph's ink in the strip with a small fixed margin (`GGO_METRICS` gives
-the exact ink box), in the
-band-aware glyph color, leaving the glyph cell pixel-identical. Icons
-belonging to dropdown commands are resolved from the current command array
-(loaded before the image lists are built), so the marker follows icon
-customization, and it rides the normal/hot/pressed image-list states like
-every other glyph.
+no dropdown arrows of its own. Since 0.17.19 the arrow is not baked into
+the bitmaps: `DrawDropdownArrow` paints it live in `NM_CUSTOMDRAW`'s
+item-post-paint stage, right-anchored inside each dropdown button's real
+rect (`GGO_METRICS` gives the exact ink box), in the band-aware glyph
+color — dark ink on hover/pressed, matching the hot image list. Dropdown
+buttons are widened by a strip (`MD_MARKER_STRIP`, 10 logical px) purely
+to reserve the arrow room, and the image lists stay one plain cell-width
+set for every button.
 
 ## Runtime notes
 
