@@ -28,10 +28,11 @@ Current release: **0.17.19 — 2026-09-19**.
   subset supplies all 20 Markdown icons, all 48 HTML slots and the two
   [H][M] switch glyphs, rendered directly at the current button size and
   DPI — the whole bar shares one stroke language. Background luminance
-  selects dark glyphs on light bars or light glyphs on dark bars, and on
-  dark bars the control switches to the system dark toolbar theme
-  (`DarkMode_Explorer`) so its own hover and pressed fills match the band.
-  Theme and configuration changes re-render automatically.
+  selects dark glyphs on light bars or light glyphs on dark bars; on the
+  light system highlight that fills buttons on hover/pressed, the ink
+  switches to dark via the hot image list and pressed-state copies, and
+  the live-drawn dropdown arrow follows suit. Theme and configuration
+  changes re-render automatically.
 - **MUI**: satellite resource DLLs (`mui\1033` English, `mui\2052` Simplified
   Chinese).
 - **Settings via the official channel**: `EE_REG_SET_VALUE` /
