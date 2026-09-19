@@ -1519,6 +1519,13 @@ public:
 
 			COLORREF crGlyphFg = GetBarGlyphColor();
 			m_crGlyphFg = crGlyphFg;
+			// Minimal experiment: on a dark band, switch the control to the
+			// system dark toolbar theme so its own wholedropdown arrows (and
+			// fills) render in the dark variant's light colors. No other
+			// change: buttons, image lists and behavior stay as 0.15.7.
+			if( crGlyphFg == GLYPH_COLOR_LIGHT ){
+				SetWindowTheme( hwndToolbar, L"DarkMode_Explorer", NULL );
+			}
 			// On a dark band (light glyphs) request a second, dark-drawn copy
 			// of every image appended to this list; pressed dropdown buttons
 			// are pointed at their dark copy while their menu tracks.
