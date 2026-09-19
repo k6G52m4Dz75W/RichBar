@@ -14,6 +14,23 @@ this code base:
 | `0.4.x`       | Compatibility fixes that make the original plug-in build and load correctly on modern EmEditor (v26). |
 | `0.9.0` – `0.17.x` | The HTML + Markdown dual-mode toolbar, heading towards `1.0.0`. |
 
+## [0.17.14] - 2026-09-19
+
+### Fixed
+
+- **Non-dropdown icons sit centered again.** Since 0.17.10 widened every
+  image to cell + strip, glyphs drawn in the left cell left-packed every
+  button. Non-dropdown (and `[H][M]`) glyphs now center on the full image
+  width — the exact button position a plain cell-width image had — at an
+  unchanged font size; dropdown glyphs stay in the left cell with the
+  marker strip to their right (Word-style). `DrawIconGlyph` /
+  `DrawMdIcon` / `DrawHtmlIcon` take an optional wider drawing rect,
+  decoupling glyph font size from the canvas width.
+- The harness now asserts the centering, that dropdown glyph cells match a
+  direct cell-width rendering (color-compared; list slots carry alpha FF
+  after the key-out), and that marker ink stays inside the measured strip
+  box and actually exists.
+
 ## [0.17.13] - 2026-09-19
 
 ### Removed

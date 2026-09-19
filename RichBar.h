@@ -1296,8 +1296,14 @@ public:
 		DeleteObject( hfont );
 	}
 
-	BOOL DrawIconGlyph( HDC hdc, int cx, WCHAR ch, COLORREF crFg )
+	BOOL DrawIconGlyph( HDC hdc, int cx, WCHAR ch, COLORREF crFg, int cxRect = 0 )
 	{
+		// cx sets the font em (and the default square rect); cxRect > cx only
+		// widens the drawing rect, centering the same-size glyph on the wider
+		// image canvas
+		if( cxRect <= 0 ){
+			cxRect = cx;
+		}
 		HFONT hfontIcon = GetMdIconFont( cx );
 		if( !hfontIcon ) return FALSE;
 		BOOL drawn = FALSE;
@@ -1310,7 +1316,7 @@ public:
 				index != 0 && index != 0xFFFF ){
 				SetBkMode( hdc, TRANSPARENT );
 				SetTextColor( hdc, crFg );
-				RECT rc = { 0, 0, cx, cx };
+				RECT rc = { 0, 0, cxRect, cx };
 				drawn = DrawTextW( hdc, &ch, 1, &rc, DT_CENTER | DT_VCENTER | DT_SINGLELINE ) != 0;
 			}
 			SelectObject( hdc, old );
@@ -1360,7 +1366,7 @@ public:
 		DeleteObject( hfontIcon );
 	}
 
-	void DrawMdIcon( HDC hdc, int cx, int iIcon, COLORREF crFg )
+	void DrawMdIcon( HDC hdc, int cx, int iIcon, COLORREF crFg, int cxRect = 0 )
 	{
 		HPEN hpen = CreatePen( PS_SOLID, max( 1, cx / 16 ), crFg );
 		HPEN hpenOld = (HPEN)SelectObject( hdc, hpen );
@@ -1393,13 +1399,13 @@ public:
 		BOOL bGlyphDrawn = FALSE;
 		for( int g = 0; g < (int)_countof( c_aIconGlyphs ); g++ ){
 			if( c_aIconGlyphs[g].iIcon != iIcon ) continue;
-			bGlyphDrawn = DrawIconGlyph( hdc, cx, c_aIconGlyphs[g].wch, crFg );
+			bGlyphDrawn = DrawIconGlyph( hdc, cx, c_aIconGlyphs[g].wch, crFg, cxRect );
 			break;
 		}
 		
 		// the [H][M] mode switch: Remix html5-fill / markdown-fill glyphs
 		if( iIcon >= MD_ICON_MODE_H ){
-			DrawIconGlyph( hdc, cx, iIcon == MD_ICON_MODE_H ? 0xEE40 : 0xEF1D, crFg );
+			DrawIconGlyph( hdc, cx, iIcon == MD_ICON_MODE_H ? 0xEE40 : 0xEF1D, crFg, cxRect );
 			return;
 		}
 		// no fallback artwork by design: the subset ships inside this DLL
@@ -1408,7 +1414,7 @@ public:
 		DeleteObject( hpen );
 	}
 
-	void DrawHtmlIcon( HDC hdc, int cx, int iIcon, COLORREF crFg )
+	void DrawHtmlIcon( HDC hdc, int cx, int iIcon, COLORREF crFg, int cxRect = 0 )
 	{
 		// Preserve all 48 persisted HTML icon slots, including customization-only icons.
 				static const WCHAR glyphs[] = {
@@ -1422,7 +1428,7 @@ public:
 			0xED9E, 0xEB97, 0xEA21, 0xEE59, 0xED3B, 0xEF83  // function, error, warning, info, flag, sound
 		};
 		if( iIcon < 0 || iIcon >= (int)_countof( glyphs ) ) return;
-		DrawIconGlyph( hdc, cx, glyphs[iIcon], crFg );
+		DrawIconGlyph( hdc, cx, glyphs[iIcon], crFg, cxRect );
 	}
 
 	COLORREF GetBarGlyphColor()
@@ -1471,7 +1477,7 @@ public:
 			}
 			HDC hdc = CreateCompatibleDC( NULL );
 			HBITMAP hbmOld = (HBITMAP)SelectObject( hdc, hbm );
-			DrawMdIcon( hdc, cxCell, MD_ICON_MODE_H + i, crFg );
+			DrawMdIcon( hdc, cxCell, MD_ICON_MODE_H + i, crFg, cxImage );
 			SelectObject( hdc, hbmOld );
 			DeleteDC( hdc );
 			MdKeyOutBackground( cxImage, cxCell, pvBits );
@@ -1501,9 +1507,15 @@ public:
 				}
 				HDC hdc = CreateCompatibleDC( NULL );
 				HBITMAP hbmOld = (HBITMAP)SelectObject( hdc, hbm );
-				if( mode == MODE_MD ) DrawMdIcon( hdc, cxCell, i, crCopyFg );
-				else DrawHtmlIcon( hdc, cxCell, i, crCopyFg );
-				if( IsDropdownIconIndex( i ) ){
+				// dropdown glyphs sit in the left cell so the marker strip to
+				// their right never overlaps them; every other glyph keeps
+				// its size and centers on the full image width, which is the
+				// exact button position a plain cell-width image had
+				const bool bDropdown = IsDropdownIconIndex( i );
+				const int cxRect = bDropdown ? cxCell : cxImage;
+				if( mode == MODE_MD ) DrawMdIcon( hdc, cxCell, i, crCopyFg, cxRect );
+				else DrawHtmlIcon( hdc, cxCell, i, crCopyFg, cxRect );
+				if( bDropdown ){
 					DrawDropdownMarker( hdc, cxCell, cxImage, crCopyFg );
 				}
 				SelectObject( hdc, hbmOld );

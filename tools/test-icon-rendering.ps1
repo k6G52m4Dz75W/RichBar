@@ -302,6 +302,30 @@ static std::vector<DWORD> SlotPixels(HIMAGELIST list, int icon, int w, int h) {
     DeleteDC(dc);
     return px;
 }
+static std::vector<DWORD> CellReference(int size, int icon, COLORREF fg) {
+    // render one icon into a cell-width canvas the way a dropdown slot does
+    HDC dc = CreateCompatibleDC(NULL);
+    Check(dc != NULL, "reference DC failed");
+    BITMAPINFO info = {};
+    info.bmiHeader.biSize = sizeof(BITMAPINFOHEADER);
+    info.bmiHeader.biWidth = size; info.bmiHeader.biHeight = -size;
+    info.bmiHeader.biPlanes = 1; info.bmiHeader.biBitCount = 32;
+    void* bits = NULL;
+    HBITMAP bmp = CreateDIBSection(dc, &info, DIB_RGB_COLORS, &bits, NULL, 0);
+    Check(bmp && bits, "reference bitmap allocation failed");
+    HGDIOBJ old = SelectObject(dc, bmp);
+    RECT rc = {0, 0, size, size};
+    HBRUSH bg = CreateSolidBrush(RGB(255, 0, 255));
+    FillRect(dc, &rc, bg);
+    DeleteObject(bg);
+    Renderer().DrawHtmlIcon(dc, size, icon, fg, size);
+    GdiFlush();
+    std::vector<DWORD> px((DWORD*)bits, (DWORD*)bits + (size_t)size*size);
+    SelectObject(dc, old);
+    DeleteObject(bmp);
+    DeleteDC(dc);
+    return px;
+}
 static void TestDropdownMarkers() {
     htmlTests = true;
     expectMarker = true;
@@ -326,21 +350,23 @@ static void TestDropdownMarkers() {
         Renderer plain;
         plain.m_iMode = MODE_HTML;
         HIMAGELIST bare = plain.BuildToolbarImageList(wide, size, RGB(224,224,224), MODE_HTML);
-        currentIcon = 6; currentSize = size;
-        auto bare6 = SlotPixels(bare, 6, wide, size);
-        currentIcon = 17;
-        auto bare17 = SlotPixels(bare, 17, wide, size);
-        currentIcon = 1;
+        currentIcon = 1; currentSize = size;
         auto bare1 = SlotPixels(bare, 1, wide, size);
         ImageList_Destroy(bare);
 
-        // the glyph cell itself must stay untouched: the marker lives only
-        // in the strip to the right of it
+        // the dropdown glyph's cell must be pixel-identical to a plain
+        // cell-width rendering of the same icon: the marker may only touch
+        // the strip (the bare list draws non-dropdown slots centered, so the
+        // comparison uses a direct cell-width reference instead of it)
+        const std::vector<DWORD> ref6 = CellReference(size, 6, RGB(224,224,224));
+        const std::vector<DWORD> ref17 = CellReference(size, 17, RGB(224,224,224));
+        // compare colors only: list slots carry alpha FF after the key-out,
+        // the direct reference has alpha 00 on its untouched DIB
         for (int y = 0; y < size; ++y) for (int x = 0; x < size; ++x) {
-            Check(with6[(size_t)y*wide + x] == bare6[(size_t)y*wide + x],
-                "marker leaked into the glyph cell (icon 6)");
-            Check(with17[(size_t)y*wide + x] == bare17[(size_t)y*wide + x],
-                "marker leaked into the glyph cell (icon 17)");
+            Check((with6[(size_t)y*wide + x] & 0xFFFFFF) == (ref6[(size_t)y*size + x] & 0xFFFFFF),
+                "dropdown glyph cell altered (icon 6)");
+            Check((with17[(size_t)y*wide + x] & 0xFFFFFF) == (ref17[(size_t)y*size + x] & 0xFFFFFF),
+                "dropdown glyph cell altered (icon 17)");
         }
 
         // the marker's em is strip*5/3; measure its ink box exactly the way
@@ -364,20 +390,36 @@ static void TestDropdownMarkers() {
         DeleteObject(mf);
         DeleteDC(mdc);
         int zx = inkLeft - 2, zy = inkTop - 2;
-        auto ZoneDiff = [&](const std::vector<DWORD>& a, const std::vector<DWORD>& b) {
-            int diff = 0;
-            for (int y = 0; y < size; ++y) for (int x = 0; x < wide; ++x) {
-                if (a[(size_t)y*wide + x] != b[(size_t)y*wide + x]) {
-                    Check(x >= zx && y >= zy, "marker render changed pixels outside the strip zone");
-                    ++diff;
+        // in the strip, ink may only appear inside the measured ink box (plus
+        // a 2px AA grace), and it must actually be there
+        for (int pass = 0; pass < 2; ++pass) {
+            const std::vector<DWORD>& slot = pass ? with17 : with6;
+            int inkCount = 0;
+            for (int y = 0; y < size; ++y) for (int x = size; x < wide; ++x) {
+                bool ink = (slot[(size_t)y*wide + x] & 0xFFFFFF) != 0xFF00FF;
+                if (x < zx || y < zy) {
+                    Check(!ink, "marker ink outside the measured strip zone");
+                }
+                else if (ink) {
+                    ++inkCount;
                 }
             }
-            return diff;
-        };
-        int diff6 = ZoneDiff(with6, bare6), diff17 = ZoneDiff(with17, bare17);
-        Check(diff6 >= 3, "dropdown icon 6: no marker ink");
-        Check(diff17 >= 3, "dropdown icon 17: no marker ink");
+            Check(inkCount >= 3, pass ? "dropdown icon 17: no marker ink" : "dropdown icon 6: no marker ink");
+        }
         Check(with1 == bare1, "plain icon 1 must not carry a marker");
+        // non-dropdown glyphs center on the full image width (plain buttons
+        // keep the glyph at the button's center, as cell-width images did)
+        {
+            int left = wide, right = -1;
+            for (int y = 0; y < size; ++y) for (int x = 0; x < wide; ++x) {
+                if ((with1[(size_t)y*wide + x] & 0xFFFFFF) != 0xFF00FF) {
+                    if (x < left) left = x;
+                    if (x > right) right = x;
+                }
+            }
+            Check(right > left, "icon 1 has no ink");
+            Check(abs((left + right) - (wide - 1)) <= 2, "non-dropdown glyph not centered on the button");
+        }
     }
     Check(markerDraws == 4, "marker glyph draw count wrong");
     Renderer::ReleaseMdIconFont();
