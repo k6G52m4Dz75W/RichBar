@@ -330,7 +330,7 @@ static void TestDropdownMarkers() {
     htmlTests = true;
     expectMarker = true;
     currentColor = RGB(224, 224, 224);
-    const int strip = 6;    // harness runs at 96 DPI
+    const int strip = 10;   // harness runs at 96 DPI (MD_MARKER_STRIP)
     for (int size : {16, 24}) {
         int wide = size + strip;
         Renderer marked;
@@ -372,7 +372,7 @@ static void TestDropdownMarkers() {
         // the marker's em is strip*5/3; measure its ink box exactly the way
         // DrawDropdownMarker centers it in the strip, so the allowed zone
         // follows the real glyph metrics
-        int em = max(8, strip * 5 / 3);
+        int em = max(8, strip * 4 / 3);
         HDC mdc = CreateCompatibleDC(NULL);
         Check(mdc != NULL, "marker zone DC failed");
         HFONT mf = CreateFontW(-em, 0, 0, 0, FW_NORMAL, FALSE, FALSE, FALSE,

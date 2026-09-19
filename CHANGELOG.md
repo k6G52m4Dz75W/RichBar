@@ -14,6 +14,19 @@ this code base:
 | `0.4.x`       | Compatibility fixes that make the original plug-in build and load correctly on modern EmEditor (v26). |
 | `0.9.0` – `0.17.x` | The HTML + Markdown dual-mode toolbar, heading towards `1.0.0`. |
 
+## [0.17.17] - 2026-09-19
+
+### Changed
+
+- **The marker strip gets breathing room.** At the old values (6 logical px
+  strip, marker font at 5/3 of the strip) the glyph's ink filled ~10 of
+  the strip's 12 px at 200% DPI — 1 px margins, visually touching the
+  button's right side. The strip is now 10 logical px (`MD_MARKER_STRIP`)
+  and the marker font 4/3 of it, so the ink fills two thirds of the strip
+  with ~1/6 strip of margin on each side (at 200% DPI: 20 px strip, 13 px
+  ink, ~3.5 px margins plus the 7 px control padding to the button edge).
+  Dropdown buttons correspondingly measure cell + 20 px + padding.
+
 ## [0.17.16] - 2026-09-19
 
 ### Fixed

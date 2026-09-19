@@ -157,6 +157,9 @@ WCHAR OctToDec( LPWSTR& p )
 // runtime-drawn glyphs appended to every toolbar image list
 #define MD_ICON_MODE_H			20
 #define MD_ICON_MODE_M			21
+// logical width of the dropdown marker strip (DPI-scaled); sized so the
+// marker glyph keeps clear margins inside the strip
+#define MD_MARKER_STRIP			10
 
 // glyph colors: light glyphs sit on dark bands, dark glyphs on light ones
 // (including the toolbar's light hover/checked fill)
@@ -1377,9 +1380,10 @@ public:
 	void DrawDropdownMarker( HDC hdc, int cxCell, int cxImage, COLORREF crFg )
 	{
 		const WCHAR wch = 0xEA4D;	// ri-arrow-down-s-fill
-		// the glyph's ink is 0.5em wide by 0.25em tall; this em size fills
-		// most of the strip's width while staying clear of its edges
-		const int em = max( 8, ( cxImage - cxCell ) * 5 / 3 );
+		// the glyph's ink is 0.5em wide by 0.25em tall; at 4/3 of the strip
+		// the ink fills two thirds of the strip, leaving ~1/6 strip of
+		// margin on each side
+		const int em = max( 8, ( cxImage - cxCell ) * 4 / 3 );
 		HFONT hfontIcon = GetMdIconFont( em );
 		if( !hfontIcon ) return;
 		HFONT old = (HFONT)SelectObject( hdc, hfontIcon );
@@ -1616,7 +1620,7 @@ public:
 			// Word-style split layout: the glyph keeps its full cell on the
 			// left, dropdown buttons get a dedicated arrow strip on the right
 			// so the marker never overlaps the glyph's ink
-			const int cxStrip = MulDiv( 6, nDPI, DEFAULT_DPI );
+			const int cxStrip = MulDiv( MD_MARKER_STRIP, nDPI, DEFAULT_DPI );
 			const int cxImage = cxButtonSize + cxStrip;
 
 			//int cx = g_metrics.ScaleY( m_bLargeToolbar ? BUTTON_SIZE_LARGE : BUTTON_SIZE_SMALL );
@@ -1752,7 +1756,7 @@ public:
 		}
 		int nDPI = (int)Editor_DocInfo( m_hWnd, 0, EI_GET_DPI, 0 );
 		int cxButtonSize = MulDiv( m_bLargeToolbar ? 24 : 16, nDPI, DEFAULT_DPI );
-		const int cxStrip = MulDiv( 6, nDPI, DEFAULT_DPI );
+		const int cxStrip = MulDiv( MD_MARKER_STRIP, nDPI, DEFAULT_DPI );
 		int cxImage = cxButtonSize + cxStrip;
 		COLORREF crGlyphFg = GetBarGlyphColor();
 		m_crGlyphFg = crGlyphFg;
