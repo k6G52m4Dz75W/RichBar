@@ -14,6 +14,24 @@ this code base:
 | `0.4.x`       | Compatibility fixes that make the original plug-in build and load correctly on modern EmEditor (v26). |
 | `0.9.0` – `0.17.x` | The HTML + Markdown dual-mode toolbar, heading towards `1.0.0`. |
 
+## [0.17.8] - 2026-09-19
+
+### Changed
+
+- **0.17.7 withdrawn with a second empirical result: EmEditor does not
+  handle foreign toolbars' `NM_CUSTOMDRAW` notifications** - forwarding
+  them to the frame window changed nothing. Its own toolbar coloring is
+  bound to its own controls.
+- **New experiment, one step short of self-drawing: answer the toolbar's
+  own `NM_CUSTOMDRAW` with `TBCDRF_USECDCOLORS`.** The system still paints
+  everything itself - nothing is drawn by us - we only relay, per button,
+  the color that EmEditor's measured band background implies: light arrow
+  on a dark band, dark arrow on a light band, dark on the light hover/
+  pressed fill. If the control applies the custom-draw text color to its
+  wholedropdown arrows (as it does for button text), the arrows finally
+  follow the bar for any custom color. All other code remains the restored
+  0.15.7 architecture.
+
 ## [0.17.5] - 2026-09-19
 
 ### Fixed
