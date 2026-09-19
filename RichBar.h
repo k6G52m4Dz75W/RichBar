@@ -158,8 +158,8 @@ WCHAR OctToDec( LPWSTR& p )
 #define MD_ICON_MODE_H			20
 #define MD_ICON_MODE_M			21
 // logical width of the dropdown marker strip (DPI-scaled); sized so the
-// marker glyph keeps clear margins inside the strip
-#define MD_MARKER_STRIP			10
+// live-drawn arrow keeps clear of the glyph while the button stays compact
+#define MD_MARKER_STRIP			8
 
 // glyph colors: light glyphs sit on dark bands, dark glyphs on light ones
 // (including the toolbar's light hover/checked fill)

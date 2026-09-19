@@ -143,7 +143,7 @@ the bitmaps: `DrawDropdownArrow` paints it live in `NM_CUSTOMDRAW`'s
 item-post-paint stage, right-anchored inside each dropdown button's real
 rect (`GGO_METRICS` gives the exact ink box), in the band-aware glyph
 color — dark ink on hover/pressed, matching the hot image list. Dropdown
-buttons are widened by a strip (`MD_MARKER_STRIP`, 10 logical px) purely
+buttons are widened by a strip (`MD_MARKER_STRIP`, 8 logical px) purely
 to reserve the arrow room, and the image lists stay one plain cell-width
 set for every button.
 
