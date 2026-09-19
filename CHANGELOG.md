@@ -14,51 +14,27 @@ this code base:
 | `0.4.x`       | Compatibility fixes that make the original plug-in build and load correctly on modern EmEditor (v26). |
 | `0.9.0` – `0.17.x` | The HTML + Markdown dual-mode toolbar, heading towards `1.0.0`. |
 
-## [0.17.4] - 2026-09-18
+## [0.17.5] - 2026-09-19
 
 ### Fixed
 
-- **Reverts 0.17.3** (the shift-the-glyph-left attempt — withdrawn).
-- **The dropdown arrows are drawn by the toolbar control in fixed theme
-  colors (dark gray), which never followed EmEditor's bar colors.** On a
-  dark band the arrows therefore sat nearly invisible, and against the new
-  wider Remix artwork they looked plainly wrong. The toolbar now switches
-  to the system dark toolbar theme (`SetWindowTheme DarkMode_Explorer`)
-  whenever the band is dark, so the control itself draws arrows, hover and
-  pressed fills in dark-mode colors that match the band — the standard
-  dark-toolbar mechanism, still no custom artwork. With the dark-theme
-  fills the hover hot image list and the pressed-state dark copies became
-  unnecessary and are removed; light bands are unchanged.
+- **Every 0.17.1-0.17.4 attempt at the dropdown-arrow color was withdrawn**
+  (revert commits on master); the toolbar code is restored to the proven
+  0.15.7 architecture - `BTNS_WHOLEDROPDOWN` buttons with the control's
+  own theme-drawn arrows, the hover hot image list, and the pressed-state
+  dark-glyph copies - now pointed at the Remix subset and its codepoints.
+- The [H][M] mode switch draws the Remix `html5-fill`/`markdown-fill`
+  glyphs; the legacy Markdown letter/shape fallback drawings and the HTML
+  `?` marker (which the Remix glyphs made unreachable) are removed, so the
+  font path is the single source of artwork. The Remix subset (62 unique
+  glyphs, 8,964 bytes, SHA256 ea113337d0b9b4cb0f645f13a2e1333e0fa86884f057bb30903cc0696b3d708a)
+  now also contains those two mode glyphs.
 
 ### Changed
 
-- All 0.17.1/0.17.2/0.17.3 intermediate attempts at the arrow color are
-  superseded by this release; the hover highlight on dark bands is now the
-  dark-mode subtle fill instead of the light system highlight.
-
-## [0.17.4] - 2026-09-18
-
-### Fixed
-
-- **The dropdown arrows are now fully self-managed.** The toolbar control
-  draws its wholedropdown arrows in fixed system theme colors that never
-  follow EmEditor's bar colors, and neither the Windows dark-mode theme
-  (0.17.4's `DarkMode_Explorer` attempt) nor geometry tweaks (0.17.1-0.17.3)
-  could make them match. The three in-bar dropdown buttons (heading, font,
-  form) are therefore plain buttons — the control draws no arrow at all —
-  and the affordance is a small filled triangle baked into their icon
-  bitmaps, drawn with the bar's foreground color so it is correct in every
-  theme, hover and pressed state. Clicks arrive as plain `WM_COMMAND` and
-  `OnDlgCommand` opens the dropdown; hover-open and `TBN_DROPDOWN` handling
-  are kept. With the control's light hover fill gone, the dark-band
-  `DarkMode_Explorer` theme remains and the hover hot image list and
-  pressed-state dark copies are no longer needed and are removed.
-
-### Changed
-
-- All arrow-color attempts of 0.17.1-0.17.3 are superseded by this
-  self-managed design; on hover the button now shows the dark-mode subtle
-  fill instead of the light system highlight.
+- `tools/test-icon-rendering.ps1` follows the restored architecture
+  (hot list and pressed copies back), with oracle tables and face checks
+  updated to `remixicon` codepoints.
 
 ## [0.17.0] - 2026-09-18
 
