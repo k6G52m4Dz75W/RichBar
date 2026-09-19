@@ -14,6 +14,26 @@ this code base:
 | `0.4.x`       | Compatibility fixes that make the original plug-in build and load correctly on modern EmEditor (v26). |
 | `0.9.0` – `0.17.x` | The HTML + Markdown dual-mode toolbar, heading towards `1.0.0`. |
 
+## [0.17.11] - 2026-09-19
+
+### Fixed
+
+- **Dark -> light theme switch now recolors the bar without a restart** (as
+  a plug-in-side workaround). Confirmed systemic upstream behavior: no
+  plug-in sees EmEditor's scheme change in time when leaving Very Dark, so
+  the bar kept its dark rendering until relaunch. After handling
+  `WM_THEMECHANGED` the bar now arms a deferred recheck (1 s; postponed
+  while a dropdown menu tracks) that re-evaluates the glyph color and
+  re-creates the bar if it no longer matches — the flip shows up about a
+  second late instead of never. The bar is also re-created on the theme
+  message even while hidden, so showing it afterwards is no longer stale.
+- **The dropdown marker now re-syncs immediately after customization**:
+  closing the Customize dialog re-renders the image lists against the
+  edited command array (customization edits buttons live but never
+  rebuilt the lists, so a re-added dropdown button could temporarily lack
+  its arrow until the next bar re-creation, and a reassigned icon could
+  keep a stale one).
+
 ## [0.17.10] - 2026-09-19
 
 ### Fixed

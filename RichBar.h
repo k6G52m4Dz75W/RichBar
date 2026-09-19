@@ -154,6 +154,10 @@ WCHAR OctToDec( LPWSTR& p )
 #define ID_MODE_MD				91
 // hover-to-open dropdown delay timer (m_hDlg)
 #define IDT_HOVER_MENU			1
+// deferred theme-state recheck (m_hDlg): EmEditor's scheme state may lag
+// its WM_THEMECHANGED broadcast (the dark -> light switch is not seen by
+// any plug-in in time), so the glyph color is re-evaluated once more
+#define IDT_THEME_RECHECK		2
 // runtime-drawn glyphs appended to every toolbar image list
 #define MD_ICON_MODE_H			20
 #define MD_ICON_MODE_M			21
@@ -1666,6 +1670,47 @@ public:
 		}
 	}
 
+	// re-render the image lists against the current command array; used
+	// after the Customize dialog closes, which edits buttons live but leaves
+	// the marker baking (which icons carry the dropdown arrow) to the next
+	// full rebuild
+	void RebuildToolbarImages()
+	{
+		if( !m_hwndToolbar || !m_himageToolbar ){
+			return;
+		}
+		int nDPI = (int)Editor_DocInfo( m_hWnd, 0, EI_GET_DPI, 0 );
+		int cxButtonSize = MulDiv( m_bLargeToolbar ? 24 : 16, nDPI, DEFAULT_DPI );
+		const int cxStrip = MulDiv( 6, nDPI, DEFAULT_DPI );
+		int cxImage = cxButtonSize + cxStrip;
+		COLORREF crGlyphFg = GetBarGlyphColor();
+		m_crGlyphFg = crGlyphFg;
+		const int nCopies = ( crGlyphFg == GLYPH_COLOR_LIGHT ) ? 2 : 1;
+		HIMAGELIST himlNew = BuildToolbarImageList( cxImage, cxButtonSize, crGlyphFg, m_iMode, nCopies );
+		if( !himlNew ){
+			return;
+		}
+		SendMessage( m_hwndToolbar, TB_SETIMAGELIST, 0, (LPARAM)himlNew );
+		ImageList_Destroy( m_himageToolbar );
+		m_himageToolbar = himlNew;
+		m_nLightIcons = ImageList_GetImageCount( m_himageToolbar ) / nCopies;
+		if( nCopies == 2 ){
+			HIMAGELIST himlHot = BuildHotImageList( cxImage, cxButtonSize );
+			if( himlHot ){
+				SendMessage( m_hwndToolbar, TB_SETHOTIMAGELIST, 0, (LPARAM)himlHot );
+				if( m_himageToolbarHot ){
+					ImageList_Destroy( m_himageToolbarHot );
+				}
+				m_himageToolbarHot = himlHot;
+			}
+		}
+		else if( m_himageToolbarHot ){
+			SendMessage( m_hwndToolbar, TB_SETHOTIMAGELIST, 0, (LPARAM)NULL );
+			ImageList_Destroy( m_himageToolbarHot );
+			m_himageToolbarHot = NULL;
+		}
+	}
+
 	void OnCommand( HWND /*hwndView*/ )
 	{
 		DisplayBar( !IsVisible() );
@@ -1935,6 +1980,11 @@ public:
 	{
 		if( DialogBox( EEGetLocaleInstanceHandle(), MAKEINTRESOURCE( IDD_CUSTOMIZE ), hwnd, CustomizeDlg ) == IDOK ){
 		}
+		// customization edits buttons live but never rebuilds the image
+		// lists; re-sync so the dropdown marker follows any icon/command
+		// changes (a removed dropdown command drops its marker, a re-added
+		// one gains it immediately instead of at the next bar re-creation)
+		RebuildToolbarImages();
 	}
 
 	void OnPropInitDialog( HWND hDlg )
@@ -2454,14 +2504,39 @@ public:
 	void OnThemeChanged( HWND hwnd )
 	{
 		Editor_Info( hwnd, EI_WM_THEMECHANGED, (LPARAM)hwnd );
-		// re-create the bar when the glyph color flipped with the theme
-		if( m_hwndToolbar && m_bVisible ){
+		// re-create the bar when the glyph color flipped with the theme;
+		// EmEditor's scheme state may lag the broadcast (official plug-ins
+		// never see the dark -> light switch in time either), so also arm a
+		// deferred recheck that re-evaluates the state one second later
+		if( m_hwndToolbar ){
 			COLORREF crFg = GetBarGlyphColor();
 			if( crFg != m_crGlyphFg ){
 				Editor_ToolbarClose( m_hWnd, m_nClientID );
 				CustomBarClosed();
-				DisplayBar( true );
+				DisplayBar( m_bVisible );
 			}
+			SetTimer( m_hDlg, IDT_THEME_RECHECK, 1000, NULL );
+		}
+	}
+
+	// deferred theme recheck: re-create the bar if the glyph color it was
+	// built with no longer matches the (by now possibly updated) bar state
+	void OnThemeRecheck()
+	{
+		KillTimer( m_hDlg, IDT_THEME_RECHECK );
+		if( !m_hwndToolbar ){
+			return;
+		}
+		if( m_bInDropdownMenu ){
+			// never tear the bar down while a menu tracks; look again later
+			SetTimer( m_hDlg, IDT_THEME_RECHECK, 500, NULL );
+			return;
+		}
+		COLORREF crFg = GetBarGlyphColor();
+		if( crFg != m_crGlyphFg ){
+			Editor_ToolbarClose( m_hWnd, m_nClientID );
+			CustomBarClosed();
+			DisplayBar( m_bVisible );
 		}
 	}
 
@@ -3463,6 +3538,13 @@ INT_PTR CALLBACK NewProc( HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam )
 			CMyFrame* pFrame = static_cast<CMyFrame*>(GetFrame( hwnd ));
 			if( pFrame ){
 				pFrame->OnHoverMenuTimer();
+			}
+			return 0;
+		}
+		else if( wParam == IDT_THEME_RECHECK ){
+			CMyFrame* pFrame = static_cast<CMyFrame*>(GetFrame( hwnd ));
+			if( pFrame ){
+				pFrame->OnThemeRecheck();
 			}
 			return 0;
 		}
