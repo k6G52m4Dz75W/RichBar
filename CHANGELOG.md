@@ -14,6 +14,20 @@ this code base:
 | `0.4.x`       | Compatibility fixes that make the original plug-in build and load correctly on modern EmEditor (v26). |
 | `0.9.0` – `0.17.x` | The HTML + Markdown dual-mode toolbar, heading towards `1.0.0`. |
 
+## [0.17.13] - 2026-09-19
+
+### Removed
+
+- The theme-state recheck (0.17.11) and the 1 s state poll (0.17.12).
+  Field testing confirmed the root cause is upstream and absolute: when
+  leaving Very Dark, EmEditor never updates `EI_IS_VERY_DARK` or
+  `EI_GET_BAR_BACK_COLOR` before relaunch — the queryable state itself is
+  never modified, so no plug-in can detect the switch by any means
+  (notification, recheck or polling), and the machinery only added
+  overhead. The bar still re-renders on `WM_THEMECHANGED` and on every
+  mode/config-driven re-creation; the dark -> light flip takes a relaunch
+  until fixed in EmEditor itself.
+
 ## [0.17.12] - 2026-09-19
 
 ### Fixed
