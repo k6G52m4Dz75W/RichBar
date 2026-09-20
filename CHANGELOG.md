@@ -14,6 +14,16 @@ this code base:
 | `0.4.x`       | Compatibility fixes that make the original plug-in build and load correctly on modern EmEditor (v26). |
 | `0.9.0` – `0.17.x` | The HTML + Markdown dual-mode toolbar, heading towards `1.0.0`. |
 
+## [0.19.3] - 2026-09-20
+
+### Fixed
+
+- **The Icon Color toolbar button did not refresh the bar**: swapping the
+  image lists in `RebuildToolbarImages` does not repaint already-visible
+  buttons, so the new colors only appeared after some unrelated
+  invalidation. The rebuild now finishes with `TB_AUTOSIZE` +
+  `InvalidateRect` + `UpdateWindow`, applying the change instantly.
+
 ## [0.19.2] - 2026-09-20
 
 ### Fixed

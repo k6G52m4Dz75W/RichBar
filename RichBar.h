@@ -1729,6 +1729,11 @@ public:
 			ImageList_Destroy( m_himageToolbarHot );
 			m_himageToolbarHot = NULL;
 		}
+		// swapping the image lists does not repaint the visible buttons:
+		// force a full layout + repaint so the new colors show immediately
+		SendMessage( m_hwndToolbar, TB_AUTOSIZE, 0, 0 );
+		InvalidateRect( m_hwndToolbar, NULL, TRUE );
+		UpdateWindow( m_hwndToolbar );
 	}
 
 	// The dropdown arrow, drawn live in NM_CUSTOMDRAW's item-post-paint
