@@ -12,15 +12,15 @@ replaces `docs/lucide-font.md` (the Lucide subset was removed in 0.16.0).
 - The release's `remixicon.ttf` is **613,136 bytes**, SHA256
   `cdff268662c834fbe023a8d34f77e2842c50025b093bc827c9b71adefc81b256`.
 - Bundled artifact: `remixicon_subset.ttf` at the repository root —
-  **9,104 bytes**, **63 unique icons** (plus `.notdef`), SHA256
-  `90bf417fe74a9d7fd28b3f3218dd3ed0952e3466e7faf6c672fe91b770210cc4`.
+  **9,264 bytes**, **63 unique icons** (plus `.notdef`), SHA256
+  `d7f5a0690523a6c5e5731834146727b9e9e0d94feb8ed04dc364a8579c644699`.
 
 Verify the bundled subset at any time:
 
 ```powershell
-Get-Item .\remixicon_subset.ttf | Select-Object Length    # 9104
+Get-Item .\remixicon_subset.ttf | Select-Object Length    # 9264
 Get-FileHash .\remixicon_subset.ttf -Algorithm SHA256
-# 90bf417fe74a9d7fd28b3f3218dd3ed0952e3466e7faf6c672fe91b770210cc4
+# d7f5a0690523a6c5e5731834146727b9e9e0d94feb8ed04dc364a8579c644699
 ```
 
 ## Regenerating the subset
@@ -136,7 +136,7 @@ Markdown 21/22, HTML 49/50:
 
 | Slot (MD / HTML) | Toolbar command | Remix Icon name | Codepoint |
 |---|---|---|---|
-| 20 / 48 | Icon Color | `drop-line` | U+EC6A |
+| 20 / 48 | Icon Color | `color-filter-line` | U+F42E |
 
 ## Dropdown arrow marker (since 0.17.9; live-drawn since 0.17.19)
 

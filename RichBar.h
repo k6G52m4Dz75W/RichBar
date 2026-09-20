@@ -1417,7 +1417,7 @@ public:
 			{ 17, 0xEE4B },		// image-line
 			{ 18, 0xF1DE },		// table-line
 			{ 19, 0xF0EE },		// settings-line (customize)
-			{ 20, 0xEC6A },		// drop-line (icon color)
+			{ 20, 0xF42E },		// color-filter-line (icon color)
 		};
 		BOOL bGlyphDrawn = FALSE;
 		for( int g = 0; g < (int)_countof( c_aIconGlyphs ); g++ ){
@@ -1449,7 +1449,7 @@ public:
 			0xF050, 0xEA7A, 0xF327, 0xF39A, 0xEC0A, 0xEAE9, // radio, group box, select, listbox, buttons
 			0xECB7, 0xF2F5, 0xEB31, 0xEC36, 0xF0BB, 0xF029, // hidden, object, camera, disc, scanner, printer
 			0xED9E, 0xEB97, 0xEA21, 0xEE59, 0xED3B, 0xEF83, // function, error, warning, info, flag, sound
-			0xEC6A                                          // drop-line (icon color)
+			0xF42E                                          // color-filter-line (icon color)
 		};
 		if( iIcon < 0 || iIcon >= (int)_countof( glyphs ) ) return;
 		DrawIconGlyph( hdc, cx, glyphs[iIcon], crFg, cxRect );

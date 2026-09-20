@@ -59,7 +59,7 @@ static const ExpectedGlyph expected[] = {
     {5, 0xEDEB}, {6, 0xEAD1}, {7, 0xEE6B}, {8, 0xF1AB}, {9, 0xEBAD},
     {10, 0xEBA7}, {11, 0xEC51}, {12, 0xEEBE}, {13, 0xEEBB}, {14, 0xEEB9},
     {15, 0xF1AF}, {16, 0xEEB2}, {17, 0xEE4B}, {18, 0xF1DE}, {19, 0xF0EE},
-    {20, 0xEC6A}
+    {20, 0xF42E}
 };
 static bool HasPua(LPCWSTR s, int n) {
     if (n < 0) n = (int)wcslen(s);

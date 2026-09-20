@@ -14,6 +14,19 @@ this code base:
 | `0.4.x`       | Compatibility fixes that make the original plug-in build and load correctly on modern EmEditor (v26). |
 | `0.9.0` – `0.17.x` | The HTML + Markdown dual-mode toolbar, heading towards `1.0.0`. |
 
+## [0.19.2] - 2026-09-20
+
+### Fixed
+
+- **The toolbar Icon Color button was dead** — its popup menu resource was
+  written as a flat menu, but the popup helper resolves the menu's first
+  submenu (`GetSubMenu(0)`), which came back NULL and TrackPopupMenu
+  silently failed. The menu is now wrapped in a POPUP entry like every
+  other popup in this plug-in.
+- The button glyph is Remix `color-filter-line` (U+F42E) instead of
+  `drop-line` (subset stays 63 glyphs; 9,264 bytes, SHA256
+  `d7f5a0690523a6c5e5731834146727b9e9e0d94feb8ed04dc364a8579c644699`).
+
 ## [0.19.1] - 2026-09-20
 
 ### Added
