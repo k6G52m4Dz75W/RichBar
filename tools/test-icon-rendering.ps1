@@ -59,7 +59,7 @@ static const ExpectedGlyph expected[] = {
     {5, 0xEDEB}, {6, 0xEAD1}, {7, 0xEE6B}, {8, 0xF1AB}, {9, 0xEBAD},
     {10, 0xEBA7}, {11, 0xEC51}, {12, 0xEEBE}, {13, 0xEEBB}, {14, 0xEEB9},
     {15, 0xF1AF}, {16, 0xEEB2}, {17, 0xEE4B}, {18, 0xF1DE}, {19, 0xF0EE},
-    {20, 0xF42E}, {21, 0xEF1E}, {22, 0xECB5}
+    {20, 0xF42E}, {21, 0xEE8D}, {22, 0xECB5}
 };
 static bool HasPua(LPCWSTR s, int n) {
     if (n < 0) n = (int)wcslen(s);
@@ -232,7 +232,7 @@ static void TestImageLists(bool fallback) {
     for (int size : {16, 24, 32}) {
         for (int mode : {MODE_HTML, MODE_MD, MODE_HTML}) {
             renderer.m_iMode = mode;
-            int count = mode == MODE_HTML ? 51 : 23;
+            int count = mode == MODE_HTML ? 50 : 23;
             for (COLORREF fg : {RGB(48,48,48), RGB(224,224,224)}) {
                 HIMAGELIST list = renderer.BuildToolbarImageList(size, fg, mode);
                 Check(list && ImageList_GetImageCount(list) == count+2, "wrong command image-list count (commands + H/M)");

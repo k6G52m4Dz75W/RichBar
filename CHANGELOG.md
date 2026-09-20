@@ -14,6 +14,24 @@ this code base:
 | `0.4.x`       | Compatibility fixes that make the original plug-in build and load correctly on modern EmEditor (v26). |
 | `0.9.0` – `0.17.x` | The HTML + Markdown dual-mode toolbar, heading towards `1.0.0`. |
 
+## [0.20.1] - 2026-09-20
+
+### Fixed
+
+- **The Preview button now toggles the in-editor web preview pane**
+  (renders HTML and Markdown) via `EI_SET_WEB` with
+  `FLAG_OPEN_WEB`/`FLAG_CLOSE_WEB`, instead of `EEID_VIEW_WEB`, which
+  opens an external browser page. The pane state has no SDK query and is
+  tracked locally.
+- **Design View is Markdown-mode only**: the button no longer appears in
+  HTML mode, and HTML layouts saved by 0.20.0 have it removed on load.
+  Its glyph changed from `markdown-line` (too close to the [M] switch's
+  `markdown-fill`) to `layout-column-line` (U+EE8D); HTML gains the
+  `eye-line` preview glyph at slot 49 (pool: Markdown 0–22 + switches
+  23/24, HTML 0–49 + switches 50/51; subset stays 65 glyphs, 9,580
+  bytes, SHA256
+  `acd9cb0872666bd506718be8b46a7336e181743a40e9991c43a839db375c845d`).
+
 ## [0.20.0] - 2026-09-20
 
 ### Added

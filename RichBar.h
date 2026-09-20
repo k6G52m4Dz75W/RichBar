@@ -152,10 +152,12 @@ WCHAR OctToDec( LPWSTR& p )
 #define CMD_PREVIEW				11
 #define MAX_CMD					12
 
-// built-in EmEditor command IDs from the v24.4 plug-in SDK
-// (Emurasoft/emeditor-plugin-library plugin.h); executed via WM_COMMAND
+// built-in EmEditor command IDs and pane flags from the v23/v24.4 plug-in
+// SDK (Emurasoft/emeditor-plugin-library plugin.h)
 #define EEID_MARKDOWN_VIEW		23255	// Markdown design view toggle
-#define EEID_VIEW_WEB			23243	// HTML/Markdown web preview toggle
+#define EI_SET_WEB				405		// open/close the web preview pane
+#define FLAG_OPEN_WEB			0x0001
+#define FLAG_CLOSE_WEB			0x0002
 
 // toolbar mode-switch buttons (command IDs below ID_COMMAND_BASE)
 #define ID_MODE_HTML			90
@@ -258,8 +260,7 @@ static struct CDefCmd DefCmd[] =
 	{ 23, CMD_DROPDOWN_FORM, ID_FORM, L"", L"" },
 	{ -1, CMD_SEPARATOR, 0, L"", L"" },
 	{ 48, CMD_ICON_COLOR, ID_ICON_COLOR, L"", L"" },
-	{ 49, CMD_MD_VIEW, ID_MD_VIEW, L"", L"" },
-	{ 50, CMD_PREVIEW, ID_PREVIEW, L"", L"" },
+	{ 49, CMD_PREVIEW, ID_PREVIEW, L"", L"" },
 	{ 24, CMD_CUSTOMIZE, ID_CUSTOMIZE, L"", L"" },
 	{ 25, CMD_TAGS, ID_FORM_FORM, L"<form method=\"post\" action=\"\">\n\t", L"\n<input type=\"submit\"><input type=\"reset\"></form>\n" },
 	{ 26, CMD_TAGS, ID_TEXTBOX, L"<input type=\"text\" id=\"\" />", L"" },
@@ -407,6 +408,7 @@ public:
 	bool m_bCustomIconColor;	// icon color mode: false = auto (band luminance), true = user color
 	COLORREF m_crCustomIcon;	// user-picked icon color for the normal state
 	bool m_bIconColorDirty;		// a color setting was touched in the open Prop dialog
+	bool m_bPreviewOpen;		// web preview pane toggled from our button (no SDK query)
 	UINT m_nHoverMenuCmd;		// dropdown command waiting for the hover-open timer
 	UINT m_nLastMenuCmd;		// dropdown whose menu closed last; reopen only after the mouse leaves it
 	bool m_bLastMenuLeft;		// the mouse has left m_nLastMenuCmd since its menu closed
@@ -1016,12 +1018,14 @@ public:
 		if( bResult ){
 			// migration: arrays saved by older versions predate newer
 			// functional buttons; splice any missing ones in before the
-			// customize entry and persist so it sticks
-			struct NewButton { int iCmd; int iIcon; LPCWSTR pszTitle; };
+			// customize entry and persist so it sticks. Design View exists
+			// in Markdown mode only (and is removed from HTML arrays saved
+			// by 0.20.0, which added it to both)
+			struct NewButton { int iCmd; int iIcon; LPCWSTR pszTitle; bool bMdOnly; };
 			const NewButton aNew[] = {
-				{ CMD_ICON_COLOR, ( iMode == MODE_MD ) ? 20 : 48, L"Icon Color" },
-				{ CMD_MD_VIEW,    ( iMode == MODE_MD ) ? 21 : 49, L"Design View" },
-				{ CMD_PREVIEW,    ( iMode == MODE_MD ) ? 22 : 50, L"Preview" },
+				{ CMD_ICON_COLOR, ( iMode == MODE_MD ) ? 20 : 48, L"Icon Color", false },
+				{ CMD_MD_VIEW,    ( iMode == MODE_MD ) ? 21 : 0,  L"Design View", true },
+				{ CMD_PREVIEW,    ( iMode == MODE_MD ) ? 22 : 49, L"Preview", false },
 			};
 			bool bInserted = false;
 			int iAt = (int)m_CmdArray[iMode].size();
@@ -1029,6 +1033,7 @@ public:
 				if( m_CmdArray[iMode][i].m_iCmd == CMD_CUSTOMIZE ){ iAt = i; break; }
 			}
 			for( auto& nb : aNew ){
+				if( nb.bMdOnly && iMode != MODE_MD )  continue;
 				bool bFound = false;
 				for( const auto& cmd : m_CmdArray[iMode] ){
 					if( cmd.m_iCmd == nb.iCmd ){ bFound = true; break; }
@@ -1038,6 +1043,14 @@ public:
 					m_CmdArray[iMode].insert( m_CmdArray[iMode].begin() + iAt, cmd );
 					iAt++;
 					bInserted = true;
+				}
+			}
+			if( iMode != MODE_MD ){
+				for( int i = (int)m_CmdArray[iMode].size() - 1; i >= 0; i-- ){
+					if( m_CmdArray[iMode][i].m_iCmd == CMD_MD_VIEW ){
+						m_CmdArray[iMode].erase( m_CmdArray[iMode].begin() + i );
+						bInserted = true;
+					}
 				}
 			}
 			if( bInserted && iMode == m_iMode ){
@@ -1440,7 +1453,7 @@ public:
 			{ 18, 0xF1DE },		// table-line
 			{ 19, 0xF0EE },		// settings-line (customize)
 			{ 20, 0xF42E },		// color-filter-line (icon color)
-			{ 21, 0xEF1E },		// markdown-line (design view)
+			{ 21, 0xEE8D },		// layout-column-line (design view)
 			{ 22, 0xECB5 },		// eye-line (preview)
 		};
 		BOOL bGlyphDrawn = FALSE;
@@ -1473,8 +1486,7 @@ public:
 			0xF050, 0xEA7A, 0xF327, 0xF39A, 0xEC0A, 0xEAE9, // radio, group box, select, listbox, buttons
 			0xECB7, 0xF2F5, 0xEB31, 0xEC36, 0xF0BB, 0xF029, // hidden, object, camera, disc, scanner, printer
 			0xED9E, 0xEB97, 0xEA21, 0xEE59, 0xED3B, 0xEF83, // function, error, warning, info, flag, sound
-			0xF42E,                                         // color-filter-line (icon color)
-			0xEF1E, 0xECB5                                  // markdown-line (design view), eye-line (preview)
+			0xF42E, 0xECB5                                  // color-filter-line (icon color), eye-line (preview)
 		};
 		if( iIcon < 0 || iIcon >= (int)_countof( glyphs ) ) return;
 		DrawIconGlyph( hdc, cx, glyphs[iIcon], crFg, cxRect );
@@ -1546,7 +1558,7 @@ public:
 	// button's actual rect (see DrawDropdownArrow).
 	HIMAGELIST BuildToolbarImageList( int cx, COLORREF crFg, int mode, int nCopies = 1 )
 	{
-		int count = mode == MODE_MD ? 23 : 51;
+		int count = mode == MODE_MD ? 23 : 50;
 		HIMAGELIST himl = ImageList_Create( cx, cx, ILC_COLOR32, ( count + 2 ) * nCopies, 2 );
 		if( !himl ){
 			return NULL;
@@ -2059,6 +2071,7 @@ public:
 		m_bCustomIconColor = false;
 		m_crCustomIcon = RGB( 224, 224, 224 );
 		m_bIconColorDirty = false;
+		m_bPreviewOpen = false;
 		m_nBand = (UINT)-1;
 	}
 
@@ -2777,7 +2790,11 @@ public:
 				PostMessage( m_hWnd, WM_COMMAND, MAKEWPARAM( EEID_MARKDOWN_VIEW, 0 ), 0 );
 			}
 			else if( cmd.m_iCmd == CMD_PREVIEW ){
-				PostMessage( m_hWnd, WM_COMMAND, MAKEWPARAM( EEID_VIEW_WEB, 0 ), 0 );
+				// toggle the in-editor web preview pane (renders HTML and
+				// Markdown); EmEditor has no query for the pane state, so
+				// it is tracked locally
+				m_bPreviewOpen = !m_bPreviewOpen;
+				Editor_Info( m_hWnd, EI_SET_WEB, m_bPreviewOpen ? FLAG_OPEN_WEB : FLAG_CLOSE_WEB );
 			}
 		}
 

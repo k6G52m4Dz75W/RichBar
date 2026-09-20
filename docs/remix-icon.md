@@ -12,15 +12,15 @@ replaces `docs/lucide-font.md` (the Lucide subset was removed in 0.16.0).
 - The release's `remixicon.ttf` is **613,136 bytes**, SHA256
   `cdff268662c834fbe023a8d34f77e2842c50025b093bc827c9b71adefc81b256`.
 - Bundled artifact: `remixicon_subset.ttf` at the repository root —
-  **9,612 bytes**, **65 unique icons** (plus `.notdef`), SHA256
-  `fd0acd17c3ec731daffb22d1fbb666464bbfeab725dbe904d91ded2142490940`.
+  **9,580 bytes**, **65 unique icons** (plus `.notdef`), SHA256
+  `acd9cb0872666bd506718be8b46a7336e181743a40e9991c43a839db375c845d`.
 
 Verify the bundled subset at any time:
 
 ```powershell
-Get-Item .\remixicon_subset.ttf | Select-Object Length    # 9612
+Get-Item .\remixicon_subset.ttf | Select-Object Length    # 9580
 Get-FileHash .\remixicon_subset.ttf -Algorithm SHA256
-# fd0acd17c3ec731daffb22d1fbb666464bbfeab725dbe904d91ded2142490940
+# acd9cb0872666bd506718be8b46a7336e181743a40e9991c43a839db375c845d
 ```
 
 ## Regenerating the subset
@@ -125,12 +125,12 @@ icons).
 
 Since 0.17.0 the leftmost mode-switch pair also draws from this subset
 (filled variants, most legible at toolbar sizes). Slots per mode:
-Markdown 23/24, HTML 51/52:
+Markdown 23/24, HTML 50/51:
 
 | Slot (MD / HTML) | Command | Remix Icon name | Codepoint |
 |---|---|---|---|
-| 23 / 51 | Mode switch: HTML | `html5-fill` | U+EE40 |
-| 24 / 52 | Mode switch: Markdown | `markdown-fill` | U+EF1D |
+| 23 / 50 | Mode switch: HTML | `html5-fill` | U+EE40 |
+| 24 / 51 | Mode switch: Markdown | `markdown-fill` | U+EF1D |
 
 ## Icon color button (since 0.19.1)
 
@@ -142,8 +142,8 @@ Markdown 23/24, HTML 51/52:
 
 | Slot (MD / HTML) | Toolbar command | Remix Icon name | Codepoint |
 |---|---|---|---|
-| 21 / 49 | Design View | `markdown-line` | U+EF1E |
-| 22 / 50 | Preview | `eye-line` | U+ECB5 |
+| 21 / — | Design View (Markdown mode only) | `layout-column-line` | U+EE8D |
+| 22 / 49 | Preview | `eye-line` | U+ECB5 |
 
 ## Dropdown arrow marker (since 0.17.9; live-drawn since 0.17.19)
 
