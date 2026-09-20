@@ -410,9 +410,11 @@ public:
 	bool m_bCustomIconColor;	// icon color mode: false = auto (band luminance), true = user color
 	COLORREF m_crCustomIcon;	// user-picked icon color for the normal state
 	bool m_bIconColorDirty;		// a color setting was touched in the open Prop dialog
+	bool m_bDesignViewOn;		// design view toggle state (synced with 407 when it works)
 	bool m_bPreviewOn;			// preview pane toggled from our button (no SDK query)
 	bool m_bDesignViewDrawn;	// design-view state as of the last state-sync repaint
 	bool m_bPreviewDrawn;		// preview state as of the last state-sync repaint
+	bool m_b407Alive;			// EI_GET_MARKDOWN_PREVIEW has ever returned TRUE
 	UINT m_nHoverMenuCmd;		// dropdown command waiting for the hover-open timer
 	UINT m_nLastMenuCmd;		// dropdown whose menu closed last; reopen only after the mouse leaves it
 	bool m_bLastMenuLeft;		// the mouse has left m_nLastMenuCmd since its menu closed
@@ -1794,19 +1796,28 @@ public:
 				bInverted = ( iHot == (int)SendMessage( m_hwndToolbar, TB_COMMANDTOINDEX, uIDCommand, 0 ) );
 			}
 		}
+		bool bToggled = false;
 		if( uIDCommand >= ID_COMMAND_BASE && uIDCommand < ID_COMMAND_BASE + (int)Cmds().size() ){
 			const int iCmd = Cmds()[ uIDCommand - ID_COMMAND_BASE ].m_iCmd;
-			// the Design View button mirrors EmEditor's persistent design
-			// view state (from the state-sync poll), the Preview button our
-			// last toggle
+			// the Design View and Preview buttons are toggles: while on,
+			// they keep the pressed look (background + dark ink) even after
+			// the mouse is released
 			if( iCmd == CMD_MD_VIEW ){
-				bInverted = m_bDesignViewDrawn;
+				bToggled = m_bDesignViewOn;
 			}
 			else if( iCmd == CMD_PREVIEW ){
-				bInverted = m_bPreviewOn;
+				bToggled = m_bPreviewOn;
 			}
 		}
+		bInverted = bInverted || bToggled;
 		if( !bInverted )  return;
+		if( bToggled ){
+			// a held button gets the control's own pressed fill; a toggled
+			// button needs us to draw the highlight background itself
+			HBRUSH br = CreateSolidBrush( GetSysColor( COLOR_HIGHLIGHT ) );
+			FillRect( hdc, &rc, br );
+			DeleteObject( br );
+		}
 		int iIcon = -1;
 		if( uIDCommand == ID_MODE_HTML )  iIcon = m_nLightIcons - 2;
 		else if( uIDCommand == ID_MODE_MD )  iIcon = m_nLightIcons - 1;
@@ -1831,8 +1842,14 @@ public:
 			return;
 		}
 		BOOL bDesign = Editor_Info( m_hWnd, EI_GET_MARKDOWN_PREVIEW, 0 ) != FALSE;
-		if( bDesign != m_bDesignViewDrawn || m_bPreviewOn != m_bPreviewDrawn ){
-			m_bDesignViewDrawn = bDesign;
+		if( bDesign ){
+			m_b407Alive = true;	// the query works: trust it over our local toggle
+		}
+		if( m_b407Alive && bDesign != m_bDesignViewOn ){
+			m_bDesignViewOn = bDesign;
+		}
+		if( m_bDesignViewOn != m_bDesignViewDrawn || m_bPreviewOn != m_bPreviewDrawn ){
+			m_bDesignViewDrawn = m_bDesignViewOn;
 			m_bPreviewDrawn = m_bPreviewOn;
 			InvalidateRect( m_hwndToolbar, NULL, TRUE );
 		}
@@ -2108,9 +2125,11 @@ public:
 		m_bCustomIconColor = false;
 		m_crCustomIcon = RGB( 224, 224, 224 );
 		m_bIconColorDirty = false;
+		m_bDesignViewOn = false;
 		m_bPreviewOn = false;
 		m_bDesignViewDrawn = false;
 		m_bPreviewDrawn = false;
+		m_b407Alive = false;
 		m_nBand = (UINT)-1;
 	}
 
@@ -2407,6 +2426,8 @@ public:
 			m_bProfileLoaded = true;
 			m_bOpenStartup = !!GetProfileInt( _T("OpenStartup"), FALSE );
 			m_bAutoDisplay = !!GetProfileInt( _T("AutoDisplay"), FALSE );
+			m_bDesignViewOn = !!GetProfileInt( _T("DesignViewOn"), FALSE );
+			m_bPreviewOn = !!GetProfileInt( _T("PreviewOn"), FALSE );
 			m_bCustomIconColor = !!GetProfileInt( _T("IconColorMode"), FALSE );
 			m_crCustomIcon = (COLORREF)GetProfileInt( _T("IconColor"), (int)RGB( 224, 224, 224 ) );
 			m_cx = GetProfileInt( _T("cx"), 0 );
@@ -2425,6 +2446,9 @@ public:
 		if( m_bUninstalling )  return;
 //		WriteProfileInt( _T("OpenStartup"), m_bOpenStartup );
 		WriteProfileInt( _T("AutoDisplay"), !!m_bAutoDisplay );
+		WriteProfileInt( _T("DesignViewOn"), !!m_bDesignViewOn );
+		WriteProfileInt( _T("PreviewOn"), !!m_bPreviewOn );
+		WriteProfileInt( _T("IconColorMode"), !!m_bCustomIconColor );
 		WriteProfileInt( _T("IconColorMode"), !!m_bCustomIconColor );
 		WriteProfileInt( _T("IconColor"), (int)m_crCustomIcon );
 		WriteProfileInt( _T("cx"), m_cx );
@@ -2868,6 +2892,8 @@ public:
 				// the built-in command toggles the design view; EmEditor
 				// persists its state, and the state-sync poll repaints our
 				// button to match
+				m_bDesignViewOn = !m_bDesignViewOn;
+				SaveProfile();
 				PostMessage( m_hWnd, WM_COMMAND, MAKEWPARAM( EEID_MARKDOWN_VIEW, 0 ), 0 );
 			}
 			else if( cmd.m_iCmd == CMD_PREVIEW ){
@@ -2875,6 +2901,7 @@ public:
 				// preview (it converts before rendering); other documents
 				// (HTML) run the WebPreview plug-in on the raw file
 				m_bPreviewOn = !m_bPreviewOn;
+				SaveProfile();
 				if( m_iMode == MODE_MD ){
 					PostMessage( m_hWnd, WM_COMMAND, MAKEWPARAM( EEID_MARKDOWN_PREVIEW, 0 ), 0 );
 				}

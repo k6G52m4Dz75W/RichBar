@@ -14,6 +14,20 @@ this code base:
 | `0.4.x`       | Compatibility fixes that make the original plug-in build and load correctly on modern EmEditor (v26). |
 | `0.9.0` – `0.17.x` | The HTML + Markdown dual-mode toolbar, heading towards `1.0.0`. |
 
+## [0.20.5] - 2026-09-20
+
+### Fixed
+
+- **The Design View and Preview buttons now draw a complete checked
+  look**: while their pane is on, the button is painted with the system
+  highlight background plus the dark ink (previously only the ink
+  flipped, which read as a broken dark button on an unchanged
+  background). Released → back to the normal custom color.
+- **The Design View toggle keeps local state** (persisted as
+  `DesignViewOn`), corrected by `EI_GET_MARKDOWN_PREVIEW` whenever that
+  query responds; **Preview** persists as `PreviewOn`. Both survive
+  restarts.
+
 ## [0.20.4] - 2026-09-20
 
 ### Fixed
