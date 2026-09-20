@@ -59,7 +59,7 @@ static const ExpectedGlyph expected[] = {
     {5, 0xEDEB}, {6, 0xEAD1}, {7, 0xEE6B}, {8, 0xF1AB}, {9, 0xEBAD},
     {10, 0xEBA7}, {11, 0xEC51}, {12, 0xEEBE}, {13, 0xEEBB}, {14, 0xEEB9},
     {15, 0xF1AF}, {16, 0xEEB2}, {17, 0xEE4B}, {18, 0xF1DE}, {19, 0xF0EE},
-    {20, 0xF42E}
+    {20, 0xF42E}, {21, 0xEF1E}, {22, 0xECB5}
 };
 static bool HasPua(LPCWSTR s, int n) {
     if (n < 0) n = (int)wcslen(s);
@@ -114,8 +114,8 @@ static int Draw(HDC dc, LPCWSTR s, int n, LPRECT r, UINT flags) {
         ++puaDraws;
         Check(!failAdd && !missingGlyph, "fallback attempted a PUA draw");
         wchar_t expect = 0;
-        if (!htmlTests && currentIcon >= 0 && currentIcon < 21) expect = expected[currentIcon].ch;
-        else if (!htmlTests && currentIcon >= 21 && currentIcon < 23) expect = modeExpected[currentIcon - 21];
+        if (!htmlTests && currentIcon >= 0 && currentIcon < 23) expect = expected[currentIcon].ch;
+        else if (!htmlTests && currentIcon >= 23 && currentIcon < 25) expect = modeExpected[currentIcon - 21];
         Check(expect == 0 || (n == 1 && s[0] == expect), "wrong mapped glyph drawn");
         ValidateGlyph(dc, s[0]);
     }
@@ -168,7 +168,7 @@ static std::vector<DWORD> Render(int size, COLORREF fg, int icon, bool direct = 
         // A fresh renderer each time must still share the process registration.
         Renderer().DrawMdIcon(dc, size, icon, fg);
     } else {
-        Check(icon >= 0 && icon < 21 && expected[icon].icon == icon, "invalid oracle entry");
+        Check(icon >= 0 && icon < 23 && expected[icon].icon == icon, "invalid oracle entry");
         HFONT font = CreateFontW(-size, 0, 0, 0, FW_NORMAL, FALSE, FALSE, FALSE,
             DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS, ANTIALIASED_QUALITY,
             FF_DONTCARE, L"remixicon");
@@ -197,7 +197,7 @@ static void Sweep(bool fallback) {
     int comparisons = 0, cases = 0;
     for (int size : {16, 20, 24, 32, 36, 48, 72}) {
         for (COLORREF fg : {RGB(48,48,48), RGB(224,224,224)}) {
-            for (int icon = 0; icon <= 22; ++icon) {
+            for (int icon = 0; icon <= 24; ++icon) {
                 int drawsBefore = puaDraws, probesBefore = probes, facesBefore = faceCalls;
                 auto actual = Render(size, fg, icon);
                 Check(puaDraws - drawsBefore == (fallback ? 0 : 1), "incorrect PUA draw count");
@@ -205,7 +205,7 @@ static void Sweep(bool fallback) {
                     Check(probes == probesBefore + 1 && faceCalls == facesBefore + 1,
                         "each glyph must check actual face and glyph index");
                 }
-                if (!fallback && icon < 21) {
+                if (!fallback && icon < 23) {
                     Check(actual == Render(size, fg, icon, true), "pixels differ from direct Remix drawing");
                     ++comparisons;
                 }
@@ -213,8 +213,8 @@ static void Sweep(bool fallback) {
             }
         }
     }
-    printf("%s: nonempty=%d/322 exact-Remix=%d/%d PUA-draws=%d\n",
-        fallback ? "fallback" : "normal", cases, comparisons, fallback ? 0 : 294, puaDraws);
+    printf("%s: nonempty=%d/350 exact-Remix=%d/%d PUA-draws=%d\n",
+        fallback ? "fallback" : "normal", cases, comparisons, fallback ? 0 : 322, puaDraws);
 }
 static void ReleaseAndCheck() {
     int before = removeCalls;
@@ -232,7 +232,7 @@ static void TestImageLists(bool fallback) {
     for (int size : {16, 24, 32}) {
         for (int mode : {MODE_HTML, MODE_MD, MODE_HTML}) {
             renderer.m_iMode = mode;
-            int count = mode == MODE_HTML ? 49 : 21;
+            int count = mode == MODE_HTML ? 51 : 23;
             for (COLORREF fg : {RGB(48,48,48), RGB(224,224,224)}) {
                 HIMAGELIST list = renderer.BuildToolbarImageList(size, fg, mode);
                 Check(list && ImageList_GetImageCount(list) == count+2, "wrong command image-list count (commands + H/M)");
@@ -279,16 +279,16 @@ int main(int argc, char** argv) {
     ReleaseAndCheck();
     Sweep(failAdd || missingGlyph);
     if (failAdd) {
-        Check(addCalls == 322 && added == 0 && probes == 0 && puaDraws == 0,
+        Check(addCalls == 350 && added == 0 && probes == 0 && puaDraws == 0,
             "failed registration must retry without probing/drawing PUA");
         // Recovery without release also verifies a failed install was not cached.
         failAdd = false;
         auto recovered = Render(24, RGB(48,48,48), 16);
         Check(recovered == Render(24, RGB(48,48,48), 16, true), "registration retry did not recover");
-        Check(added == 1 && addCalls == 323, "retry must register exactly once");
+        Check(added == 1 && addCalls == 351, "retry must register exactly once");
     } else {
         Check(addCalls == 1 && added == 1, "registration not shared across renderers and sizes");
-        if (missingGlyph) Check(probes == 322 && puaDraws == 0, "missing-glyph fallback not exercised");
+        if (missingGlyph) Check(probes == 350 && puaDraws == 0, "missing-glyph fallback not exercised");
     }
     ReleaseAndCheck();
     Check(removeCalls == 1, "first registration not removed exactly once");

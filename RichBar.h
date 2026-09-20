@@ -148,7 +148,14 @@ WCHAR OctToDec( LPWSTR& p )
 #define CMD_CUSTOMIZE			7
 #define CMD_LINE_PREFIX			8
 #define CMD_ICON_COLOR			9
-#define MAX_CMD					10
+#define CMD_MD_VIEW				10
+#define CMD_PREVIEW				11
+#define MAX_CMD					12
+
+// built-in EmEditor command IDs from the v24.4 plug-in SDK
+// (Emurasoft/emeditor-plugin-library plugin.h); executed via WM_COMMAND
+#define EEID_MARKDOWN_VIEW		23255	// Markdown design view toggle
+#define EEID_VIEW_WEB			23243	// HTML/Markdown web preview toggle
 
 // toolbar mode-switch buttons (command IDs below ID_COMMAND_BASE)
 #define ID_MODE_HTML			90
@@ -156,8 +163,8 @@ WCHAR OctToDec( LPWSTR& p )
 // hover-to-open dropdown delay timer (m_hDlg)
 #define IDT_HOVER_MENU			1
 // runtime-drawn glyphs appended to every toolbar image list
-#define MD_ICON_MODE_H			21
-#define MD_ICON_MODE_M			22
+#define MD_ICON_MODE_H			23
+#define MD_ICON_MODE_M			24
 // logical width of the dropdown marker strip (DPI-scaled); sized so the
 // live-drawn arrow keeps clear of the glyph while the button stays compact
 #define MD_MARKER_STRIP			8
@@ -251,6 +258,8 @@ static struct CDefCmd DefCmd[] =
 	{ 23, CMD_DROPDOWN_FORM, ID_FORM, L"", L"" },
 	{ -1, CMD_SEPARATOR, 0, L"", L"" },
 	{ 48, CMD_ICON_COLOR, ID_ICON_COLOR, L"", L"" },
+	{ 49, CMD_MD_VIEW, ID_MD_VIEW, L"", L"" },
+	{ 50, CMD_PREVIEW, ID_PREVIEW, L"", L"" },
 	{ 24, CMD_CUSTOMIZE, ID_CUSTOMIZE, L"", L"" },
 	{ 25, CMD_TAGS, ID_FORM_FORM, L"<form method=\"post\" action=\"\">\n\t", L"\n<input type=\"submit\"><input type=\"reset\"></form>\n" },
 	{ 26, CMD_TAGS, ID_TEXTBOX, L"<input type=\"text\" id=\"\" />", L"" },
@@ -315,6 +324,8 @@ static struct CDefCmdMd {
 	{ 18, CMD_INSERT_TABLE, L"Table", L"", L"", 0, 0 },
 	{ -1, CMD_SEPARATOR, L"", L"", L"", 0, 0 },
 	{ 20, CMD_ICON_COLOR, L"Icon Color", L"", L"", 0, 0 },
+	{ 21, CMD_MD_VIEW, L"Design View", L"", L"", 0, 0 },
+	{ 22, CMD_PREVIEW, L"Preview", L"", L"", 0, 0 },
 	{ 19, CMD_CUSTOMIZE, L"Customize", L"", L"", 0, 0 },
 };
 
@@ -1003,24 +1014,35 @@ public:
 			}
 		}
 		if( bResult ){
-			// migration: arrays saved by pre-0.19.1 versions predate the
-			// icon-color button; splice it in before the customize entry
-			// and persist so it sticks
-			bool bHasIconColor = false;
-			for( const auto& cmd : m_CmdArray[iMode] ){
-				if( cmd.m_iCmd == CMD_ICON_COLOR ){ bHasIconColor = true; break; }
+			// migration: arrays saved by older versions predate newer
+			// functional buttons; splice any missing ones in before the
+			// customize entry and persist so it sticks
+			struct NewButton { int iCmd; int iIcon; LPCWSTR pszTitle; };
+			const NewButton aNew[] = {
+				{ CMD_ICON_COLOR, ( iMode == MODE_MD ) ? 20 : 48, L"Icon Color" },
+				{ CMD_MD_VIEW,    ( iMode == MODE_MD ) ? 21 : 49, L"Design View" },
+				{ CMD_PREVIEW,    ( iMode == MODE_MD ) ? 22 : 50, L"Preview" },
+			};
+			bool bInserted = false;
+			int iAt = (int)m_CmdArray[iMode].size();
+			for( int i = 0; i < (int)m_CmdArray[iMode].size(); i++ ){
+				if( m_CmdArray[iMode][i].m_iCmd == CMD_CUSTOMIZE ){ iAt = i; break; }
 			}
-			if( !bHasIconColor ){
-				CCmd cmd( ( iMode == MODE_MD ) ? 20 : 48, CMD_ICON_COLOR, L"Icon Color", L"", L"" );
-				int iAt = (int)m_CmdArray[iMode].size();
-				for( int i = 0; i < (int)m_CmdArray[iMode].size(); i++ ){
-					if( m_CmdArray[iMode][i].m_iCmd == CMD_CUSTOMIZE ){ iAt = i; break; }
+			for( auto& nb : aNew ){
+				bool bFound = false;
+				for( const auto& cmd : m_CmdArray[iMode] ){
+					if( cmd.m_iCmd == nb.iCmd ){ bFound = true; break; }
 				}
-				m_CmdArray[iMode].insert( m_CmdArray[iMode].begin() + iAt, cmd );
-				if( iMode == m_iMode ){
-					m_bCmdArrayModified = true;
-					SaveCmdArray();
+				if( !bFound ){
+					CCmd cmd( nb.iIcon, nb.iCmd, nb.pszTitle, L"", L"" );
+					m_CmdArray[iMode].insert( m_CmdArray[iMode].begin() + iAt, cmd );
+					iAt++;
+					bInserted = true;
 				}
+			}
+			if( bInserted && iMode == m_iMode ){
+				m_bCmdArrayModified = true;
+				SaveCmdArray();
 			}
 		}
 		return bResult;
@@ -1418,6 +1440,8 @@ public:
 			{ 18, 0xF1DE },		// table-line
 			{ 19, 0xF0EE },		// settings-line (customize)
 			{ 20, 0xF42E },		// color-filter-line (icon color)
+			{ 21, 0xEF1E },		// markdown-line (design view)
+			{ 22, 0xECB5 },		// eye-line (preview)
 		};
 		BOOL bGlyphDrawn = FALSE;
 		for( int g = 0; g < (int)_countof( c_aIconGlyphs ); g++ ){
@@ -1449,7 +1473,8 @@ public:
 			0xF050, 0xEA7A, 0xF327, 0xF39A, 0xEC0A, 0xEAE9, // radio, group box, select, listbox, buttons
 			0xECB7, 0xF2F5, 0xEB31, 0xEC36, 0xF0BB, 0xF029, // hidden, object, camera, disc, scanner, printer
 			0xED9E, 0xEB97, 0xEA21, 0xEE59, 0xED3B, 0xEF83, // function, error, warning, info, flag, sound
-			0xF42E                                          // color-filter-line (icon color)
+			0xF42E,                                         // color-filter-line (icon color)
+			0xEF1E, 0xECB5                                  // markdown-line (design view), eye-line (preview)
 		};
 		if( iIcon < 0 || iIcon >= (int)_countof( glyphs ) ) return;
 		DrawIconGlyph( hdc, cx, glyphs[iIcon], crFg, cxRect );
@@ -1521,7 +1546,7 @@ public:
 	// button's actual rect (see DrawDropdownArrow).
 	HIMAGELIST BuildToolbarImageList( int cx, COLORREF crFg, int mode, int nCopies = 1 )
 	{
-		int count = mode == MODE_MD ? 21 : 49;
+		int count = mode == MODE_MD ? 23 : 51;
 		HIMAGELIST himl = ImageList_Create( cx, cx, ILC_COLOR32, ( count + 2 ) * nCopies, 2 );
 		if( !himl ){
 			return NULL;
@@ -2748,6 +2773,12 @@ public:
 			else if( cmd.m_iCmd == CMD_CUSTOMIZE ){
 				OnCustomize( m_hWnd );
 			}
+			else if( cmd.m_iCmd == CMD_MD_VIEW ){
+				PostMessage( m_hWnd, WM_COMMAND, MAKEWPARAM( EEID_MARKDOWN_VIEW, 0 ), 0 );
+			}
+			else if( cmd.m_iCmd == CMD_PREVIEW ){
+				PostMessage( m_hWnd, WM_COMMAND, MAKEWPARAM( EEID_VIEW_WEB, 0 ), 0 );
+			}
 		}
 
 
@@ -3537,10 +3568,10 @@ public:
 				GetDlgItemText( hDlg, IDC_TAG_END, sz, _countof( sz ) );
 				m_pcmdProp->m_sTagEnd = sz;
 			}
-			else if( m_pcmdProp->m_iCmd == CMD_ICON_COLOR ){
-				// a functional button, not an editable special command:
-				// keep its code and apply only the title/icon changes
-				m_pcmdProp->m_iCmd = CMD_ICON_COLOR;
+			else if( m_pcmdProp->m_iCmd == CMD_ICON_COLOR || m_pcmdProp->m_iCmd == CMD_MD_VIEW || m_pcmdProp->m_iCmd == CMD_PREVIEW ){
+				// functional buttons, not editable special commands:
+				// keep their code and apply only the title/icon changes
+				;	// m_iCmd unchanged
 			}
 			else {
 				int iSpecial = (int)SendDlgItemMessage( hDlg, IDC_COMBO_SPECIAL, CB_GETCURSEL, 0, 0 );

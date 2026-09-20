@@ -14,6 +14,24 @@ this code base:
 | `0.4.x`       | Compatibility fixes that make the original plug-in build and load correctly on modern EmEditor (v26). |
 | `0.9.0` – `0.17.x` | The HTML + Markdown dual-mode toolbar, heading towards `1.0.0`. |
 
+## [0.20.0] - 2026-09-20
+
+### Added
+
+- **Design View and Preview toolbar buttons** (both modes, next to Icon
+  Color): *Design View* toggles the Markdown design view
+  (`EEID_MARKDOWN_VIEW` 23255) and *Preview* toggles the HTML/Markdown
+  web preview (`EEID_VIEW_WEB` 23243) — built-in EmEditor commands from
+  the v24.4 plug-in SDK, executed via `WM_COMMAND`. New dedicated glyphs:
+  Remix `markdown-line` (U+EF1E, Design View) and `eye-line` (U+ECB5,
+  Preview); the subset grows to **65 glyphs**, 9,612 bytes, SHA256
+  `fd0acd17c3ec731daffb22d1fbb666464bbfeab725dbe904d91ded2142490940`
+  (Markdown pool 0–22, HTML pool 0–50; the [H][M] glyphs moved to
+  Markdown 23/24 and HTML 51/52).
+- **Migration extended**: the same splicing that adds the Icon Color
+  button to layouts saved by older versions now also adds Design View
+  and Preview, in order, before Customize.
+
 ## [0.19.7] - 2026-09-20
 
 ### Fixed
