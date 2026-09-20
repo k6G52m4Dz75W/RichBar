@@ -14,6 +14,18 @@ this code base:
 | `0.4.x`       | Compatibility fixes that make the original plug-in build and load correctly on modern EmEditor (v26). |
 | `0.9.0` – `0.17.x` | The HTML + Markdown dual-mode toolbar, heading towards `1.0.0`. |
 
+## [0.20.7] - 2026-09-20
+
+### Fixed
+
+- **The Design View / Preview toggle buttons now use the native checked
+  rendering**: they are `BTNS_CHECK` buttons whose `TBSTATE_CHECKED` the
+  control renders exactly like the [H][M] buttons' checked look
+  (background and ink together — no more dark ink on an unchanged
+  background). Clicks flip the control state and the handlers read that
+  state as the source of truth; the state-sync poll keeps the Design View
+  button aligned with EmEditor's own design-view state.
+
 ## [0.20.6] - 2026-09-20
 
 ### Changed

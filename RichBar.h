@@ -1224,6 +1224,12 @@ public:
 			if( it->m_iCmd == CMD_SEPARATOR ){
 				atb[i + 3].fsStyle = TBSTYLE_SEP;
 			}
+			// Design View / Preview are check toggles: BTNS_CHECK makes the
+			// control render TBSTATE_CHECKED exactly like the [H][M]
+			// buttons' checked look
+			if( it->m_iCmd == CMD_MD_VIEW || it->m_iCmd == CMD_PREVIEW ){
+				atb[i + 3].fsStyle = BTNS_CHECK;
+			}
 			// Dropdown commands keep the dropdown behavior: the whole button
 			// sends TBN_DROPDOWN. The toolbar deliberately lacks
 			// TBSTYLE_EX_DRAWDDARROWS, so the control draws no arrow — the
@@ -1789,30 +1795,16 @@ public:
 	void DrawButtonStateImage( HDC hdc, const RECT& rc, UINT uIDCommand )
 	{
 		if( !m_hwndToolbar || !m_himageToolbar )  return;
+		// The two check-toggle buttons (Design View / Preview) render their
+		// on state natively via TBSTATE_CHECKED + BTNS_CHECK — same as the
+		// [H][M] buttons — so this dark-ink overdraw only serves transient
+		// pressed/hot states of the plain buttons.
 		bool bInverted = ( SendMessage( m_hwndToolbar, TB_GETSTATE, uIDCommand, 0 ) & TBSTATE_PRESSED ) != 0;
 		if( !bInverted ){
 			int iHot = (int)SendMessage( m_hwndToolbar, TB_GETHOTITEM, 0, 0 );
 			if( iHot >= 0 ){
 				bInverted = ( iHot == (int)SendMessage( m_hwndToolbar, TB_COMMANDTOINDEX, uIDCommand, 0 ) );
 			}
-		}
-		bool bCheckedToggle = false;
-		if( uIDCommand >= ID_COMMAND_BASE && uIDCommand < ID_COMMAND_BASE + (int)Cmds().size() ){
-			const int iCmd = Cmds()[ uIDCommand - ID_COMMAND_BASE ].m_iCmd;
-			// the Design View and Preview buttons are toggles: EmEditor
-			// renders their on state natively via TBSTATE_CHECKED (same as
-			// the [H][M] buttons), so no manual background is drawn here
-			if( iCmd == CMD_MD_VIEW ){
-				bCheckedToggle = m_bDesignViewOn;
-			}
-			else if( iCmd == CMD_PREVIEW ){
-				bCheckedToggle = m_bPreviewOn;
-			}
-		}
-		if( bCheckedToggle ){
-			// keep the native checked fill; just ensure the dark ink copy
-			// stays on top of it for readability
-			bInverted = true;
 		}
 		if( !bInverted )  return;
 		int iIcon = -1;
@@ -2909,18 +2901,15 @@ public:
 				OnCustomize( m_hWnd );
 			}
 			else if( cmd.m_iCmd == CMD_MD_VIEW ){
-				// the built-in command toggles the design view; EmEditor
-				// persists its state, and the state-sync poll repaints our
-				// button to match
-				m_bDesignViewOn = !m_bDesignViewOn;
+				// BTNS_CHECK toggled the control state before this command
+				// arrived: the control is the source of truth for the
+				// visual, the built-in command toggles the design view
+				m_bDesignViewOn = ( SendMessage( m_hwndToolbar, TB_GETSTATE, wParam, 0 ) & TBSTATE_CHECKED ) != 0;
 				SaveProfile();
 				PostMessage( m_hWnd, WM_COMMAND, MAKEWPARAM( EEID_MARKDOWN_VIEW, 0 ), 0 );
 			}
 			else if( cmd.m_iCmd == CMD_PREVIEW ){
-				// Markdown documents go through EmEditor's own Markdown
-				// preview (it converts before rendering); other documents
-				// (HTML) run the WebPreview plug-in on the raw file
-				m_bPreviewOn = !m_bPreviewOn;
+				m_bPreviewOn = ( SendMessage( m_hwndToolbar, TB_GETSTATE, wParam, 0 ) & TBSTATE_CHECKED ) != 0;
 				SaveProfile();
 				if( m_iMode == MODE_MD ){
 					PostMessage( m_hWnd, WM_COMMAND, MAKEWPARAM( EEID_MARKDOWN_PREVIEW, 0 ), 0 );
