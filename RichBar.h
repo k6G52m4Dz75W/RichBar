@@ -1226,11 +1226,11 @@ public:
 			if( it->m_iCmd == CMD_SEPARATOR ){
 				atb[i + 3].fsStyle = TBSTYLE_SEP;
 			}
-			// Design View / Preview are check toggles: BTNS_CHECK makes the
-			// control render TBSTATE_CHECKED exactly like the [H][M]
-			// buttons' checked look
+			// Design View / Preview are check toggles: BTNS_CHECK | BTNS_GROUP
+			// makes the control render TBSTATE_CHECKED exactly like the
+			// [H][M] buttons' checked look
 			if( it->m_iCmd == CMD_MD_VIEW || it->m_iCmd == CMD_PREVIEW ){
-				atb[i + 3].fsStyle = BTNS_CHECK;
+				atb[i + 3].fsStyle = BTNS_CHECK | BTNS_GROUP;
 			}
 			// Dropdown commands keep the dropdown behavior: the whole button
 			// sends TBN_DROPDOWN. The toolbar deliberately lacks
@@ -1809,6 +1809,16 @@ public:
 			}
 		}
 		if( !bInverted )  return;
+		// The Design View / Preview toggles render their on state natively
+		// (TBSTATE_CHECKED + BTNS_CHECK | BTNS_GROUP, same as the [H][M]
+		// buttons): no dark overdraw for them, the control draws the checked
+		// fill and the normal image itself
+		if( uIDCommand >= ID_COMMAND_BASE && uIDCommand < ID_COMMAND_BASE + (int)Cmds().size() ){
+			const int iCmd = Cmds()[ uIDCommand - ID_COMMAND_BASE ].m_iCmd;
+			if( iCmd == CMD_MD_VIEW || iCmd == CMD_PREVIEW ){
+				return;
+			}
+		}
 		int iIcon = -1;
 		if( uIDCommand == ID_MODE_HTML )  iIcon = m_nLightIcons - 2;
 		else if( uIDCommand == ID_MODE_MD )  iIcon = m_nLightIcons - 1;

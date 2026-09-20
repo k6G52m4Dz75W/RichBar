@@ -14,6 +14,16 @@ this code base:
 | `0.4.x`       | Compatibility fixes that make the original plug-in build and load correctly on modern EmEditor (v26). |
 | `0.9.0` – `0.17.x` | The HTML + Markdown dual-mode toolbar, heading towards `1.0.0`. |
 
+## [0.20.10] - 2026-09-20
+
+### Fixed
+
+- **The Design View / Preview toggle buttons now look exactly like the
+  [H][M] buttons**: the dark-ink post-paint overdraw no longer applies to
+  them — their on state (checked background + normal band-appropriate
+  image) is rendered entirely by the control via `TBSTATE_CHECKED` +
+  `BTNS_CHECK | BTNS_GROUP`, in every theme.
+
 ## [0.20.9] - 2026-09-20
 
 ### Changed
