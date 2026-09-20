@@ -157,13 +157,15 @@ WCHAR OctToDec( LPWSTR& p )
 #define EEID_MARKDOWN_VIEW		23255	// Markdown design view toggle
 #define EEID_MARKDOWN_PREVIEW	23275	// Markdown rendered preview toggle
 #define EI_GET_MARKDOWN_PREVIEW	407		// TRUE if the design view is on
-#define EI_SET_MARKDOWN_PREVIEW	408		// toggles the design view
 
 // toolbar mode-switch buttons (command IDs below ID_COMMAND_BASE)
 #define ID_MODE_HTML			90
 #define ID_MODE_MD				91
 // hover-to-open dropdown delay timer (m_hDlg)
 #define IDT_HOVER_MENU			1
+// state sync (m_hDlg): pane toggles produce no notification, so the
+// design-view state is polled and the bar repainted only on change
+#define IDT_STATE_SYNC			2
 // runtime-drawn glyphs appended to every toolbar image list
 #define MD_ICON_MODE_H			23
 #define MD_ICON_MODE_M			24
@@ -408,6 +410,9 @@ public:
 	bool m_bCustomIconColor;	// icon color mode: false = auto (band luminance), true = user color
 	COLORREF m_crCustomIcon;	// user-picked icon color for the normal state
 	bool m_bIconColorDirty;		// a color setting was touched in the open Prop dialog
+	bool m_bPreviewOn;			// preview pane toggled from our button (no SDK query)
+	bool m_bDesignViewDrawn;	// design-view state as of the last state-sync repaint
+	bool m_bPreviewDrawn;		// preview state as of the last state-sync repaint
 	UINT m_nHoverMenuCmd;		// dropdown command waiting for the hover-open timer
 	UINT m_nLastMenuCmd;		// dropdown whose menu closed last; reopen only after the mouse leaves it
 	bool m_bLastMenuLeft;		// the mouse has left m_nLastMenuCmd since its menu closed
@@ -1714,16 +1719,19 @@ public:
 
 				m_nClientID = Editor_ToolbarOpen( m_hWnd, &cri );
 
-				if( !m_nClientID ){
-					CustomBarClosed();
-				}
-				else {
-					m_bVisible = bVisible;
-				}
-
-				ShowWindow( hwndToolbar, m_bVisible );
+			if( !m_nClientID ){
+				CustomBarClosed();
 			}
+			else {
+				m_bVisible = bVisible;
+			}
+
+			ShowWindow( hwndToolbar, m_bVisible );
+			// pane toggles (design view / preview) produce no notification;
+			// poll the state so the buttons stay in sync
+			SetTimer( m_hDlg, IDT_STATE_SYNC, 500, NULL );
 		}
+	}
 	}
 
 	// re-render the image list against the current command array; used after
@@ -1786,17 +1794,16 @@ public:
 				bInverted = ( iHot == (int)SendMessage( m_hwndToolbar, TB_COMMANDTOINDEX, uIDCommand, 0 ) );
 			}
 		}
-		// the Design View button mirrors EmEditor's own persistent design
-		// view state (not the transient press state): EmEditor persists it
-		// across restarts, so the button stays pressed while it is on
-		if( uIDCommand != ID_MODE_HTML && uIDCommand != ID_MODE_MD ){
-			for( const auto& cmd : Cmds() ){
-				if( cmd.m_iCmd == CMD_MD_VIEW ){
-					if( uIDCommand == ID_COMMAND_BASE + (int)( &cmd - &Cmds()[0] ) ){
-						bInverted = Editor_Info( m_hWnd, EI_GET_MARKDOWN_PREVIEW, 0 ) != FALSE;
-					}
-					break;
-				}
+		if( uIDCommand >= ID_COMMAND_BASE && uIDCommand < ID_COMMAND_BASE + (int)Cmds().size() ){
+			const int iCmd = Cmds()[ uIDCommand - ID_COMMAND_BASE ].m_iCmd;
+			// the Design View button mirrors EmEditor's persistent design
+			// view state (from the state-sync poll), the Preview button our
+			// last toggle
+			if( iCmd == CMD_MD_VIEW ){
+				bInverted = m_bDesignViewDrawn;
+			}
+			else if( iCmd == CMD_PREVIEW ){
+				bInverted = m_bPreviewOn;
 			}
 		}
 		if( !bInverted )  return;
@@ -1814,6 +1821,21 @@ public:
 		int x = rc.left + ( ( rc.right - rc.left ) - ilcx ) / 2;
 		int y = rc.top + ( ( rc.bottom - rc.top ) - ilcy ) / 2;
 		ImageList_Draw( m_himageToolbar, iDark, hdc, x, y, ILD_NORMAL );
+	}
+
+	// state sync poll: pane toggles (from EmEditor's own UI or ours) fire
+	// no notification; repaint only when the drawn state goes stale
+	void OnStateSyncTimer()
+	{
+		if( !m_hwndToolbar ){
+			return;
+		}
+		BOOL bDesign = Editor_Info( m_hWnd, EI_GET_MARKDOWN_PREVIEW, 0 ) != FALSE;
+		if( bDesign != m_bDesignViewDrawn || m_bPreviewOn != m_bPreviewDrawn ){
+			m_bDesignViewDrawn = bDesign;
+			m_bPreviewDrawn = m_bPreviewOn;
+			InvalidateRect( m_hwndToolbar, NULL, TRUE );
+		}
 	}
 
 	// The dropdown arrow, drawn live in NM_CUSTOMDRAW's item-post-paint
@@ -1877,6 +1899,9 @@ public:
 
 	void CustomBarClosed()
 	{
+		if( m_hDlg ){
+			KillTimer( m_hDlg, IDT_STATE_SYNC );
+		}
 		if( m_hwndToolbar ){
 			if( IsWindow( m_hwndToolbar ) ){
 				DestroyWindow( m_hwndToolbar );
@@ -2083,6 +2108,9 @@ public:
 		m_bCustomIconColor = false;
 		m_crCustomIcon = RGB( 224, 224, 224 );
 		m_bIconColorDirty = false;
+		m_bPreviewOn = false;
+		m_bDesignViewDrawn = false;
+		m_bPreviewDrawn = false;
 		m_nBand = (UINT)-1;
 	}
 
@@ -2837,15 +2865,16 @@ public:
 				OnCustomize( m_hWnd );
 			}
 			else if( cmd.m_iCmd == CMD_MD_VIEW ){
-				// toggle via the documented design-view state pair so the
-				// state lives in EmEditor (persistent, consistent everywhere)
-				BOOL bOn = (BOOL)Editor_Info( m_hWnd, EI_GET_MARKDOWN_PREVIEW, 0 );
-				Editor_Info( m_hWnd, EI_SET_MARKDOWN_PREVIEW, !bOn );
+				// the built-in command toggles the design view; EmEditor
+				// persists its state, and the state-sync poll repaints our
+				// button to match
+				PostMessage( m_hWnd, WM_COMMAND, MAKEWPARAM( EEID_MARKDOWN_VIEW, 0 ), 0 );
 			}
 			else if( cmd.m_iCmd == CMD_PREVIEW ){
 				// Markdown documents go through EmEditor's own Markdown
 				// preview (it converts before rendering); other documents
 				// (HTML) run the WebPreview plug-in on the raw file
+				m_bPreviewOn = !m_bPreviewOn;
 				if( m_iMode == MODE_MD ){
 					PostMessage( m_hWnd, WM_COMMAND, MAKEWPARAM( EEID_MARKDOWN_PREVIEW, 0 ), 0 );
 				}
@@ -3847,6 +3876,13 @@ INT_PTR CALLBACK NewProc( HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam )
 			CMyFrame* pFrame = static_cast<CMyFrame*>(GetFrame( hwnd ));
 			if( pFrame ){
 				pFrame->OnHoverMenuTimer();
+			}
+			return 0;
+		}
+		else if( wParam == IDT_STATE_SYNC ){
+			CMyFrame* pFrame = static_cast<CMyFrame*>(GetFrame( hwnd ));
+			if( pFrame ){
+				pFrame->OnStateSyncTimer();
 			}
 			return 0;
 		}

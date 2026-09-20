@@ -14,6 +14,22 @@ this code base:
 | `0.4.x`       | Compatibility fixes that make the original plug-in build and load correctly on modern EmEditor (v26). |
 | `0.9.0` – `0.17.x` | The HTML + Markdown dual-mode toolbar, heading towards `1.0.0`. |
 
+## [0.20.4] - 2026-09-20
+
+### Fixed
+
+- **The Design View button toggles the design view again** — 0.20.3
+  switched its click to `EI_SET_MARKDOWN_PREVIEW`, which only drives the
+  Markdown preview state, not the design view; clicks are back on the
+  `EEID_MARKDOWN_VIEW` command.
+- **The Design View and Preview buttons keep their pressed state in sync
+  with the panes**: pane toggles fire no notification, so a 500 ms
+  state-sync poll repaints the buttons when the design-view state
+  (`EI_GET_MARKDOWN_PREVIEW`) or the preview toggle goes stale — pressing
+  the button keeps it pressed while the pane is open, including closes
+  made from EmEditor's own UI. (The web/markdown preview pane itself has
+  no SDK query; its button state tracks our toggles.)
+
 ## [0.20.3] - 2026-09-20
 
 ### Changed
