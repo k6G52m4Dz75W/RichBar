@@ -155,9 +155,6 @@ WCHAR OctToDec( LPWSTR& p )
 // built-in EmEditor command IDs and pane flags from the v23/v24.4 plug-in
 // SDK (Emurasoft/emeditor-plugin-library plugin.h)
 #define EEID_MARKDOWN_VIEW		23255	// Markdown design view toggle
-#define EI_SET_WEB				405		// open/close the web preview pane
-#define FLAG_OPEN_WEB			0x0001
-#define FLAG_CLOSE_WEB			0x0002
 
 // toolbar mode-switch buttons (command IDs below ID_COMMAND_BASE)
 #define ID_MODE_HTML			90
@@ -408,7 +405,6 @@ public:
 	bool m_bCustomIconColor;	// icon color mode: false = auto (band luminance), true = user color
 	COLORREF m_crCustomIcon;	// user-picked icon color for the normal state
 	bool m_bIconColorDirty;		// a color setting was touched in the open Prop dialog
-	bool m_bPreviewOpen;		// web preview pane toggled from our button (no SDK query)
 	UINT m_nHoverMenuCmd;		// dropdown command waiting for the hover-open timer
 	UINT m_nLastMenuCmd;		// dropdown whose menu closed last; reopen only after the mouse leaves it
 	bool m_bLastMenuLeft;		// the mouse has left m_nLastMenuCmd since its menu closed
@@ -2071,7 +2067,6 @@ public:
 		m_bCustomIconColor = false;
 		m_crCustomIcon = RGB( 224, 224, 224 );
 		m_bIconColorDirty = false;
-		m_bPreviewOpen = false;
 		m_nBand = (UINT)-1;
 	}
 
@@ -2208,6 +2203,45 @@ public:
 		StringPrintf( szColor, _countof( szColor ), _T("#%02X%02X%02X"),
 			GetRValue( m_crCustomIcon ), GetGValue( m_crCustomIcon ), GetBValue( m_crCustomIcon ) );
 		SetDlgItemText( hDlg, IDC_BTN_ICON_COLOR, szColor );
+	}
+
+	// The Preview button runs EmEditor's official WebPreview plug-in, which
+	// renders the current HTML/Markdown document in its embedded pane. The
+	// plug-in DLL is resolved next to EmEditor.exe (or beside this DLL) and
+	// kept loaded; EmEditor itself already holds a reference to the same
+	// module, so calling its exported OnCommand is equivalent to the user
+	// running it from the Plug-ins menu.
+	void RunWebPreviewPlugin()
+	{
+		HMODULE hMod = GetModuleHandle( _T("WebPreview.dll") );
+		if( !hMod ){
+			TCHAR szPath[MAX_PATH];
+			DWORD cch = GetModuleFileName( NULL, szPath, MAX_PATH );	// EmEditor.exe
+			if( cch > 0 ){
+				LPTSTR p = szPath + cch;
+				while( p > szPath && p[-1] != _T('\\') )  p--;
+				*p = 0;
+				lstrcat( szPath, _T("PlugIns\\WebPreview.dll") );
+				hMod = LoadLibrary( szPath );
+			}
+		}
+		if( !hMod ){
+			TCHAR szPath[MAX_PATH];
+			DWORD cch = GetModuleFileName( EEGetInstanceHandle(), szPath, MAX_PATH );	// this DLL
+			if( cch > 0 ){
+				LPTSTR p = szPath + cch;
+				while( p > szPath && p[-1] != _T('\\') )  p--;
+				*p = 0;
+				lstrcat( szPath, _T("WebPreview.dll") );
+				hMod = LoadLibrary( szPath );
+			}
+		}
+		if( hMod ){
+			void (WINAPI *pfnOnCommand)( HWND ) = (void (WINAPI *)( HWND ))GetProcAddress( hMod, "OnCommand" );
+			if( pfnOnCommand ){
+				pfnOnCommand( m_hWnd );
+			}
+		}
 	}
 
 	void OnPropCommand( HWND hDlg, WPARAM wParam )
@@ -2790,11 +2824,7 @@ public:
 				PostMessage( m_hWnd, WM_COMMAND, MAKEWPARAM( EEID_MARKDOWN_VIEW, 0 ), 0 );
 			}
 			else if( cmd.m_iCmd == CMD_PREVIEW ){
-				// toggle the in-editor web preview pane (renders HTML and
-				// Markdown); EmEditor has no query for the pane state, so
-				// it is tracked locally
-				m_bPreviewOpen = !m_bPreviewOpen;
-				Editor_Info( m_hWnd, EI_SET_WEB, m_bPreviewOpen ? FLAG_OPEN_WEB : FLAG_CLOSE_WEB );
+				RunWebPreviewPlugin();
 			}
 		}
 

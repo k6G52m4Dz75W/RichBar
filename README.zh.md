@@ -7,7 +7,7 @@
 它旨在替代 EmEditor v26 内置的 HTML/Markdown 工具栏（闭源、大部分标签
 藏在下拉菜单里）。
 
-当前版本：**0.20.1 — 2026-09-20**。
+当前版本：**0.20.2 — 2026-09-20**。
 
 ## 功能
 
@@ -96,9 +96,9 @@
   **工具栏上的"图标颜色"按钮**（弹出菜单：自动 / 自定义颜色…）等效，
   旧版保存的按钮布局会自动补上这个新按钮。
 - **设计视图与预览按钮**：*Design View*（仅 Markdown 模式显示）切换
-  EmEditor 的 Markdown 设计视图（`EEID_MARKDOWN_VIEW`）；*Preview* 切换
-  内嵌网页预览窗格，可渲染 HTML 与 Markdown（`EI_SET_WEB`）——均为
-  v24.4 SDK 的官方接口。同样会自动补进旧版保存的布局，配专用
+  EmEditor 的 Markdown 设计视图（`EEID_MARKDOWN_VIEW`）；*Preview* 运行
+  EmEditor 官方的 WebPreview 插件，在内嵌窗格中渲染当前 HTML/Markdown
+  文档。同样会自动补进旧版保存的布局，配专用
   `layout-column-line` / `eye-line` 字形。
 - **旧版 HTML 彩色 BMP 不再被加载**（资源仍保留在 DLL 中，插件列表中的
   插件入口图标仍使用自己的位图）。悬停/按下为浅色系统高亮填充，深色

@@ -14,6 +14,17 @@ this code base:
 | `0.4.x`       | Compatibility fixes that make the original plug-in build and load correctly on modern EmEditor (v26). |
 | `0.9.0` – `0.17.x` | The HTML + Markdown dual-mode toolbar, heading towards `1.0.0`. |
 
+## [0.20.2] - 2026-09-20
+
+### Fixed
+
+- **The Preview button now runs EmEditor's official WebPreview plug-in**,
+  whose embedded pane renders the current HTML/Markdown document.
+  `EI_SET_WEB` turned out to drive the external-browser path as well; the
+  plug-in is resolved next to EmEditor.exe (or beside this DLL), kept
+  loaded, and its exported `OnCommand` is invoked on the active view —
+  equivalent to the user running it from the Plug-ins menu.
+
 ## [0.20.1] - 2026-09-20
 
 ### Fixed

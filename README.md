@@ -7,7 +7,7 @@ toolbar, forked from the official Emurasoft HTMLBar plug-in source
 (`19.5.0`). It is meant to replace the HTML/Markdown toolbar built into
 EmEditor v26 (closed source, with most tags hidden inside dropdown menus).
 
-Current release: **0.20.1 — 2026-09-20**.
+Current release: **0.20.2 — 2026-09-20**.
 
 ## Features
 
@@ -110,11 +110,11 @@ adaptivity changed. The 59 unique names and codepoints are mapped in
   toolbar itself** (popup: *Automatic* / *Custom Color...*) drive it; the
   toolbar button is added to saved layouts automatically.
 - **Design View and Preview buttons**: *Design View* (Markdown mode only)
-  toggles EmEditor's Markdown design view; *Preview* toggles the
-  in-editor web preview pane that renders HTML and Markdown
-  (`EEID_MARKDOWN_VIEW` / `EI_SET_WEB` from the v24.4 SDK). Added to
-  saved layouts automatically, with dedicated `layout-column-line` /
-  `eye-line` glyphs.
+  toggles EmEditor's Markdown design view; *Preview* runs EmEditor's
+  official WebPreview plug-in to render the current HTML/Markdown
+  document in its embedded pane (`EEID_MARKDOWN_VIEW` / the WebPreview
+  plug-in interface). Added to saved layouts automatically, with
+  dedicated `layout-column-line` / `eye-line` glyphs.
 - The **legacy colored HTML BMPs are no longer loaded** (their resources
   remain in the DLL, and the plug-in entry icon still uses its own bitmap).
   Because both modes draw monochrome glyphs, the **hover (hot) image list
