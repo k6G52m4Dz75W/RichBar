@@ -14,6 +14,16 @@ this code base:
 | `0.4.x`       | Compatibility fixes that make the original plug-in build and load correctly on modern EmEditor (v26). |
 | `0.9.0` – `0.17.x` | The HTML + Markdown dual-mode toolbar, heading towards `1.0.0`. |
 
+## [0.19.5] - 2026-09-20
+
+### Fixed
+
+- **The pressed glyph did not switch to its dark copy** (the arrow did
+  since 0.19.4, the glyph stayed in the normal light ink on the light
+  pressed fill): `TB_SETBUTTONINFO` after the swap does not reliably
+  repaint the pressed button. The swap now invalidates the button rect
+  and updates immediately.
+
 ## [0.19.4] - 2026-09-20
 
 ### Fixed

@@ -2914,6 +2914,13 @@ public:
 					bi.dwMask = TBIF_IMAGE;
 					bi.iImage = iDark;
 					SendMessage( m_hwndToolbar, TB_SETBUTTONINFO, nIDCommand, (LPARAM)&bi );
+					// the swap does not repaint the pressed button reliably:
+					// force it, or the glyph stays in the normal (light) ink
+					RECT rcBtn = {};
+					if( SendMessage( m_hwndToolbar, TB_GETITEMRECT, nIndex, (LPARAM)&rcBtn ) ){
+						InvalidateRect( m_hwndToolbar, &rcBtn, TRUE );
+					}
+					UpdateWindow( m_hwndToolbar );
 				}
 				else {
 					iOldImage = -1;
