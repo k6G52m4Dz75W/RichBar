@@ -412,8 +412,6 @@ public:
 	bool m_bIconColorDirty;		// a color setting was touched in the open Prop dialog
 	bool m_bDesignViewOn;		// design view toggle state (synced with 407 when it works)
 	bool m_bPreviewOn;			// preview pane toggled from our button (no SDK query)
-	bool m_bDesignViewDrawn;	// design-view state as of the last state-sync repaint
-	bool m_bPreviewDrawn;		// preview state as of the last state-sync repaint
 	bool m_b407Alive;			// EI_GET_MARKDOWN_PREVIEW has ever returned TRUE
 	UINT m_nHoverMenuCmd;		// dropdown command waiting for the hover-open timer
 	UINT m_nLastMenuCmd;		// dropdown whose menu closed last; reopen only after the mouse leaves it
@@ -1454,12 +1452,12 @@ public:
 			{ 13, 0xEEBB },		// list-ordered
 			{ 14, 0xEEB9 },		// list-check-2 (task list)
 			{ 15, 0xF1AF },		// subtract-line (horizontal rule)
-			{ 16, 0xEEB2 },		// link
+			{ 16, 0xEEB8 },		// links-line (link)
 			{ 17, 0xEE4B },		// image-line
 			{ 18, 0xF1DE },		// table-line
 			{ 19, 0xF0EE },		// settings-line (customize)
 			{ 20, 0xF42E },		// color-filter-line (icon color)
-			{ 21, 0xEE8D },		// layout-column-line (design view)
+			{ 21, 0xF1D3 },		// t-box-line (design view)
 			{ 22, 0xECB5 },		// eye-line (preview)
 		};
 		BOOL bGlyphDrawn = FALSE;
@@ -1485,14 +1483,15 @@ public:
 		// Preserve all 48 persisted HTML icon slots, including customization-only icons.
 				static const WCHAR glyphs[] = {
 			0xEE03, 0xEFC8, 0xF200, 0xEAD1, 0xEE6B, 0xF244, // heading, paragraph, break, bold, italic, underline
-			0xED8C, 0xEFC5, 0xEE4B, 0xEEB2, 0xF1DE, 0xF1AF, // font, color, image, link, table, rule
+			0xED8C, 0xEFC5, 0xEE4B, 0xEEB8, 0xF1DE, 0xF1AF, // font, color, image, links, table, rule
 			0xEAEB, 0xEA27, 0xEA25, 0xEA28, 0xEA26, 0xEEBB, // comment/tags, alignment, ordered list
 			0xEEBE, 0xEE54, 0xEE55, 0xEF1C, 0xEFC2, 0xECEF, // list, unindent, indent, highlight, fill, forms
 			0xF0EE, 0xECED, 0xEE5E, 0xEED0, 0xECDB, 0xEB85, // settings, form, text, password, textarea, checkbox
 			0xF050, 0xEA7A, 0xF327, 0xF39A, 0xEC0A, 0xEAE9, // radio, group box, select, listbox, buttons
 			0xECB7, 0xF2F5, 0xEB31, 0xEC36, 0xF0BB, 0xF029, // hidden, object, camera, disc, scanner, printer
 			0xED9E, 0xEB97, 0xEA21, 0xEE59, 0xED3B, 0xEF83, // function, error, warning, info, flag, sound
-			0xF42E, 0xECB5                                  // color-filter-line (icon color), eye-line (preview)
+			0xF42E, 0xECB5,                                 // color-filter-line (icon color), eye-line (preview)
+			0xEEB8                                          // links-line (link)
 		};
 		if( iIcon < 0 || iIcon >= (int)_countof( glyphs ) ) return;
 		DrawIconGlyph( hdc, cx, glyphs[iIcon], crFg, cxRect );
@@ -1684,6 +1683,7 @@ public:
 			}
 
 			AddButtons( hwndToolbar );
+			ApplyToggleStates();
 			// CCS_NORESIZE prevents TB_AUTOSIZE from resizing the window, so size it explicitly;
 			// EmEditor measures the client at ToolbarOpen time and a 0-width window yields a title-only band
 			SIZE size = { 0, 0 };
@@ -1796,28 +1796,25 @@ public:
 				bInverted = ( iHot == (int)SendMessage( m_hwndToolbar, TB_COMMANDTOINDEX, uIDCommand, 0 ) );
 			}
 		}
-		bool bToggled = false;
+		bool bCheckedToggle = false;
 		if( uIDCommand >= ID_COMMAND_BASE && uIDCommand < ID_COMMAND_BASE + (int)Cmds().size() ){
 			const int iCmd = Cmds()[ uIDCommand - ID_COMMAND_BASE ].m_iCmd;
-			// the Design View and Preview buttons are toggles: while on,
-			// they keep the pressed look (background + dark ink) even after
-			// the mouse is released
+			// the Design View and Preview buttons are toggles: EmEditor
+			// renders their on state natively via TBSTATE_CHECKED (same as
+			// the [H][M] buttons), so no manual background is drawn here
 			if( iCmd == CMD_MD_VIEW ){
-				bToggled = m_bDesignViewOn;
+				bCheckedToggle = m_bDesignViewOn;
 			}
 			else if( iCmd == CMD_PREVIEW ){
-				bToggled = m_bPreviewOn;
+				bCheckedToggle = m_bPreviewOn;
 			}
 		}
-		bInverted = bInverted || bToggled;
-		if( !bInverted )  return;
-		if( bToggled ){
-			// a held button gets the control's own pressed fill; a toggled
-			// button needs us to draw the highlight background itself
-			HBRUSH br = CreateSolidBrush( GetSysColor( COLOR_HIGHLIGHT ) );
-			FillRect( hdc, &rc, br );
-			DeleteObject( br );
+		if( bCheckedToggle ){
+			// keep the native checked fill; just ensure the dark ink copy
+			// stays on top of it for readability
+			bInverted = true;
 		}
+		if( !bInverted )  return;
 		int iIcon = -1;
 		if( uIDCommand == ID_MODE_HTML )  iIcon = m_nLightIcons - 2;
 		else if( uIDCommand == ID_MODE_MD )  iIcon = m_nLightIcons - 1;
@@ -1834,6 +1831,35 @@ public:
 		ImageList_Draw( m_himageToolbar, iDark, hdc, x, y, ILD_NORMAL );
 	}
 
+	// Design View / Preview are toggles: their on state is carried by the
+	// native TBSTATE_CHECKED bit, which the control renders exactly like
+	// the [H][M] buttons' checked look — no manual painting needed
+	void ApplyToggleStates()
+	{
+		if( !m_hwndToolbar ){
+			return;
+		}
+		for( int i = 0; i < (int)Cmds().size(); i++ ){
+			const int iCmd = Cmds()[ i ].m_iCmd;
+			if( iCmd != CMD_MD_VIEW && iCmd != CMD_PREVIEW ){
+				continue;
+			}
+			const UINT uID = (UINT)( i + ID_COMMAND_BASE );
+			const bool bOn = ( iCmd == CMD_MD_VIEW ) ? m_bDesignViewOn : m_bPreviewOn;
+			LRESULT st = SendMessage( m_hwndToolbar, TB_GETSTATE, uID, 0 );
+			LRESULT ns = ( st | TBSTATE_ENABLED ) & ~TBSTATE_PRESSED;
+			if( bOn ){
+				ns |= TBSTATE_CHECKED;
+			}
+			else {
+				ns &= ~TBSTATE_CHECKED;
+			}
+			if( ns != st ){
+				SendMessage( m_hwndToolbar, TB_SETSTATE, uID, MAKELPARAM( ns, 0 ) );
+			}
+		}
+	}
+
 	// state sync poll: pane toggles (from EmEditor's own UI or ours) fire
 	// no notification; repaint only when the drawn state goes stale
 	void OnStateSyncTimer()
@@ -1847,11 +1873,7 @@ public:
 		}
 		if( m_b407Alive && bDesign != m_bDesignViewOn ){
 			m_bDesignViewOn = bDesign;
-		}
-		if( m_bDesignViewOn != m_bDesignViewDrawn || m_bPreviewOn != m_bPreviewDrawn ){
-			m_bDesignViewDrawn = m_bDesignViewOn;
-			m_bPreviewDrawn = m_bPreviewOn;
-			InvalidateRect( m_hwndToolbar, NULL, TRUE );
+			ApplyToggleStates();
 		}
 	}
 
@@ -2127,8 +2149,6 @@ public:
 		m_bIconColorDirty = false;
 		m_bDesignViewOn = false;
 		m_bPreviewOn = false;
-		m_bDesignViewDrawn = false;
-		m_bPreviewDrawn = false;
 		m_b407Alive = false;
 		m_nBand = (UINT)-1;
 	}
