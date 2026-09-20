@@ -14,6 +14,20 @@ this code base:
 | `0.4.x`       | Compatibility fixes that make the original plug-in build and load correctly on modern EmEditor (v26). |
 | `0.9.0` – `0.17.x` | The HTML + Markdown dual-mode toolbar, heading towards `1.0.0`. |
 
+## [0.19.7] - 2026-09-20
+
+### Fixed
+
+- **Pressed/hover glyph recolor is now deterministic.** The runtime
+  dark-copy swap depended on when the control chose to repaint a pressed
+  button — a race that various fixes (invalidation, posted repaint) could
+  not close. The swap machinery is removed entirely: the control always
+  paints the normal image (`TBCDRF_NOOFFSET` pins it in place), and at
+  custom-draw post-paint — after the press state is applied — the dark
+  copy is overdrawn in place whenever the button reads pressed or hot.
+  The overlay position mirrors the control's centering, so the copy
+  covers the normal ink exactly.
+
 ## [0.19.6] - 2026-09-20
 
 ### Fixed

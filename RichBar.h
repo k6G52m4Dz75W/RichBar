@@ -1736,6 +1736,37 @@ public:
 		UpdateWindow( m_hwndToolbar );
 	}
 
+	// On hover/pressed the light highlight fill needs dark ink: the control
+	// paints the normal image, this overdraws the dark copy on top (same
+	// glyph, different ink). The state comes from the control itself, so it
+	// is always in sync regardless of paint timing.
+	void DrawButtonStateImage( HDC hdc, const RECT& rc, UINT uIDCommand )
+	{
+		if( !m_hwndToolbar || !m_himageToolbar )  return;
+		bool bInverted = ( SendMessage( m_hwndToolbar, TB_GETSTATE, uIDCommand, 0 ) & TBSTATE_PRESSED ) != 0;
+		if( !bInverted ){
+			int iHot = (int)SendMessage( m_hwndToolbar, TB_GETHOTITEM, 0, 0 );
+			if( iHot >= 0 ){
+				bInverted = ( iHot == (int)SendMessage( m_hwndToolbar, TB_COMMANDTOINDEX, uIDCommand, 0 ) );
+			}
+		}
+		if( !bInverted )  return;
+		int iIcon = -1;
+		if( uIDCommand == ID_MODE_HTML )  iIcon = m_nLightIcons - 2;
+		else if( uIDCommand == ID_MODE_MD )  iIcon = m_nLightIcons - 1;
+		else if( uIDCommand >= ID_COMMAND_BASE && uIDCommand < ID_COMMAND_BASE + (int)Cmds().size() ){
+			iIcon = Cmds()[ uIDCommand - ID_COMMAND_BASE ].m_iIcon;
+		}
+		if( iIcon < 0 )  return;
+		int iDark = m_nLightIcons + iIcon;
+		if( iDark >= ImageList_GetImageCount( m_himageToolbar ) )  return;
+		int ilcx = 0, ilcy = 0;
+		if( !ImageList_GetIconSize( m_himageToolbar, &ilcx, &ilcy ) )  return;
+		int x = rc.left + ( ( rc.right - rc.left ) - ilcx ) / 2;
+		int y = rc.top + ( ( rc.bottom - rc.top ) - ilcy ) / 2;
+		ImageList_Draw( m_himageToolbar, iDark, hdc, x, y, ILD_NORMAL );
+	}
+
 	// The dropdown arrow, drawn live in NM_CUSTOMDRAW's item-post-paint
 	// stage: right-anchored inside the button's ACTUAL rect, so the control's
 	// image placement and any width rounding cannot shift or clip it. The
@@ -2901,31 +2932,6 @@ public:
 		// by hovering never presses the button: while the menu tracks we
 		// swallow the toolbar's WM_MOUSELEAVE (see ToolbarProc), so the hot
 		// look simply never fades and the glyph never shifts.
-		int iOldImage = -1;
-		if( bPressedByMouse && m_himageToolbarHot != NULL && m_nLightIcons > 0 ){
-			int nIndex = (int)SendMessage( m_hwndToolbar, TB_COMMANDTOINDEX, nIDCommand, 0L );
-			TBBUTTON tb = {};
-			if( nIndex >= 0 && SendMessage( m_hwndToolbar, TB_GETBUTTON, nIndex, (LPARAM)&tb ) ){
-				iOldImage = tb.iBitmap;
-				int iDark = m_nLightIcons + iOldImage;
-				if( iDark < ImageList_GetImageCount( m_himageToolbar ) ){
-					TBBUTTONINFO bi = {};
-					bi.cbSize = sizeof( bi );
-					bi.dwMask = TBIF_IMAGE;
-					bi.iImage = iDark;
-					SendMessage( m_hwndToolbar, TB_SETBUTTONINFO, nIDCommand, (LPARAM)&bi );
-					// the control settles its light pressed fill only after
-					// this notification returns; repainting synchronously
-					// here draws the dark copy on the dark background
-					// (invisible). Post instead — the repaint lands exactly
-					// after the press state is applied
-					PostMessage( m_hDlg, WM_APP, 0, 0 );
-				}
-				else {
-					iOldImage = -1;
-				}
-			}
-		}
 		// The tooltip has had its time by now (the menu delay is the tooltip
 		// delay plus a margin); retire it so the menu owns the spot below
 		// the button instead of the two popups overlapping.
@@ -3030,13 +3036,6 @@ public:
 
 		}
 		m_bInDropdownMenu = false;
-		if( iOldImage >= 0 ){
-			TBBUTTONINFO bi = {};
-			bi.cbSize = sizeof( bi );
-			bi.dwMask = TBIF_IMAGE;
-			bi.iImage = iOldImage;
-			SendMessage( m_hwndToolbar, TB_SETBUTTONINFO, nIDCommand, (LPARAM)&bi );
-		}
 		// A menu just opened here stays quiet until the mouse has actually
 		// left the button, tracked deterministically in the mouse handlers.
 		m_nLastMenuCmd = nIDCommand;
@@ -3160,14 +3159,19 @@ public:
 				// arrow anchored to the item's real rect
 				LPNMTBCUSTOMDRAW pTBCD = (LPNMTBCUSTOMDRAW)pnmh;
 				if( pTBCD->nmcd.dwDrawStage == CDDS_PREPAINT ){
-					return CDRF_NOTIFYITEMDRAW;
+					return CDRF_NOTIFYITEMDRAW | TBCDRF_NOOFFSET;
 				}
 				if( pTBCD->nmcd.dwDrawStage == CDDS_ITEMPREPAINT ){
 					return CDRF_NOTIFYPOSTPAINT;
 				}
 				if( pTBCD->nmcd.dwDrawStage == CDDS_ITEMPOSTPAINT ){
-					if( IsDropdownCommand( (UINT)pTBCD->nmcd.dwItemSpec ) ){
-						DrawDropdownArrow( pTBCD->nmcd.hdc, pTBCD->nmcd.rc, (UINT)pTBCD->nmcd.dwItemSpec );
+					UINT uID = (UINT)pTBCD->nmcd.dwItemSpec;
+					// with the press offset suppressed, the control's normal
+					// image sits exactly where we would place it: overdraw
+					// the dark copy on hover/pressed, then the arrow
+					DrawButtonStateImage( pTBCD->nmcd.hdc, pTBCD->nmcd.rc, uID );
+					if( IsDropdownCommand( uID ) ){
+						DrawDropdownArrow( pTBCD->nmcd.hdc, pTBCD->nmcd.rc, uID );
 					}
 				}
 				return CDRF_DODEFAULT;
@@ -3733,19 +3737,6 @@ INT_PTR CALLBACK NewProc( HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam )
 			nResult = TRUE;
 		}
 		break;
-	case WM_APP:
-		{
-			// posted from ShowDropdownMenu's pressed-swap: repaint the bar
-			// now that the control has applied its pressed state, so the
-			// dark-copy image lands on the light pressed fill
-			CMyFrame* pFrame = static_cast<CMyFrame*>(GetFrame( hwnd ));
-			if( pFrame && pFrame->m_hwndToolbar ){
-				InvalidateRect( pFrame->m_hwndToolbar, NULL, TRUE );
-				UpdateWindow( pFrame->m_hwndToolbar );
-			}
-		}
-		break;
-
 	case WM_TIMER:
 		if( wParam == IDT_HOVER_MENU ){
 			CMyFrame* pFrame = static_cast<CMyFrame*>(GetFrame( hwnd ));
