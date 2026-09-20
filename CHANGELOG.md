@@ -14,6 +14,21 @@ this code base:
 | `0.4.x`       | Compatibility fixes that make the original plug-in build and load correctly on modern EmEditor (v26). |
 | `0.9.0` – `0.17.x` | The HTML + Markdown dual-mode toolbar, heading towards `1.0.0`. |
 
+## [0.19.4] - 2026-09-20
+
+### Fixed
+
+- **Dropdown buttons no longer draw their arrow in the normal ink while
+  pressed.** `NMCUSTOMDRAW.uItemState` is documented valid only at
+  ITEMPREPAINT, and the post-paint stage saw no pressed state, so on dark
+  bands the arrow stayed light on the light pressed fill. The arrow color
+  is now derived from the control's authoritative button state
+  (`TB_GETSTATE` pressed / `TB_GETHOTITEM`).
+- The **Icon Color button joined the dropdown family**: it now carries the
+  dropdown triangle marker, the widened button, and hover-to-open like
+  the other dropdown buttons (its menu moved from the WM_COMMAND path to
+  the `TBN_DROPDOWN` path).
+
 ## [0.19.3] - 2026-09-20
 
 ### Fixed

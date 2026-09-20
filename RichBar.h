@@ -1190,7 +1190,7 @@ public:
 			// TBSTYLE_EX_DRAWDDARROWS, so the control draws no arrow — the
 			// arrow is drawn live at paint time, anchored to the button's
 			// actual rect (see DrawDropdownArrow / NM_CUSTOMDRAW).
-			if( it->m_iCmd == CMD_FONT || it->m_iCmd == CMD_DROPDOWN_HEADER || it->m_iCmd == CMD_DROPDOWN_FORM ){
+			if( IsDropdownCmdCode( it->m_iCmd ) ){
 				atb[i + 3].fsStyle = BTNS_DROPDOWN;
 			}
 
@@ -1741,11 +1741,24 @@ public:
 	// image placement and any width rounding cannot shift or clip it. The
 	// glyph is the bundled Remix arrow-down-s-fill; on hover/pressed the
 	// light fill needs dark ink, mirroring the hot image list.
-	void DrawDropdownArrow( HDC hdc, const RECT& rc, UINT uItemState )
+	void DrawDropdownArrow( HDC hdc, const RECT& rc, UINT uIDCommand )
 	{
 		const WCHAR wch = 0xEA4D;	// ri-arrow-down-s-fill
 		const int nDPI = (int)Editor_DocInfo( m_hWnd, 0, EI_GET_DPI, 0 );
-		COLORREF crFg = ( uItemState & ( CDIS_HOT | CDIS_SELECTED ) ) ? GLYPH_COLOR_DARK : m_crGlyphFg;
+		// uItemState is documented invalid past ITEMPREPAINT, so read the
+		// button state from the control instead: pressed or hot means the
+		// light highlight fill, which needs dark ink
+		bool bInverted = false;
+		if( m_hwndToolbar ){
+			bInverted = ( SendMessage( m_hwndToolbar, TB_GETSTATE, uIDCommand, 0 ) & TBSTATE_PRESSED ) != 0;
+			if( !bInverted ){
+				int iHot = (int)SendMessage( m_hwndToolbar, TB_GETHOTITEM, 0, 0 );
+				if( iHot >= 0 ){
+					bInverted = ( iHot == (int)SendMessage( m_hwndToolbar, TB_COMMANDTOINDEX, uIDCommand, 0 ) );
+				}
+			}
+		}
+		COLORREF crFg = bInverted ? GLYPH_COLOR_DARK : m_crGlyphFg;
 		const int em = MulDiv( 13, nDPI, DEFAULT_DPI );	// ink ≈ 6.5 logical px wide
 		const int nMargin = MulDiv( 1, nDPI, DEFAULT_DPI );
 		HFONT hfontIcon = GetMdIconFont( em );
@@ -2126,38 +2139,6 @@ public:
 		StringPrintf( szColor, _countof( szColor ), _T("#%02X%02X%02X"),
 			GetRValue( m_crCustomIcon ), GetGValue( m_crCustomIcon ), GetBValue( m_crCustomIcon ) );
 		SetDlgItemText( hDlg, IDC_BTN_ICON_COLOR, szColor );
-	}
-
-	// the toolbar's icon-color button: a small popup offering Auto and a
-	// color picker; applies immediately and persists
-	void OnIconColorCommand( WPARAM nIDCommand )
-	{
-		int n = PopupMenuSub( (UINT)nIDCommand, IDR_POPUP_ICONCOLOR );
-		bool bChanged = false;
-		if( n == 1 ){	// Automatic
-			if( m_bCustomIconColor ){
-				m_bCustomIconColor = false;
-				bChanged = true;
-			}
-		}
-		else if( n == 2 ){	// Custom color
-			CHOOSECOLOR cc = {};
-			static COLORREF acrCust[16] = {};
-			cc.lStructSize = sizeof( cc );
-			cc.hwndOwner = m_hDlg;
-			cc.rgbResult = m_crCustomIcon;
-			cc.lpCustColors = acrCust;
-			cc.Flags = CC_FULLOPEN | CC_RGBINIT;
-			if( ChooseColor( &cc ) ){
-				m_crCustomIcon = cc.rgbResult;
-				m_bCustomIconColor = true;
-				bChanged = true;
-			}
-		}
-		if( bChanged ){
-			SaveProfile();
-			RebuildToolbarImages();
-		}
 	}
 
 	void OnPropCommand( HWND hDlg, WPARAM wParam )
@@ -2736,9 +2717,6 @@ public:
 			else if( cmd.m_iCmd == CMD_CUSTOMIZE ){
 				OnCustomize( m_hWnd );
 			}
-			else if( cmd.m_iCmd == CMD_ICON_COLOR ){
-				OnIconColorCommand( wParam );
-			}
 		}
 
 
@@ -2899,6 +2877,7 @@ public:
 		case CMD_FONT:
 		case CMD_DROPDOWN_HEADER:
 		case CMD_DROPDOWN_FORM:
+		case CMD_ICON_COLOR:
 			return true;
 		}
 		return false;
@@ -3008,6 +2987,37 @@ public:
 				case 9:
 					InsertTag( _T("<button id=\"\">Type Here"), _T("</button>") );
 					break;
+				}
+			}
+			break;
+
+		case CMD_ICON_COLOR:
+			{
+				int n = PopupMenuSub( nIDCommand, IDR_POPUP_ICONCOLOR );
+				bool bChanged = false;
+				if( n == 1 ){	// Automatic
+					if( m_bCustomIconColor ){
+						m_bCustomIconColor = false;
+						bChanged = true;
+					}
+				}
+				else if( n == 2 ){	// Custom color
+					CHOOSECOLOR cc = {};
+					static COLORREF acrCust[16] = {};
+					cc.lStructSize = sizeof( cc );
+					cc.hwndOwner = m_hDlg;
+					cc.rgbResult = m_crCustomIcon;
+					cc.lpCustColors = acrCust;
+					cc.Flags = CC_FULLOPEN | CC_RGBINIT;
+					if( ChooseColor( &cc ) ){
+						m_crCustomIcon = cc.rgbResult;
+						m_bCustomIconColor = true;
+						bChanged = true;
+					}
+				}
+				if( bChanged ){
+					SaveProfile();
+					RebuildToolbarImages();
 				}
 			}
 			break;
@@ -3151,7 +3161,7 @@ public:
 				}
 				if( pTBCD->nmcd.dwDrawStage == CDDS_ITEMPOSTPAINT ){
 					if( IsDropdownCommand( (UINT)pTBCD->nmcd.dwItemSpec ) ){
-						DrawDropdownArrow( pTBCD->nmcd.hdc, pTBCD->nmcd.rc, pTBCD->nmcd.uItemState );
+						DrawDropdownArrow( pTBCD->nmcd.hdc, pTBCD->nmcd.rc, (UINT)pTBCD->nmcd.dwItemSpec );
 					}
 				}
 				return CDRF_DODEFAULT;
