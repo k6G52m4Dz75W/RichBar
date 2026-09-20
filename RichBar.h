@@ -156,7 +156,6 @@ WCHAR OctToDec( LPWSTR& p )
 // SDK (Emurasoft/emeditor-plugin-library plugin.h)
 #define EEID_MARKDOWN_VIEW		23255	// Markdown design view toggle
 #define EEID_MARKDOWN_PREVIEW	23275	// Markdown rendered preview toggle
-#define EEID_MARKDOWN_TO_HTML	23280	// converts Markdown to HTML in place
 #define EI_GET_MARKDOWN_PREVIEW	407		// TRUE if the design view is on
 #define EI_OPEN_WEB				406		// opens a URL in the web view pane
 
@@ -1871,12 +1870,7 @@ public:
 		if( !m_bPanesRestored ){
 			m_bPanesRestored = true;
 			if( m_bPreviewOn ){
-				if( m_iMode == MODE_MD ){
-					PostMessage( m_hWnd, WM_COMMAND, MAKEWPARAM( EEID_MARKDOWN_PREVIEW, 0 ), 0 );
-				}
-				else {
-					RunWebPreviewPlugin();
-				}
+				RunWebPreviewPlugin();
 			}
 			// the design view state is queryable: only force it on when the
 			// live query (working) says it is currently off
@@ -2300,82 +2294,6 @@ public:
 		StringPrintf( szColor, _countof( szColor ), _T("#%02X%02X%02X"),
 			GetRValue( m_crCustomIcon ), GetGValue( m_crCustomIcon ), GetBValue( m_crCustomIcon ) );
 		SetDlgItemText( hDlg, IDC_BTN_ICON_COLOR, szColor );
-	}
-
-	// Read the whole document text (logical lines joined with CRLF).
-	wstring ReadWholeDoc()
-	{
-		wstring s;
-		int nLines = (int)Editor_GetLines( m_hWnd, POS_LOGICAL_W );
-		for( int y = 0; y < nLines; y++ ){
-			GET_LINE_INFO gli = {};
-			gli.cch = 0;
-			gli.yLine = y;
-			UINT_PTR cch = Editor_GetLineW( m_hWnd, &gli, NULL );
-			if( cch ){
-				wstring line( (size_t)cch + 1, L'\0' );
-				gli.cch = cch + 1;
-				Editor_GetLineW( m_hWnd, &gli, &line[0] );
-				line.resize( wcslen( line.c_str() ) );
-				s += line;
-			}
-			s += L"\r\n";
-		}
-		return s;
-	}
-
-	// The Preview button on a Markdown document: run EmEditor's own
-	// Markdown-to-HTML conversion on the text, capture the result, restore
-	// the Markdown source, write the HTML to a temp file, and open it in
-	// the web view pane. The source document is restored untouched.
-	void RunMarkdownPreview()
-	{
-		const wstring wstrMd = ReadWholeDoc();
-		// convert in place with the built-in converter
-		SendMessage( m_hWnd, WM_COMMAND, MAKEWPARAM( EEID_MARKDOWN_TO_HTML, 0 ), 0 );
-		const wstring wstrHtml = ReadWholeDoc();
-		// restore the Markdown source: anchor at (0,0), caret at the end,
-		// and insert replaces the whole selection in one step
-		POINT_PTR ptStart = { 0, 0 };
-		Editor_SetAnchorPos( m_hWnd, POS_LOGICAL_W, &ptStart );
-		int nLines = (int)Editor_GetLines( m_hWnd, POS_LOGICAL_W );
-		GET_LINE_INFO gliLast = {};
-		gliLast.cch = 0;
-		gliLast.yLine = nLines - 1;
-		UINT_PTR cchLast = ( nLines > 0 ) ? Editor_GetLineW( m_hWnd, &gliLast, NULL ) : 0;
-		POINT_PTR ptEnd = { ( nLines > 0 ) ? ( nLines - 1 ) : 0, cchLast };
-		Editor_SetCaretPos( m_hWnd, POS_LOGICAL_W, &ptEnd );
-		Editor_InsertW( m_hWnd, wstrMd.c_str() );
-		// write the converted HTML to a temp file (UTF-8 with BOM)
-		TCHAR szPath[MAX_PATH];
-		UINT cchPath = GetTempPath( MAX_PATH - 32, szPath );
-		if( cchPath == 0 ){
-			return;
-		}
-		lstrcat( szPath, _T("RichBarPreview.html") );
-		int cbUtf8 = WideCharToMultiByte( CP_UTF8, 0, wstrHtml.c_str(), (int)wstrHtml.size(), NULL, 0, NULL, NULL );
-		if( cbUtf8 <= 0 ){
-			return;
-		}
-		FILE* fp = _wfopen( szPath, L"wb" );
-		if( !fp ){
-			return;
-		}
-		const BYTE bom[3] = { 0xEF, 0xBB, 0xBF };
-		fwrite( bom, 1, 3, fp );
-		char* pUtf8 = new char[ cbUtf8 ];
-		WideCharToMultiByte( CP_UTF8, 0, wstrHtml.c_str(), (int)wstrHtml.size(), pUtf8, cbUtf8, NULL, NULL );
-		fwrite( pUtf8, 1, cbUtf8, fp );
-		delete [] pUtf8;
-		fclose( fp );
-		// open the temp page in the web view pane
-		TCHAR szUrl[ MAX_PATH * 2 ] = _T("file:///");
-		LPTSTR p = szUrl + lstrlen( szUrl );
-		for( LPCTSTR q = szPath; *q; q++ ){
-			*p++ = ( *q == _T('\\') ) ? _T('/') : *q;
-		}
-		*p = 0;
-		Editor_Info( m_hWnd, EI_OPEN_WEB, (LPARAM)szUrl );
 	}
 
 	// The Preview button runs EmEditor's official WebPreview plug-in, which
@@ -3009,12 +2927,9 @@ public:
 			else if( cmd.m_iCmd == CMD_PREVIEW ){
 				m_bPreviewOn = ( SendMessage( m_hwndToolbar, TB_GETSTATE, wParam, 0 ) & TBSTATE_CHECKED ) != 0;
 				SaveProfile();
-				if( m_iMode == MODE_MD ){
-					RunMarkdownPreview();
-				}
-				else {
-					RunWebPreviewPlugin();
-				}
+				// the official WebPreview plug-in previews the current
+				// HTML/Markdown document directly, in both modes
+				RunWebPreviewPlugin();
 			}
 		}
 

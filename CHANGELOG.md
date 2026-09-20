@@ -14,6 +14,16 @@ this code base:
 | `0.4.x`       | Compatibility fixes that make the original plug-in build and load correctly on modern EmEditor (v26). |
 | `0.9.0` – `0.17.x` | The HTML + Markdown dual-mode toolbar, heading towards `1.0.0`. |
 
+## [0.20.9] - 2026-09-20
+
+### Changed
+
+- **The Preview button routes every document — HTML and Markdown — to
+  the official WebPreview plug-in**, which previews the current
+  HTML/Markdown document in its embedded pane. This reverts the 0.20.8
+  self-made Markdown-to-HTML conversion pipeline (per user decision to
+  stay on the built-in plug-in).
+
 ## [0.20.8] - 2026-09-20
 
 ### Fixed
