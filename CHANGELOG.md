@@ -14,6 +14,17 @@ this code base:
 | `0.4.x`       | Compatibility fixes that make the original plug-in build and load correctly on modern EmEditor (v26). |
 | `0.9.0` – `0.17.x` | The HTML + Markdown dual-mode toolbar, heading towards `1.0.0`. |
 
+## [0.19.6] - 2026-09-20
+
+### Fixed
+
+- **0.19.5's synchronous repaint made the pressed glyph vanish** on dark
+  bands: inside `TBN_DROPDOWN` the control has not applied its light
+  pressed fill yet, so the forced paint drew the dark copy on the dark
+  background. The repaint is now **posted** (`WM_APP`) and lands after
+  the control settles the press state — the dark copy is drawn on the
+  light fill, visible as intended.
+
 ## [0.19.5] - 2026-09-20
 
 ### Fixed

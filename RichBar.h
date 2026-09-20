@@ -2914,13 +2914,12 @@ public:
 					bi.dwMask = TBIF_IMAGE;
 					bi.iImage = iDark;
 					SendMessage( m_hwndToolbar, TB_SETBUTTONINFO, nIDCommand, (LPARAM)&bi );
-					// the swap does not repaint the pressed button reliably:
-					// force it, or the glyph stays in the normal (light) ink
-					RECT rcBtn = {};
-					if( SendMessage( m_hwndToolbar, TB_GETITEMRECT, nIndex, (LPARAM)&rcBtn ) ){
-						InvalidateRect( m_hwndToolbar, &rcBtn, TRUE );
-					}
-					UpdateWindow( m_hwndToolbar );
+					// the control settles its light pressed fill only after
+					// this notification returns; repainting synchronously
+					// here draws the dark copy on the dark background
+					// (invisible). Post instead — the repaint lands exactly
+					// after the press state is applied
+					PostMessage( m_hDlg, WM_APP, 0, 0 );
 				}
 				else {
 					iOldImage = -1;
@@ -3734,6 +3733,19 @@ INT_PTR CALLBACK NewProc( HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam )
 			nResult = TRUE;
 		}
 		break;
+	case WM_APP:
+		{
+			// posted from ShowDropdownMenu's pressed-swap: repaint the bar
+			// now that the control has applied its pressed state, so the
+			// dark-copy image lands on the light pressed fill
+			CMyFrame* pFrame = static_cast<CMyFrame*>(GetFrame( hwnd ));
+			if( pFrame && pFrame->m_hwndToolbar ){
+				InvalidateRect( pFrame->m_hwndToolbar, NULL, TRUE );
+				UpdateWindow( pFrame->m_hwndToolbar );
+			}
+		}
+		break;
+
 	case WM_TIMER:
 		if( wParam == IDT_HOVER_MENU ){
 			CMyFrame* pFrame = static_cast<CMyFrame*>(GetFrame( hwnd ));
