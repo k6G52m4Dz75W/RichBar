@@ -14,6 +14,26 @@ this code base:
 | `0.4.x`       | Compatibility fixes that make the original plug-in build and load correctly on modern EmEditor (v26). |
 | `0.9.0` – `0.17.x` | The HTML + Markdown dual-mode toolbar, heading towards `1.0.0`. |
 
+## [0.19.1] - 2026-09-20
+
+### Added
+
+- **An Icon Color button on the toolbar itself** (both modes, next to
+  Customize): clicking pops a small menu — *Automatic* restores the
+  band-luminance black/white ink, *Custom Color...* opens the standard
+  color dialog; either applies immediately and persists. The button uses
+  a new dedicated glyph, Remix `drop-line` (U+EC6A), added to both icon
+  pools (Markdown slot 20, HTML slot 48; the subset grows to 63 glyphs,
+  9,104 bytes, SHA256
+  `90bf417fe74a9d7fd28b3f3218dd3ed0952e3466e7faf6c672fe91b770210cc4`).
+- **Migration**: button arrays saved by older versions are spliced with
+  the new button on load (inserted before Customize) and persisted.
+
+### Fixed
+
+- Opening Properties on the Icon Color button can no longer convert it
+  into another command type; only its title and icon are editable.
+
 ## [0.19.0] - 2026-09-20
 
 ### Fixed

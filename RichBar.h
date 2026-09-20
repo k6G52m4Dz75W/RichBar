@@ -147,7 +147,8 @@ WCHAR OctToDec( LPWSTR& p )
 #define CMD_DROPDOWN_FORM		6
 #define CMD_CUSTOMIZE			7
 #define CMD_LINE_PREFIX			8
-#define MAX_CMD					9
+#define CMD_ICON_COLOR			9
+#define MAX_CMD					10
 
 // toolbar mode-switch buttons (command IDs below ID_COMMAND_BASE)
 #define ID_MODE_HTML			90
@@ -155,8 +156,8 @@ WCHAR OctToDec( LPWSTR& p )
 // hover-to-open dropdown delay timer (m_hDlg)
 #define IDT_HOVER_MENU			1
 // runtime-drawn glyphs appended to every toolbar image list
-#define MD_ICON_MODE_H			20
-#define MD_ICON_MODE_M			21
+#define MD_ICON_MODE_H			21
+#define MD_ICON_MODE_M			22
 // logical width of the dropdown marker strip (DPI-scaled); sized so the
 // live-drawn arrow keeps clear of the glyph while the button stays compact
 #define MD_MARKER_STRIP			8
@@ -249,6 +250,7 @@ static struct CDefCmd DefCmd[] =
 	{ 22, CMD_TAGS, ID_FONT_COLOR, _T("<font color=\"\\{DefColor}\">"), L"</font>" },
 	{ 23, CMD_DROPDOWN_FORM, ID_FORM, L"", L"" },
 	{ -1, CMD_SEPARATOR, 0, L"", L"" },
+	{ 48, CMD_ICON_COLOR, ID_ICON_COLOR, L"", L"" },
 	{ 24, CMD_CUSTOMIZE, ID_CUSTOMIZE, L"", L"" },
 	{ 25, CMD_TAGS, ID_FORM_FORM, L"<form method=\"post\" action=\"\">\n\t", L"\n<input type=\"submit\"><input type=\"reset\"></form>\n" },
 	{ 26, CMD_TAGS, ID_TEXTBOX, L"<input type=\"text\" id=\"\" />", L"" },
@@ -312,6 +314,7 @@ static struct CDefCmdMd {
 	{ 17, CMD_TAGS, L"Image", L"![", L"](\\{PickRelativePath,%s,%s})", IDS_PICTURE, IDS_FILTER_IMAGE },
 	{ 18, CMD_INSERT_TABLE, L"Table", L"", L"", 0, 0 },
 	{ -1, CMD_SEPARATOR, L"", L"", L"", 0, 0 },
+	{ 20, CMD_ICON_COLOR, L"Icon Color", L"", L"", 0, 0 },
 	{ 19, CMD_CUSTOMIZE, L"Customize", L"", L"", 0, 0 },
 };
 
@@ -999,6 +1002,27 @@ public:
 				delete [] pBuf;
 			}
 		}
+		if( bResult ){
+			// migration: arrays saved by pre-0.19.1 versions predate the
+			// icon-color button; splice it in before the customize entry
+			// and persist so it sticks
+			bool bHasIconColor = false;
+			for( const auto& cmd : m_CmdArray[iMode] ){
+				if( cmd.m_iCmd == CMD_ICON_COLOR ){ bHasIconColor = true; break; }
+			}
+			if( !bHasIconColor ){
+				CCmd cmd( ( iMode == MODE_MD ) ? 20 : 48, CMD_ICON_COLOR, L"Icon Color", L"", L"" );
+				int iAt = (int)m_CmdArray[iMode].size();
+				for( int i = 0; i < (int)m_CmdArray[iMode].size(); i++ ){
+					if( m_CmdArray[iMode][i].m_iCmd == CMD_CUSTOMIZE ){ iAt = i; break; }
+				}
+				m_CmdArray[iMode].insert( m_CmdArray[iMode].begin() + iAt, cmd );
+				if( iMode == m_iMode ){
+					m_bCmdArrayModified = true;
+					SaveCmdArray();
+				}
+			}
+		}
 		return bResult;
 	}
 
@@ -1393,6 +1417,7 @@ public:
 			{ 17, 0xEE4B },		// image-line
 			{ 18, 0xF1DE },		// table-line
 			{ 19, 0xF0EE },		// settings-line (customize)
+			{ 20, 0xEC6A },		// drop-line (icon color)
 		};
 		BOOL bGlyphDrawn = FALSE;
 		for( int g = 0; g < (int)_countof( c_aIconGlyphs ); g++ ){
@@ -1423,7 +1448,8 @@ public:
 			0xF0EE, 0xECED, 0xEE5E, 0xEED0, 0xECDB, 0xEB85, // settings, form, text, password, textarea, checkbox
 			0xF050, 0xEA7A, 0xF327, 0xF39A, 0xEC0A, 0xEAE9, // radio, group box, select, listbox, buttons
 			0xECB7, 0xF2F5, 0xEB31, 0xEC36, 0xF0BB, 0xF029, // hidden, object, camera, disc, scanner, printer
-			0xED9E, 0xEB97, 0xEA21, 0xEE59, 0xED3B, 0xEF83  // function, error, warning, info, flag, sound
+			0xED9E, 0xEB97, 0xEA21, 0xEE59, 0xED3B, 0xEF83, // function, error, warning, info, flag, sound
+			0xEC6A                                          // drop-line (icon color)
 		};
 		if( iIcon < 0 || iIcon >= (int)_countof( glyphs ) ) return;
 		DrawIconGlyph( hdc, cx, glyphs[iIcon], crFg, cxRect );
@@ -1495,7 +1521,7 @@ public:
 	// button's actual rect (see DrawDropdownArrow).
 	HIMAGELIST BuildToolbarImageList( int cx, COLORREF crFg, int mode, int nCopies = 1 )
 	{
-		int count = mode == MODE_MD ? 20 : 48;
+		int count = mode == MODE_MD ? 21 : 49;
 		HIMAGELIST himl = ImageList_Create( cx, cx, ILC_COLOR32, ( count + 2 ) * nCopies, 2 );
 		if( !himl ){
 			return NULL;
@@ -2097,6 +2123,38 @@ public:
 		SetDlgItemText( hDlg, IDC_BTN_ICON_COLOR, szColor );
 	}
 
+	// the toolbar's icon-color button: a small popup offering Auto and a
+	// color picker; applies immediately and persists
+	void OnIconColorCommand( WPARAM nIDCommand )
+	{
+		int n = PopupMenuSub( (UINT)nIDCommand, IDR_POPUP_ICONCOLOR );
+		bool bChanged = false;
+		if( n == 1 ){	// Automatic
+			if( m_bCustomIconColor ){
+				m_bCustomIconColor = false;
+				bChanged = true;
+			}
+		}
+		else if( n == 2 ){	// Custom color
+			CHOOSECOLOR cc = {};
+			static COLORREF acrCust[16] = {};
+			cc.lStructSize = sizeof( cc );
+			cc.hwndOwner = m_hDlg;
+			cc.rgbResult = m_crCustomIcon;
+			cc.lpCustColors = acrCust;
+			cc.Flags = CC_FULLOPEN | CC_RGBINIT;
+			if( ChooseColor( &cc ) ){
+				m_crCustomIcon = cc.rgbResult;
+				m_bCustomIconColor = true;
+				bChanged = true;
+			}
+		}
+		if( bChanged ){
+			SaveProfile();
+			RebuildToolbarImages();
+		}
+	}
+
 	void OnPropCommand( HWND hDlg, WPARAM wParam )
 	{
 		if( wParam == IDOK ){
@@ -2672,6 +2730,9 @@ public:
 			}
 			else if( cmd.m_iCmd == CMD_CUSTOMIZE ){
 				OnCustomize( m_hWnd );
+			}
+			else if( cmd.m_iCmd == CMD_ICON_COLOR ){
+				OnIconColorCommand( wParam );
 			}
 		}
 
@@ -3450,6 +3511,11 @@ public:
 				m_pcmdProp->m_sTagBegin = sz;
 				GetDlgItemText( hDlg, IDC_TAG_END, sz, _countof( sz ) );
 				m_pcmdProp->m_sTagEnd = sz;
+			}
+			else if( m_pcmdProp->m_iCmd == CMD_ICON_COLOR ){
+				// a functional button, not an editable special command:
+				// keep its code and apply only the title/icon changes
+				m_pcmdProp->m_iCmd = CMD_ICON_COLOR;
 			}
 			else {
 				int iSpecial = (int)SendDlgItemMessage( hDlg, IDC_COMBO_SPECIAL, CB_GETCURSEL, 0, 0 );
