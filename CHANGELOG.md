@@ -14,6 +14,17 @@ this code base:
 | `0.4.x`       | Compatibility fixes that make the original plug-in build and load correctly on modern EmEditor (v26). |
 | `0.9.0` – `0.17.x` | The HTML + Markdown dual-mode toolbar, heading towards `1.0.0`. |
 
+## [0.20.11] - 2026-09-20
+
+### Fixed
+
+- **Toggle states are re-asserted after every click of the Design View /
+  Preview buttons**: `BTNS_GROUP` check buttons are mutually exclusive,
+  so clicking one unchecks the other; the click handlers now re-assert
+  both buttons' `TBSTATE_CHECKED` from their tracked states immediately,
+  keeping the two toggles independent while preserving the native
+  checked rendering.
+
 ## [0.20.10] - 2026-09-20
 
 ### Fixed

@@ -2932,11 +2932,13 @@ public:
 				// visual, the built-in command toggles the design view
 				m_bDesignViewOn = ( SendMessage( m_hwndToolbar, TB_GETSTATE, wParam, 0 ) & TBSTATE_CHECKED ) != 0;
 				SaveProfile();
+				ApplyToggleStates();
 				PostMessage( m_hWnd, WM_COMMAND, MAKEWPARAM( EEID_MARKDOWN_VIEW, 0 ), 0 );
 			}
 			else if( cmd.m_iCmd == CMD_PREVIEW ){
 				m_bPreviewOn = ( SendMessage( m_hwndToolbar, TB_GETSTATE, wParam, 0 ) & TBSTATE_CHECKED ) != 0;
 				SaveProfile();
+				ApplyToggleStates();
 				// the official WebPreview plug-in previews the current
 				// HTML/Markdown document directly, in both modes
 				RunWebPreviewPlugin();
