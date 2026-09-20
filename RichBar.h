@@ -3391,8 +3391,11 @@ public:
 		if( !hwndCombo )  return;
 	    SendMessage( hwndCombo, CBEM_SETIMAGELIST, 0, (LPARAM)m_himageToolbar );
 		// enumerate light icons only; the tail of the list holds the
-		// pressed-state dark copies, which are not user-selectable slots
+		// pressed-state dark copies, and the last two light images are the
+		// [H][M] mode-switch glyphs — neither is user-assignable
 		int nCount = ( m_nLightIcons > 0 ) ? m_nLightIcons : ImageList_GetImageCount( m_himageToolbar );
+		nCount -= 2;
+		if( nCount < 0 )  nCount = 0;
 		for( int i = -1; i < nCount; i++ ) {
 			COMBOBOXEXITEM item = { 0 };
 			item.mask = CBEIF_IMAGE | CBEIF_SELECTEDIMAGE | CBEIF_TEXT;
@@ -3540,9 +3543,28 @@ public:
 							StringCopy( item.pszText, item.cchTextMax, L"----------" );
 						}
 						else {
-							LoadString( EEGetLocaleInstanceHandle(), ID_HEADER + (int)item.iItem - 1, item.pszText, item.cchTextMax );
+							// label each icon slot with the title of the
+							// command that uses it in the CURRENT mode: the
+							// old fixed ID_HEADER+slot mapping silently
+							// assumed HTML slots and mislabeled every icon
+							// in Markdown mode
+							const int iSlot = item.iItem - 1;
+							bool bFound = false;
+							for( const auto& cmd : Cmds() ){
+								if( cmd.m_iCmd != CMD_SEPARATOR && cmd.m_iIcon == iSlot && !cmd.m_sTitle.empty() ){
+									StringCopyN( item.pszText, item.cchTextMax, cmd.m_sTitle.c_str(), item.cchTextMax - 1 );
+									bFound = true;
+									break;
+								}
+							}
+							if( !bFound ){
+								// unassigned HTML slot: keep the default
+								// command name for that slot when defined
+								item.pszText[0] = 0;
+								LoadString( EEGetLocaleInstanceHandle(), ID_HEADER + iSlot, item.pszText, item.cchTextMax );
+							}
 						}
-					}	
+					}
 				}
 				break;
 			}

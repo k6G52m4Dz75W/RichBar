@@ -14,6 +14,20 @@ this code base:
 | `0.4.x`       | Compatibility fixes that make the original plug-in build and load correctly on modern EmEditor (v26). |
 | `0.9.0` – `0.17.x` | The HTML + Markdown dual-mode toolbar, heading towards `1.0.0`. |
 
+## [0.19.0] - 2026-09-20
+
+### Fixed
+
+- **The button-properties icon picker is labeled by the current mode's
+  command titles.** The picker labeled every icon slot with the HTML
+  default command table (`ID_HEADER + slot`), which read fine in HTML
+  mode but paired every Markdown icon with an unrelated HTML command
+  name (bold icon next to "Font", bullet list next to "Align Left", …).
+  Slots are now labeled with the title of the command that actually uses
+  them in the current mode (following renames too); unassigned HTML
+  slots keep their default command name as before. The two `[H][M]`
+  mode-switch glyphs are no longer offered as assignable icons.
+
 ## [0.18.0] - 2026-09-20
 
 ### Added
