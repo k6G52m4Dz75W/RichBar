@@ -14,6 +14,20 @@ this code base:
 | `0.4.x`       | Compatibility fixes that make the original plug-in build and load correctly on modern EmEditor (v26). |
 | `0.9.0` – `0.17.x` | The HTML + Markdown dual-mode toolbar, heading towards `1.0.0`. |
 
+## [0.20.3] - 2026-09-20
+
+### Changed
+
+- **Preview routes by mode**: Markdown documents use EmEditor's own
+  Markdown preview (`EEID_MARKDOWN_PREVIEW`), which converts before
+  rendering (raw source is no longer shown); HTML and other documents
+  keep the WebPreview plug-in.
+- **The Design View button reflects EmEditor's persistent design view
+  state**: pressed is drawn from `EI_GET_MARKDOWN_PREVIEW` (the
+  documented design-view query), and clicks toggle via
+  `EI_SET_MARKDOWN_PREVIEW` — the state stays consistent everywhere and
+  survives restarts.
+
 ## [0.20.2] - 2026-09-20
 
 ### Fixed

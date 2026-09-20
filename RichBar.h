@@ -155,6 +155,9 @@ WCHAR OctToDec( LPWSTR& p )
 // built-in EmEditor command IDs and pane flags from the v23/v24.4 plug-in
 // SDK (Emurasoft/emeditor-plugin-library plugin.h)
 #define EEID_MARKDOWN_VIEW		23255	// Markdown design view toggle
+#define EEID_MARKDOWN_PREVIEW	23275	// Markdown rendered preview toggle
+#define EI_GET_MARKDOWN_PREVIEW	407		// TRUE if the design view is on
+#define EI_SET_MARKDOWN_PREVIEW	408		// toggles the design view
 
 // toolbar mode-switch buttons (command IDs below ID_COMMAND_BASE)
 #define ID_MODE_HTML			90
@@ -1783,6 +1786,19 @@ public:
 				bInverted = ( iHot == (int)SendMessage( m_hwndToolbar, TB_COMMANDTOINDEX, uIDCommand, 0 ) );
 			}
 		}
+		// the Design View button mirrors EmEditor's own persistent design
+		// view state (not the transient press state): EmEditor persists it
+		// across restarts, so the button stays pressed while it is on
+		if( uIDCommand != ID_MODE_HTML && uIDCommand != ID_MODE_MD ){
+			for( const auto& cmd : Cmds() ){
+				if( cmd.m_iCmd == CMD_MD_VIEW ){
+					if( uIDCommand == ID_COMMAND_BASE + (int)( &cmd - &Cmds()[0] ) ){
+						bInverted = Editor_Info( m_hWnd, EI_GET_MARKDOWN_PREVIEW, 0 ) != FALSE;
+					}
+					break;
+				}
+			}
+		}
 		if( !bInverted )  return;
 		int iIcon = -1;
 		if( uIDCommand == ID_MODE_HTML )  iIcon = m_nLightIcons - 2;
@@ -2821,10 +2837,21 @@ public:
 				OnCustomize( m_hWnd );
 			}
 			else if( cmd.m_iCmd == CMD_MD_VIEW ){
-				PostMessage( m_hWnd, WM_COMMAND, MAKEWPARAM( EEID_MARKDOWN_VIEW, 0 ), 0 );
+				// toggle via the documented design-view state pair so the
+				// state lives in EmEditor (persistent, consistent everywhere)
+				BOOL bOn = (BOOL)Editor_Info( m_hWnd, EI_GET_MARKDOWN_PREVIEW, 0 );
+				Editor_Info( m_hWnd, EI_SET_MARKDOWN_PREVIEW, !bOn );
 			}
 			else if( cmd.m_iCmd == CMD_PREVIEW ){
-				RunWebPreviewPlugin();
+				// Markdown documents go through EmEditor's own Markdown
+				// preview (it converts before rendering); other documents
+				// (HTML) run the WebPreview plug-in on the raw file
+				if( m_iMode == MODE_MD ){
+					PostMessage( m_hWnd, WM_COMMAND, MAKEWPARAM( EEID_MARKDOWN_PREVIEW, 0 ), 0 );
+				}
+				else {
+					RunWebPreviewPlugin();
+				}
 			}
 		}
 
