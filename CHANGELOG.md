@@ -14,6 +14,16 @@ this code base:
 | `0.4.x`       | Compatibility fixes that make the original plug-in build and load correctly on modern EmEditor (v26). |
 | `0.9.0` – `0.17.x` | The HTML + Markdown dual-mode toolbar, heading towards `1.0.0`. |
 
+## [0.20.6] - 2026-09-20
+
+### Changed
+
+- **Design View glyph** is Remix `t-box-line` (U+F1D3) — the T-box mark
+  matches the design view's own iconography.
+- **Link glyph** (both modes) is Remix `links-line` (U+EEB8) instead of
+  the singular `link`. The subset grows to **66 glyphs**, 9,816 bytes,
+  SHA256 `a07e8cb96e563128f4298960f3fc58bb20398a995b1e8c79942df0b0f5562369`.
+
 ## [0.20.5] - 2026-09-20
 
 ### Fixed
