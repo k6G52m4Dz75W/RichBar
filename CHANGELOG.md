@@ -14,6 +14,22 @@ this code base:
 | `0.4.x`       | Compatibility fixes that make the original plug-in build and load correctly on modern EmEditor (v26). |
 | `0.9.0` – `0.17.x` | The HTML + Markdown dual-mode toolbar, heading towards `1.0.0`. |
 
+## [0.20.8] - 2026-09-20
+
+### Fixed
+
+- **The Markdown preview now converts before rendering.** The Preview
+  button on a Markdown document runs EmEditor's built-in
+  Markdown-to-HTML conversion on the text, captures the converted HTML,
+  restores the Markdown source in one step, writes the HTML to a temp
+  file, and opens it in the web view pane (`EI_OPEN_WEB`) — the raw
+  source is never shown.
+- **Startup pane restore**: the Design View / Preview on-states saved in
+  the profile are re-applied when the session starts — the panes reopen
+  (Preview on Markdown uses the converted preview; on HTML the
+  WebPreview plug-in pane) and the Design View is forced back on if it
+  is not already (only when the state query is confirmed working).
+
 ## [0.20.7] - 2026-09-20
 
 ### Fixed
