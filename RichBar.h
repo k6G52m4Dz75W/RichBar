@@ -418,7 +418,6 @@ public:
 	bool m_bIconColorDirty;		// a color setting was touched in the open Prop dialog
 	bool m_bDesignViewOn;		// design view toggle state (synced with 407 when it works)
 	bool m_bPreviewOn;			// preview pane on (synced to the pane window's visibility)
-	bool m_b407Alive;			// EI_GET_MARKDOWN_PREVIEW has ever returned TRUE
 	HWND m_hwndView;				// the EmEditor VIEW window (plug-in OnCommand contract)
 	bool m_bPanesRestored;		// startup pane restore done (first state-sync tick)
 	DWORD m_dwPreviewGuard;		// tick of our last preview toggle; sync pauses while the pane settles
@@ -1887,17 +1886,6 @@ public:
 		return FALSE;
 	}
 
-	static BOOL CALLBACK FindChromeChildProc( HWND hwnd, LPARAM lParam )
-	{
-		WCHAR szCls[32];
-		if( GetClassNameW( hwnd, szCls, _countof( szCls ) ) != 0 &&
-			lstrcmpW( szCls, L"Chrome_WidgetWin_1" ) == 0 ){
-			*(HWND*)lParam = hwnd;
-			return FALSE;
-		}
-		return TRUE;
-	}
-
 	bool IsPreviewPaneVisible()
 	{
 		HWND hwndPane = NULL;
@@ -1905,36 +1893,80 @@ public:
 		return hwndPane != NULL;
 	}
 
-	// one Chromium reload of the preview pane. The renderer page refetches
-	// the document from the WebPreview plug-in's virtual host on every page
-	// load and the host serves the current buffer, so a reload resyncs the
-	// pane with the edited text — the same thing the pane's own right-click
-	// Refresh does
-	void RefreshPreviewPane()
+	// one refresh of the preview pane: re-navigate the WebPreview renderer
+	// page via the official EI_OPEN_WEB. The renderer fetches the document
+	// from the plug-in's virtual host on EVERY page load and the host serves
+	// the current buffer, so re-navigating to the same URL resyncs the pane
+	// with the edited text (a posted VK_F5 does not reach WebView2's browser
+	// accelerators — user-verified dead end)
+	static void UrlAppendEncoded( tstring& s, LPCTSTR psz, bool bKeepSlashes )
 	{
-		HWND hwndPane = NULL;
-		EnumChildWindows( m_hWnd, FindPreviewPaneProc, (LPARAM)&hwndPane );
-		if( !hwndPane ){
-			return;
-		}
-		HWND hwndChrome = NULL;
-		EnumChildWindows( hwndPane, FindChromeChildProc, (LPARAM)&hwndChrome );
-		if( hwndChrome ){
-			PostMessage( hwndChrome, WM_KEYDOWN, VK_F5, 0 );
-			PostMessage( hwndChrome, WM_KEYUP, VK_F5, 0 );
+		char utf8[MAX_PATH * 3];
+		int n = WideCharToMultiByte( CP_UTF8, 0, psz, -1, utf8, sizeof( utf8 ), NULL, NULL );
+		for( int i = 0; i < n - 1; i++ ){
+			unsigned char c = (unsigned char)utf8[i];
+			if( ( c >= 'A' && c <= 'Z' ) || ( c >= 'a' && c <= 'z' ) || ( c >= '0' && c <= '9' ) ||
+				c == '.' || c == '-' || c == '_' || ( bKeepSlashes && ( c == '/' || c == ':' ) ) ){
+				s += (TCHAR)c;
+			}
+			else {
+				WCHAR hex[4];
+				StringPrintf( hex, _countof( hex ), _T("%%%02X"), c );
+				s += hex;
+			}
 		}
 	}
 
-	// state sync poll: pane toggles (from EmEditor's own UI or ours) fire
-	// no notification; repaint only when the drawn state goes stale
+	void RefreshPreviewPane()
+	{
+		if( !IsPreviewPaneVisible() ){
+			return;		// never open the pane as a side effect of refreshing
+		}
+		TCHAR szFile[MAX_PATH] = { 0 };
+		Editor_Info( m_hWnd, EI_GET_FILE_NAMEW, (LPARAM)szFile );
+		if( szFile[0] == 0 ){
+			RbLogF( "auto-refresh: untitled document, skipped" );
+			return;		// the plug-in previews untitled docs via temp snapshot names we cannot reconstruct
+		}
+		TCHAR szDir[MAX_PATH], szRenderer[MAX_PATH];
+		StringCopy( szDir, _countof( szDir ), szFile );
+		LPTSTR pszSlash = szDir;
+		for( LPTSTR p = szDir; *p; p++ ){
+			if( *p == _T('\\') || *p == _T('/') ){
+				pszSlash = p;
+			}
+		}
+		LPCTSTR pszName = pszSlash + ( *pszSlash ? 1 : 0 );
+		*pszSlash = 0;
+		DWORD cch = GetModuleFileName( NULL, szRenderer, MAX_PATH );	// EmEditor.exe
+		if( cch == 0 || cch >= MAX_PATH ){
+			return;
+		}
+		LPTSTR p = szRenderer + cch;
+		while( p > szRenderer && p[-1] != _T('\\') )  p--;
+		*p = 0;
+		StringCat( szRenderer, MAX_PATH, _T("PlugIns\\markdown-renderer.html") );
+		for( p = szRenderer; *p; p++ ){
+			if( *p == _T('\\') ){
+				*p = _T('/');
+			}
+		}
+		tstring sUrl = _T("file:///");
+		UrlAppendEncoded( sUrl, szRenderer, true );
+		sUrl += _T("?documentName=");
+		UrlAppendEncoded( sUrl, pszName, false );
+		sUrl += _T("&documentFolder=");
+		UrlAppendEncoded( sUrl, szDir, false );
+		LPARAM lr = Editor_Info( m_hWnd, EI_OPEN_WEB, (LPARAM)sUrl.c_str() );
+		RbLogF( "auto-refresh: EI_OPEN_WEB ret=%p", (void*)lr );
+	}
+
+	// state sync poll: the preview pane's visibility (the pane can be
+	// toggled from EmEditor's own UI) fires no notification
 	void OnStateSyncTimer()
 	{
 		if( !m_hwndToolbar ){
 			return;
-		}
-		BOOL bDesign = Editor_Info( m_hWnd, EI_GET_MARKDOWN_PREVIEW, 0 ) != FALSE;
-		if( bDesign ){
-			m_b407Alive = true;	// the query works: trust it over our local toggle
 		}
 		bool bPane = IsPreviewPaneVisible();
 		// one-shot startup restore: reopen the panes that were on when the
@@ -1947,26 +1979,20 @@ public:
 				PostMessage( m_hWnd, WM_COMMAND, MAKEWPARAM( EEID_MARKDOWN_PREVIEW, 0 ), 0 );
 			}
 			// EmEditor does not persist the design view itself (verified by
-			// registry runtime diff) — our profile flag is the memory, and the
-			// command is safe to send unconditionally: a no-op where the view
-			// is already on or the command does not exist
-			if( m_bDesignViewOn && !bDesign ){
+			// registry runtime diff) — our profile flag is the memory. The
+			// 407 query is NOT consulted: it lags and flaps (per-document,
+			// preview-pane-sensitive), which used to undo every click
+			if( m_bDesignViewOn ){
 				RbLogF( "startup restore: design view" );
 				PostMessage( m_hWnd, WM_COMMAND, MAKEWPARAM( EEID_MARKDOWN_VIEW, 0 ), 0 );
 			}
 		}
-		// follow the pane, never our memory of it — the pane can be toggled
-		// from EmEditor's own UI; skip briefly after our own click while the
-		// WebView2 pane is still opening or closing
+		// follow the pane, never our memory of it; skip briefly after our own
+		// click while the WebView2 pane is still opening or closing
 		else if( bPane != m_bPreviewOn && GetTickCount() - m_dwPreviewGuard > 2000 ){
 			RbLogF( "sync: pane=%d previewOn=%d", (int)bPane, (int)m_bPreviewOn );
 			m_bPreviewOn = bPane;
 			SaveProfile();
-			ApplyToggleStates();
-		}
-		if( m_b407Alive && bDesign != m_bDesignViewOn ){
-			RbLogF( "sync: design407=%d designOn=%d", (int)bDesign, (int)m_bDesignViewOn );
-			m_bDesignViewOn = bDesign;
 			ApplyToggleStates();
 		}
 	}
@@ -2252,7 +2278,6 @@ public:
 		m_bIconColorDirty = false;
 		m_bDesignViewOn = false;
 		m_bPreviewOn = false;
-		m_b407Alive = false;
 		m_bPanesRestored = false;
 		m_dwPreviewGuard = 0;
 		m_hwndView = NULL;
@@ -2999,19 +3024,15 @@ public:
 			}
 			else if( cmd.m_iCmd == CMD_MD_VIEW ){
 				// BTNS_CHECK toggled the control state before this command
-				// arrived: the control is the source of truth for the wanted
-				// state; the built-in command TOGGLES, so only send it when
-				// the live query disagrees — a click on an already-aligned
-				// button must not flip the view behind the user's back
-				bool bWant = ( SendMessage( m_hwndToolbar, TB_GETSTATE, wParam, 0 ) & TBSTATE_CHECKED ) != 0;
-				BOOL bDesign = Editor_Info( m_hWnd, EI_GET_MARKDOWN_PREVIEW, 0 ) != FALSE;
-				m_bDesignViewOn = bWant;
+				// arrived: the control is the source of truth, and one click
+				// is exactly one toggle of the built-in command. The 407
+				// query is deliberately NOT consulted here — it lags and
+				// flaps, and reconciling against it used to undo the click
+				m_bDesignViewOn = ( SendMessage( m_hwndToolbar, TB_GETSTATE, wParam, 0 ) & TBSTATE_CHECKED ) != 0;
 				SaveProfile();
 				ApplyToggleStates();
-				if( !!bDesign != bWant ){
-					RbLogF( "design click: want=%d live=%d -> EEID_MARKDOWN_VIEW", (int)bWant, (int)bDesign );
-					PostMessage( m_hWnd, WM_COMMAND, MAKEWPARAM( EEID_MARKDOWN_VIEW, 0 ), 0 );
-				}
+				RbLogF( "design click: want=%d -> EEID_MARKDOWN_VIEW", (int)m_bDesignViewOn );
+				PostMessage( m_hWnd, WM_COMMAND, MAKEWPARAM( EEID_MARKDOWN_VIEW, 0 ), 0 );
 			}
 			else if( cmd.m_iCmd == CMD_PREVIEW ){
 				// same reconciliation for the preview pane: 23275 toggles,

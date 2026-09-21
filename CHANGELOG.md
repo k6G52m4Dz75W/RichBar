@@ -14,6 +14,30 @@ this code base:
 | `0.4.x`       | Compatibility fixes that make the original plug-in build and load correctly on modern EmEditor (v26). |
 | `0.9.0` – `0.17.x` | The HTML + Markdown dual-mode toolbar, heading towards `1.0.0`. |
 
+## [0.21.3] - 2026-09-21
+
+### Fixed
+
+- **Preview auto-refresh rewritten on the official API**: the 0.21.2
+  approach (posting `VK_F5` to the pane's WebView2 window) never reached
+  WebView2's browser accelerators — no refresh happened. The pane is now
+  re-navigated with `EI_OPEN_WEB` to the very URL the WebPreview plug-in
+  itself uses (`file:///…/PlugIns/markdown-renderer.html?documentName=…
+  &documentFolder=…`, percent-encoded the same way); every navigation
+  reloads the renderer, which refetches the document from the virtual host
+  serving the live buffer. Untitled documents are skipped (their snapshot
+  names cannot be reconstructed) and the pane is never opened as a side
+  effect. Self-probe verified: `EI_OPEN_WEB` returns success, the pane
+  count stays one, no external browser spawns.
+- **Design View "press twice" fixed by distrusting 407**: the trace log
+  showed `EI_GET_MARKDOWN_PREVIEW` lags and flaps (per-document, sensitive
+  to tab/pane state — it oscillated 1→0→1 within seconds), and the 500 ms
+  poll kept "correcting" the button against that noise, undoing every
+  click half a second later and toggling the view chaotically. All 407
+  usage is removed: the button is now an honest local toggle (one click =
+  one `EEID_MARKDOWN_VIEW`), with the profile flag and the unconditional
+  startup restore as the only memory.
+
 ## [0.21.2] - 2026-09-21
 
 ### Added
