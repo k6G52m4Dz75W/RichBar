@@ -14,6 +14,28 @@ this code base:
 | `0.4.x`       | Compatibility fixes that make the original plug-in build and load correctly on modern EmEditor (v26). |
 | `0.9.0` – `0.17.x` | The HTML + Markdown dual-mode toolbar, heading towards `1.0.0`. |
 
+## [0.21.5] - 2026-09-21
+
+### Fixed
+
+- **Auto-refresh no longer spawns an external browser**: `EI_OPEN_WEB`
+  turned out to open the default browser despite its docs (user-verified;
+  the probe was blind to it because a new tab in an already-running Edge
+  adds no process). The re-navigation path is removed.
+- **Pane detection is now existence-based** (the walk no longer requires
+  `IsWindowVisible`): a pane hidden behind another pane tab — or living on
+  another frame — still counts as ON, which explains sessions where the
+  button kept reading the pane as absent.
+
+### Changed
+
+- **Temporary diagnostic on the road to real auto-refresh**: the preview
+  pane window is subclassed and every `WM_COMMAND` it receives is logged
+  (auto-refresh itself is suspended — edits now do nothing but keep the
+  subclass fresh). One manual right-click → Refresh on the pane will
+  capture the command ID; the next release posts that command for the
+  live sync. The subclass detaches on pane destruction.
+
 ## [0.21.4] - 2026-09-21
 
 ### Changed

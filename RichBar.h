@@ -421,6 +421,8 @@ public:
 	HWND m_hwndView;				// the EmEditor VIEW window (plug-in OnCommand contract)
 	bool m_bPanesRestored;		// startup pane restore done (first state-sync tick)
 	HWINEVENTHOOK m_hPreviewWinHook;	// push source for the preview pane window show/hide/destroy
+	HWND m_hwndSubclassedPane;		// TEMP diagnostic: the subclassed preview pane window
+	WNDPROC m_pfnPaneOrigProc;		// TEMP diagnostic: its original window procedure
 	UINT m_nHoverMenuCmd;		// dropdown command waiting for the hover-open timer
 	UINT m_nLastMenuCmd;		// dropdown whose menu closed last; reopen only after the mouse leaves it
 	bool m_bLastMenuLeft;		// the mouse has left m_nLastMenuCmd since its menu closed
@@ -1881,8 +1883,7 @@ public:
 	{
 		WCHAR szCls[32];
 		if( GetClassNameW( hwnd, szCls, _countof( szCls ) ) == 0 ||
-			lstrcmpW( szCls, L"EmEditorWebPreview2" ) != 0 ||
-			!IsWindowVisible( hwnd ) ){
+			lstrcmpW( szCls, L"EmEditorWebPreview2" ) != 0 ){
 			return TRUE;
 		}
 		*(HWND*)lParam = hwnd;
@@ -1896,72 +1897,49 @@ public:
 		return hwndPane != NULL;
 	}
 
-	// one refresh of the preview pane: re-navigate the WebPreview renderer
-	// page via the official EI_OPEN_WEB. The renderer fetches the document
-	// from the plug-in's virtual host on EVERY page load and the host serves
-	// the current buffer, so re-navigating to the same URL resyncs the pane
-	// with the edited text (a posted VK_F5 does not reach WebView2's browser
-	// accelerators — user-verified dead end)
-	static void UrlAppendEncoded( tstring& s, LPCTSTR psz, bool bKeepSlashes )
+	// TEMPORARY diagnostic (0.21.5): the pane own right-click Refresh works,
+	// but its trigger is unknown — EI_OPEN_WEB opens an EXTERNAL browser
+	// (user-verified) and a posted VK_F5 never reaches WebView2. Subclass the
+	// pane window and log every WM_COMMAND it receives, so ONE manual Refresh
+	// teaches us the command to send; auto-refresh ships once the ID is known.
+	static LRESULT CALLBACK PaneSubclassProc( HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam )
 	{
-		char utf8[MAX_PATH * 3];
-		int n = WideCharToMultiByte( CP_UTF8, 0, psz, -1, utf8, sizeof( utf8 ), NULL, NULL );
-		for( int i = 0; i < n - 1; i++ ){
-			unsigned char c = (unsigned char)utf8[i];
-			if( ( c >= 'A' && c <= 'Z' ) || ( c >= 'a' && c <= 'z' ) || ( c >= '0' && c <= '9' ) ||
-				c == '.' || c == '-' || c == '_' || ( bKeepSlashes && ( c == '/' || c == ':' ) ) ){
-				s += (TCHAR)c;
+		CMyFrame* pFrame = static_cast<CMyFrame*>(GetFrame( hwnd ));
+		if( uMsg == WM_NCDESTROY && pFrame && pFrame->m_hwndSubclassedPane == hwnd ){
+			if( pFrame->m_pfnPaneOrigProc ){
+				SetWindowLongPtrW( hwnd, GWLP_WNDPROC, (LONG_PTR)pFrame->m_pfnPaneOrigProc );
 			}
-			else {
-				WCHAR hex[4];
-				StringPrintf( hex, _countof( hex ), _T("%%%02X"), c );
-				s += hex;
-			}
+			pFrame->m_hwndSubclassedPane = NULL;
+			pFrame->m_pfnPaneOrigProc = NULL;
 		}
+		if( pFrame && uMsg == WM_COMMAND && LOWORD( wParam ) ){
+			pFrame->RbLogF( "pane WM_COMMAND: id=%d code=%d hwndCtl=%p", LOWORD( wParam ), HIWORD( wParam ), (void*)lParam );
+		}
+		if( pFrame && pFrame->m_pfnPaneOrigProc ){
+			return CallWindowProc( pFrame->m_pfnPaneOrigProc, hwnd, uMsg, wParam, lParam );
+		}
+		return DefWindowProc( hwnd, uMsg, wParam, lParam );
+	}
+
+	void SubclassPreviewPane( HWND hwndPane )
+	{
+		if( !hwndPane || hwndPane == m_hwndSubclassedPane ){
+			return;
+		}
+		m_hwndSubclassedPane = hwndPane;
+		m_pfnPaneOrigProc = (WNDPROC)SetWindowLongPtrW( hwndPane, GWLP_WNDPROC, (LONG_PTR)PaneSubclassProc );
+		RbLogF( "pane subclassed: hwnd=%p", hwndPane );
 	}
 
 	void RefreshPreviewPane()
 	{
-		if( !IsPreviewPaneVisible() ){
-			return;		// never open the pane as a side effect of refreshing
+		// suspend the reload itself until the refresh command is captured;
+		// keep the pane subclassed on every opportunity
+		HWND hwndPane = NULL;
+		EnumChildWindows( m_hWnd, FindPreviewPaneProc, (LPARAM)&hwndPane );
+		if( hwndPane ){
+			SubclassPreviewPane( hwndPane );
 		}
-		TCHAR szFile[MAX_PATH] = { 0 };
-		Editor_Info( m_hWnd, EI_GET_FILE_NAMEW, (LPARAM)szFile );
-		if( szFile[0] == 0 ){
-			RbLogF( "auto-refresh: untitled document, skipped" );
-			return;		// the plug-in previews untitled docs via temp snapshot names we cannot reconstruct
-		}
-		TCHAR szDir[MAX_PATH], szRenderer[MAX_PATH];
-		StringCopy( szDir, _countof( szDir ), szFile );
-		LPTSTR pszSlash = szDir;
-		for( LPTSTR p = szDir; *p; p++ ){
-			if( *p == _T('\\') || *p == _T('/') ){
-				pszSlash = p;
-			}
-		}
-		LPCTSTR pszName = pszSlash + ( *pszSlash ? 1 : 0 );
-		*pszSlash = 0;
-		DWORD cch = GetModuleFileName( NULL, szRenderer, MAX_PATH );	// EmEditor.exe
-		if( cch == 0 || cch >= MAX_PATH ){
-			return;
-		}
-		LPTSTR p = szRenderer + cch;
-		while( p > szRenderer && p[-1] != _T('\\') )  p--;
-		*p = 0;
-		StringCat( szRenderer, MAX_PATH, _T("PlugIns\\markdown-renderer.html") );
-		for( p = szRenderer; *p; p++ ){
-			if( *p == _T('\\') ){
-				*p = _T('/');
-			}
-		}
-		tstring sUrl = _T("file:///");
-		UrlAppendEncoded( sUrl, szRenderer, true );
-		sUrl += _T("?documentName=");
-		UrlAppendEncoded( sUrl, pszName, false );
-		sUrl += _T("&documentFolder=");
-		UrlAppendEncoded( sUrl, szDir, false );
-		LPARAM lr = Editor_Info( m_hWnd, EI_OPEN_WEB, (LPARAM)sUrl.c_str() );
-		RbLogF( "auto-refresh: EI_OPEN_WEB ret=%p", (void*)lr );
 	}
 
 	// one-shot startup restore: reopen the panes that were on when the
@@ -2012,8 +1990,11 @@ public:
 			return;
 		}
 		CMyFrame* pFrame = static_cast<CMyFrame*>(GetFrame( hwnd ));
-		if( pFrame && pFrame->m_hDlg ){
-			PostMessage( pFrame->m_hDlg, WM_APP + 0x31, 0, 0 );
+		if( pFrame ){
+			pFrame->SubclassPreviewPane( hwnd );
+			if( pFrame->m_hDlg ){
+				PostMessage( pFrame->m_hDlg, WM_APP + 0x31, 0, 0 );
+			}
 		}
 	}
 
@@ -2317,6 +2298,8 @@ public:
 		m_bPreviewOn = false;
 		m_bPanesRestored = false;
 		m_hPreviewWinHook = NULL;
+		m_hwndSubclassedPane = NULL;
+		m_pfnPaneOrigProc = NULL;
 		m_hwndView = NULL;
 		m_nBand = (UINT)-1;
 	}
@@ -2326,6 +2309,8 @@ public:
 		if( m_hPreviewWinHook ){
 			UnhookWinEvent( m_hPreviewWinHook );
 			m_hPreviewWinHook = NULL;
+		m_hwndSubclassedPane = NULL;
+		m_pfnPaneOrigProc = NULL;
 		}
 		CustomBarClosed();
 	}
