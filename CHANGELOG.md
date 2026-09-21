@@ -14,6 +14,29 @@ this code base:
 | `0.4.x`       | Compatibility fixes that make the original plug-in build and load correctly on modern EmEditor (v26). |
 | `0.9.0` – `0.17.x` | The HTML + Markdown dual-mode toolbar, heading towards `1.0.0`. |
 
+## [0.21.2] - 2026-09-21
+
+### Added
+
+- **Live preview sync**: every buffer modification now re-arms a 400 ms
+  debounce that reloads the visible preview pane (one `VK_F5` to the pane's
+  WebView2 window). The WebPreview renderer refetches the document from the
+  plug-in's virtual host on every page load and the host serves the current
+  buffer, so a reload resyncs the pane with the edited text — the same
+  effect as the pane's own right-click Refresh, without the manual step.
+
+### Fixed
+
+- **Design View button state**: the startup restore no longer waits for
+  `EI_GET_MARKDOWN_PREVIEW` to have returned TRUE once — that gate meant a
+  session that started with the view off never restored the saved ON state
+  and never trusted the poll (EmEditor persists no design-view state
+  itself; a runtime registry diff proved it, so our profile flag is the
+  only memory). Both toggle buttons now also reconcile before sending:
+  the built-in commands TOGGLE, so a click only sends 23255/23275 when
+  the live state actually disagrees with the wanted one — a click on an
+  already-aligned button can no longer close a pane or flip the view.
+
 ## [0.21.1] - 2026-09-21
 
 ### Changed

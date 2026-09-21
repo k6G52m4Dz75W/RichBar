@@ -170,6 +170,8 @@ WCHAR OctToDec( LPWSTR& p )
 // state sync (m_hDlg): pane toggles produce no notification, so the
 // design-view state is polled and the bar repainted only on change
 #define IDT_STATE_SYNC			2
+// preview auto-refresh debounce (m_hDlg): one reload after typing pauses
+#define IDT_PREVIEW_REFRESH		3
 // runtime-drawn glyphs appended to every toolbar image list
 #define MD_ICON_MODE_H			23
 #define MD_ICON_MODE_M			24
@@ -1885,11 +1887,42 @@ public:
 		return FALSE;
 	}
 
+	static BOOL CALLBACK FindChromeChildProc( HWND hwnd, LPARAM lParam )
+	{
+		WCHAR szCls[32];
+		if( GetClassNameW( hwnd, szCls, _countof( szCls ) ) != 0 &&
+			lstrcmpW( szCls, L"Chrome_WidgetWin_1" ) == 0 ){
+			*(HWND*)lParam = hwnd;
+			return FALSE;
+		}
+		return TRUE;
+	}
+
 	bool IsPreviewPaneVisible()
 	{
 		HWND hwndPane = NULL;
 		EnumChildWindows( m_hWnd, FindPreviewPaneProc, (LPARAM)&hwndPane );
 		return hwndPane != NULL;
+	}
+
+	// one Chromium reload of the preview pane. The renderer page refetches
+	// the document from the WebPreview plug-in's virtual host on every page
+	// load and the host serves the current buffer, so a reload resyncs the
+	// pane with the edited text — the same thing the pane's own right-click
+	// Refresh does
+	void RefreshPreviewPane()
+	{
+		HWND hwndPane = NULL;
+		EnumChildWindows( m_hWnd, FindPreviewPaneProc, (LPARAM)&hwndPane );
+		if( !hwndPane ){
+			return;
+		}
+		HWND hwndChrome = NULL;
+		EnumChildWindows( hwndPane, FindChromeChildProc, (LPARAM)&hwndChrome );
+		if( hwndChrome ){
+			PostMessage( hwndChrome, WM_KEYDOWN, VK_F5, 0 );
+			PostMessage( hwndChrome, WM_KEYUP, VK_F5, 0 );
+		}
 	}
 
 	// state sync poll: pane toggles (from EmEditor's own UI or ours) fire
@@ -1908,14 +1941,17 @@ public:
 		// previous session ended
 		if( !m_bPanesRestored ){
 			m_bPanesRestored = true;
-			if( m_bPreviewOn ){
+			if( m_bPreviewOn && !bPane ){
 				RbLogF( "startup restore: preview (mode=%d)", m_iMode );
 				m_dwPreviewGuard = GetTickCount();	// WebView2 opens the pane asynchronously
 				PostMessage( m_hWnd, WM_COMMAND, MAKEWPARAM( EEID_MARKDOWN_PREVIEW, 0 ), 0 );
 			}
-			// the design view state is queryable: only force it on when the
-			// live query (working) says it is currently off
-			if( m_bDesignViewOn && m_b407Alive && !bDesign ){
+			// EmEditor does not persist the design view itself (verified by
+			// registry runtime diff) — our profile flag is the memory, and the
+			// command is safe to send unconditionally: a no-op where the view
+			// is already on or the command does not exist
+			if( m_bDesignViewOn && !bDesign ){
+				RbLogF( "startup restore: design view" );
 				PostMessage( m_hWnd, WM_COMMAND, MAKEWPARAM( EEID_MARKDOWN_VIEW, 0 ), 0 );
 			}
 		}
@@ -1923,11 +1959,13 @@ public:
 		// from EmEditor's own UI; skip briefly after our own click while the
 		// WebView2 pane is still opening or closing
 		else if( bPane != m_bPreviewOn && GetTickCount() - m_dwPreviewGuard > 2000 ){
+			RbLogF( "sync: pane=%d previewOn=%d", (int)bPane, (int)m_bPreviewOn );
 			m_bPreviewOn = bPane;
 			SaveProfile();
 			ApplyToggleStates();
 		}
 		if( m_b407Alive && bDesign != m_bDesignViewOn ){
+			RbLogF( "sync: design407=%d designOn=%d", (int)bDesign, (int)m_bDesignViewOn );
 			m_bDesignViewOn = bDesign;
 			ApplyToggleStates();
 		}
@@ -2133,6 +2171,13 @@ public:
 					CustomBarClosed();
 					DisplayBar( true );
 				}
+			}
+		}
+		if( nEvent & EVENT_CHANGE ){
+			// every buffer modification re-arms the debounce; one Chromium
+			// reload fires when the typing pauses (see RefreshPreviewPane)
+			if( m_hDlg ){
+				SetTimer( m_hDlg, IDT_PREVIEW_REFRESH, 400, NULL );
 			}
 		}
 	}
@@ -2954,25 +2999,35 @@ public:
 			}
 			else if( cmd.m_iCmd == CMD_MD_VIEW ){
 				// BTNS_CHECK toggled the control state before this command
-				// arrived: the control is the source of truth for the
-				// visual, the built-in command toggles the design view
-				m_bDesignViewOn = ( SendMessage( m_hwndToolbar, TB_GETSTATE, wParam, 0 ) & TBSTATE_CHECKED ) != 0;
+				// arrived: the control is the source of truth for the wanted
+				// state; the built-in command TOGGLES, so only send it when
+				// the live query disagrees — a click on an already-aligned
+				// button must not flip the view behind the user's back
+				bool bWant = ( SendMessage( m_hwndToolbar, TB_GETSTATE, wParam, 0 ) & TBSTATE_CHECKED ) != 0;
+				BOOL bDesign = Editor_Info( m_hWnd, EI_GET_MARKDOWN_PREVIEW, 0 ) != FALSE;
+				m_bDesignViewOn = bWant;
 				SaveProfile();
 				ApplyToggleStates();
-				PostMessage( m_hWnd, WM_COMMAND, MAKEWPARAM( EEID_MARKDOWN_VIEW, 0 ), 0 );
+				if( !!bDesign != bWant ){
+					RbLogF( "design click: want=%d live=%d -> EEID_MARKDOWN_VIEW", (int)bWant, (int)bDesign );
+					PostMessage( m_hWnd, WM_COMMAND, MAKEWPARAM( EEID_MARKDOWN_VIEW, 0 ), 0 );
+				}
 			}
 			else if( cmd.m_iCmd == CMD_PREVIEW ){
-				m_bPreviewOn = ( SendMessage( m_hwndToolbar, TB_GETSTATE, wParam, 0 ) & TBSTATE_CHECKED ) != 0;
+				// same reconciliation for the preview pane: 23275 toggles,
+				// so post only when the pane's actual visibility differs
+				// from the wanted state — never close a pane the user just
+				// asked to open (or vice versa)
+				bool bWant = ( SendMessage( m_hwndToolbar, TB_GETSTATE, wParam, 0 ) & TBSTATE_CHECKED ) != 0;
+				bool bPane = IsPreviewPaneVisible();
+				m_bPreviewOn = bWant;
 				SaveProfile();
 				ApplyToggleStates();
-				// one official command for both modes: EmEditor's core routes
-				// it to the WebPreview plug-in bound to the ACTIVE view, so
-				// the pane always follows the current document — Markdown-
-				// config documents get the converter pipeline, everything
-				// else previews as plain HTML; identical to the built-in menu
-				RbLogF( "preview click: mode=%d -> EEID_MARKDOWN_PREVIEW", m_iMode );
-				m_dwPreviewGuard = GetTickCount();
-				PostMessage( m_hWnd, WM_COMMAND, MAKEWPARAM( EEID_MARKDOWN_PREVIEW, 0 ), 0 );
+				if( bWant != bPane ){
+					RbLogF( "preview click: want=%d pane=%d -> EEID_MARKDOWN_PREVIEW", (int)bWant, (int)bPane );
+					m_dwPreviewGuard = GetTickCount();
+					PostMessage( m_hWnd, WM_COMMAND, MAKEWPARAM( EEID_MARKDOWN_PREVIEW, 0 ), 0 );
+				}
 			}
 		}
 
@@ -3971,13 +4026,21 @@ INT_PTR CALLBACK NewProc( HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam )
 			}
 			return 0;
 		}
-		else if( wParam == IDT_STATE_SYNC ){
-			CMyFrame* pFrame = static_cast<CMyFrame*>(GetFrame( hwnd ));
-			if( pFrame ){
-				pFrame->OnStateSyncTimer();
+			else if( wParam == IDT_STATE_SYNC ){
+				CMyFrame* pFrame = static_cast<CMyFrame*>(GetFrame( hwnd ));
+				if( pFrame ){
+					pFrame->OnStateSyncTimer();
+				}
+				return 0;
 			}
-			return 0;
-		}
+			else if( wParam == IDT_PREVIEW_REFRESH ){
+				KillTimer( hwnd, IDT_PREVIEW_REFRESH );
+				CMyFrame* pFrame = static_cast<CMyFrame*>(GetFrame( hwnd ));
+				if( pFrame ){
+					pFrame->RefreshPreviewPane();
+				}
+				return 0;
+			}
 		break;
 
 	}
