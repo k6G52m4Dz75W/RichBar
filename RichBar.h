@@ -415,10 +415,11 @@ public:
 	COLORREF m_crCustomIcon;	// user-picked icon color for the normal state
 	bool m_bIconColorDirty;		// a color setting was touched in the open Prop dialog
 	bool m_bDesignViewOn;		// design view toggle state (synced with 407 when it works)
-	bool m_bPreviewOn;			// preview pane toggled from our button (no SDK query)
+	bool m_bPreviewOn;			// preview pane on (synced to the pane window's visibility)
 	bool m_b407Alive;			// EI_GET_MARKDOWN_PREVIEW has ever returned TRUE
 	HWND m_hwndView;				// the EmEditor VIEW window (plug-in OnCommand contract)
 	bool m_bPanesRestored;		// startup pane restore done (first state-sync tick)
+	DWORD m_dwPreviewGuard;		// tick of our last preview toggle; sync pauses while the pane settles
 	UINT m_nHoverMenuCmd;		// dropdown command waiting for the hover-open timer
 	UINT m_nLastMenuCmd;		// dropdown whose menu closed last; reopen only after the mouse leaves it
 	bool m_bLastMenuLeft;		// the mouse has left m_nLastMenuCmd since its menu closed
@@ -1869,6 +1870,28 @@ public:
 		}
 	}
 
+	// the WebPreview pane exposes no SDK query; the pane window's presence
+	// under the frame IS its state (the plug-in creates it as class
+	// EmEditorWebPreview2 inside an EEPaneContainer)
+	static BOOL CALLBACK FindPreviewPaneProc( HWND hwnd, LPARAM lParam )
+	{
+		WCHAR szCls[32];
+		if( GetClassNameW( hwnd, szCls, _countof( szCls ) ) == 0 ||
+			lstrcmpW( szCls, L"EmEditorWebPreview2" ) != 0 ||
+			!IsWindowVisible( hwnd ) ){
+			return TRUE;
+		}
+		*(HWND*)lParam = hwnd;
+		return FALSE;
+	}
+
+	bool IsPreviewPaneVisible()
+	{
+		HWND hwndPane = NULL;
+		EnumChildWindows( m_hWnd, FindPreviewPaneProc, (LPARAM)&hwndPane );
+		return hwndPane != NULL;
+	}
+
 	// state sync poll: pane toggles (from EmEditor's own UI or ours) fire
 	// no notification; repaint only when the drawn state goes stale
 	void OnStateSyncTimer()
@@ -1880,25 +1903,29 @@ public:
 		if( bDesign ){
 			m_b407Alive = true;	// the query works: trust it over our local toggle
 		}
+		bool bPane = IsPreviewPaneVisible();
 		// one-shot startup restore: reopen the panes that were on when the
 		// previous session ended
 		if( !m_bPanesRestored ){
 			m_bPanesRestored = true;
 			if( m_bPreviewOn ){
-				if( m_iMode == MODE_MD ){
-					RbLogF( "startup restore: MD preview" );
-					PostMessage( m_hWnd, WM_COMMAND, MAKEWPARAM( EEID_MARKDOWN_PREVIEW, 0 ), 0 );
-				}
-				else {
-					RbLogF( "startup restore: HTML preview" );
-					RunWebPreviewPlugin();
-				}
+				RbLogF( "startup restore: preview (mode=%d)", m_iMode );
+				m_dwPreviewGuard = GetTickCount();	// WebView2 opens the pane asynchronously
+				PostMessage( m_hWnd, WM_COMMAND, MAKEWPARAM( EEID_MARKDOWN_PREVIEW, 0 ), 0 );
 			}
 			// the design view state is queryable: only force it on when the
 			// live query (working) says it is currently off
 			if( m_bDesignViewOn && m_b407Alive && !bDesign ){
 				PostMessage( m_hWnd, WM_COMMAND, MAKEWPARAM( EEID_MARKDOWN_VIEW, 0 ), 0 );
 			}
+		}
+		// follow the pane, never our memory of it — the pane can be toggled
+		// from EmEditor's own UI; skip briefly after our own click while the
+		// WebView2 pane is still opening or closing
+		else if( bPane != m_bPreviewOn && GetTickCount() - m_dwPreviewGuard > 2000 ){
+			m_bPreviewOn = bPane;
+			SaveProfile();
+			ApplyToggleStates();
 		}
 		if( m_b407Alive && bDesign != m_bDesignViewOn ){
 			m_bDesignViewOn = bDesign;
@@ -2182,6 +2209,7 @@ public:
 		m_bPreviewOn = false;
 		m_b407Alive = false;
 		m_bPanesRestored = false;
+		m_dwPreviewGuard = 0;
 		m_hwndView = NULL;
 		m_nBand = (UINT)-1;
 	}
@@ -2321,61 +2349,11 @@ public:
 		SetDlgItemText( hDlg, IDC_BTN_ICON_COLOR, szColor );
 	}
 
-	// The Preview button runs EmEditor's official WebPreview plug-in, which
-	// renders the current HTML/Markdown document in its embedded pane. The
-	// plug-in DLL is resolved next to EmEditor.exe (or beside this DLL) and
-	// kept loaded; EmEditor itself already holds a reference to the same
-	// module, so calling its exported OnCommand is equivalent to the user
-	// running it from the Plug-ins menu.
-	void RunWebPreviewPlugin()
-	{
-		HMODULE hMod = GetModuleHandle( _T("WebPreview.dll") );
-		if( !hMod ){
-			TCHAR szPath[MAX_PATH];
-			DWORD cch = GetModuleFileName( NULL, szPath, MAX_PATH );	// EmEditor.exe
-			if( cch > 0 ){
-				LPTSTR p = szPath + cch;
-				while( p > szPath && p[-1] != _T('\\') )  p--;
-				*p = 0;
-				lstrcat( szPath, _T("PlugIns\\WebPreview.dll") );
-				hMod = LoadLibrary( szPath );
-			}
-		}
-		if( !hMod ){
-			TCHAR szPath[MAX_PATH];
-			DWORD cch = GetModuleFileName( EEGetInstanceHandle(), szPath, MAX_PATH );	// this DLL
-			if( cch > 0 ){
-				LPTSTR p = szPath + cch;
-				while( p > szPath && p[-1] != _T('\\') )  p--;
-				*p = 0;
-				lstrcat( szPath, _T("WebPreview.dll") );
-				hMod = LoadLibrary( szPath );
-			}
-		}
-		if( hMod ){
-			void (WINAPI *pfnOnCommand)( HWND ) = (void (WINAPI *)( HWND ))GetProcAddress( hMod, "OnCommand" );
-			if( pfnOnCommand ){
-				// the plug-in OnCommand contract takes the VIEW window, not the
-				// frame (m_hWnd); passing the frame made WebPreview misbehave
-				// (external browser, unconverted Markdown, lost state)
-				HWND hwndView = m_hwndView ? m_hwndView : m_hWnd;
-				RbLogF( "WebPreview.OnCommand view=%p frame=%p", hwndView, m_hWnd );
-				pfnOnCommand( hwndView );
-			}
-			else {
-				RbLogF( "WebPreview.OnCommand NOT FOUND (mod=%p)", hMod );
-			}
-		}
-		else {
-			RbLogF( "WebPreview.dll NOT LOADED" );
-		}
-	}
-
 	// TEMPORARY trace for the preview path; remove once the preview
 	// behavior is confirmed stable
 	void RbLogF( const char* pszFmt, ... )
 	{
-		FILE* f = _wfopen( L"E:\\\\Projects\\\\RichBar\\\\rb_debug.log", L"a" );
+		FILE* f = _wfopen( L"E:\\Projects\\RichBar\\rb_debug.log", L"a" );
 		if( !f )  return;
 		SYSTEMTIME st;
 		GetLocalTime( &st );
@@ -2854,6 +2832,11 @@ public:
 	{
 		// manual override: sticks until the document or configuration changes
 		m_iModeOverride = iMode;
+		// keep the document's configuration in step with the mode: WebPreview
+		// picks its rendering pipeline from the config NAME (it converts only
+		// Markdown-config documents; anything else previews as plain HTML),
+		// so MD mode must sit on the Markdown config for previews to convert
+		Editor_SetConfigW( m_hWnd, ( iMode == MODE_MD ) ? L"Markdown" : L"HTML" );
 		if( m_iMode != iMode ){
 			m_iMode = iMode;
 			if( m_hwndToolbar && m_bVisible ){
@@ -2982,16 +2965,14 @@ public:
 				m_bPreviewOn = ( SendMessage( m_hwndToolbar, TB_GETSTATE, wParam, 0 ) & TBSTATE_CHECKED ) != 0;
 				SaveProfile();
 				ApplyToggleStates();
-				if( m_iMode == MODE_MD ){
-					// EmEditor's own Markdown preview command: converts the
-					// document and renders it
-					RbLogF( "preview click: MD -> EEID_MARKDOWN_PREVIEW" );
-					PostMessage( m_hWnd, WM_COMMAND, MAKEWPARAM( EEID_MARKDOWN_PREVIEW, 0 ), 0 );
-				}
-				else {
-					RbLogF( "preview click: HTML -> WebPreview" );
-					RunWebPreviewPlugin();
-				}
+				// one official command for both modes: EmEditor's core routes
+				// it to the WebPreview plug-in bound to the ACTIVE view, so
+				// the pane always follows the current document — Markdown-
+				// config documents get the converter pipeline, everything
+				// else previews as plain HTML; identical to the built-in menu
+				RbLogF( "preview click: mode=%d -> EEID_MARKDOWN_PREVIEW", m_iMode );
+				m_dwPreviewGuard = GetTickCount();
+				PostMessage( m_hWnd, WM_COMMAND, MAKEWPARAM( EEID_MARKDOWN_PREVIEW, 0 ), 0 );
 			}
 		}
 

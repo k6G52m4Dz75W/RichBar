@@ -14,6 +14,31 @@ this code base:
 | `0.4.x`       | Compatibility fixes that make the original plug-in build and load correctly on modern EmEditor (v26). |
 | `0.9.0` – `0.17.x` | The HTML + Markdown dual-mode toolbar, heading towards `1.0.0`. |
 
+## [0.21.1] - 2026-09-21
+
+### Changed
+
+- **Preview now routes through the official command in both modes**: the
+  button posts `EEID_MARKDOWN_PREVIEW` (23275) for HTML and Markdown alike
+  and the direct `WebPreview.dll!OnCommand` call (`RunWebPreviewPlugin`) is
+  gone. The core command routes to the WebPreview plug-in bound to the
+  ACTIVE view — our direct call could hand the plug-in a view cached before
+  a tab switch, binding the pane to the wrong document, which is why the
+  pane's right-click Refresh kept serving stale content while the official
+  pane refreshed. Investigation (controlled probe + WebView2 history
+  forensics) also proved 23275 fully converts Markdown documents whose
+  configuration is in WebPreview's Markdown list.
+- **The Preview button's pressed state now follows the pane's actual
+  visibility** (the frame is walked for the plug-in's `EmEditorWebPreview2`
+  window) instead of a remembered flag, mirroring how the Design View
+  button trusts `EI_GET_MARKDOWN_PREVIEW`. The sync pauses briefly after
+  our own click while WebView2 opens or closes the pane asynchronously.
+- **Switching toolbar mode now sets the document configuration**
+  (`[M]` → "Markdown", `[H]` → "HTML"): WebPreview picks its rendering
+  pipeline from the config NAME (it converts only Markdown-config
+  documents), so the mode switch keeps the preview type correct. Manual
+  clicks only — auto detection still just reads the config.
+
 ## [0.21.0] - 2026-09-21
 
 ### Fixed
