@@ -1,6 +1,9 @@
 // implementatin of this specific plug-in is here:
 //
 
+#include <cstdio>
+#include <cstdarg>
+
 #define MAX_BUTTON_TITLE	260
 #define MAX_TAG_FIELD		260
 #define BUTTON_SIZE_SMALL   22
@@ -414,6 +417,7 @@ public:
 	bool m_bDesignViewOn;		// design view toggle state (synced with 407 when it works)
 	bool m_bPreviewOn;			// preview pane toggled from our button (no SDK query)
 	bool m_b407Alive;			// EI_GET_MARKDOWN_PREVIEW has ever returned TRUE
+	HWND m_hwndView;				// the EmEditor VIEW window (plug-in OnCommand contract)
 	bool m_bPanesRestored;		// startup pane restore done (first state-sync tick)
 	UINT m_nHoverMenuCmd;		// dropdown command waiting for the hover-open timer
 	UINT m_nLastMenuCmd;		// dropdown whose menu closed last; reopen only after the mouse leaves it
@@ -1226,11 +1230,12 @@ public:
 			if( it->m_iCmd == CMD_SEPARATOR ){
 				atb[i + 3].fsStyle = TBSTYLE_SEP;
 			}
-			// Design View / Preview are check toggles: BTNS_CHECK | BTNS_GROUP
-			// makes the control render TBSTATE_CHECKED exactly like the
-			// [H][M] buttons' checked look
+			// Design View / Preview are INDEPENDENT check toggles: plain BTNS_CHECK.
+			// No BTNS_GROUP — that is radio semantics (clicking one unchecks
+			// the sibling), which these two must not share; [H][M] keep GROUP
+			// because the modes are exclusive
 			if( it->m_iCmd == CMD_MD_VIEW || it->m_iCmd == CMD_PREVIEW ){
-				atb[i + 3].fsStyle = BTNS_CHECK | BTNS_GROUP;
+				atb[i + 3].fsStyle = BTNS_CHECK;
 			}
 			// Dropdown commands keep the dropdown behavior: the whole button
 			// sends TBN_DROPDOWN. The toolbar deliberately lacks
@@ -1880,7 +1885,14 @@ public:
 		if( !m_bPanesRestored ){
 			m_bPanesRestored = true;
 			if( m_bPreviewOn ){
-				RunWebPreviewPlugin();
+				if( m_iMode == MODE_MD ){
+					RbLogF( "startup restore: MD preview" );
+					PostMessage( m_hWnd, WM_COMMAND, MAKEWPARAM( EEID_MARKDOWN_PREVIEW, 0 ), 0 );
+				}
+				else {
+					RbLogF( "startup restore: HTML preview" );
+					RunWebPreviewPlugin();
+				}
 			}
 			// the design view state is queryable: only force it on when the
 			// live query (working) says it is currently off
@@ -1948,8 +1960,9 @@ public:
 		DeleteObject( hfontIcon );
 	}
 
-	void OnCommand( HWND /*hwndView*/ )
+	void OnCommand( HWND hwndView )
 	{
+		m_hwndView = hwndView;	// the plug-in OnCommand contract passes the VIEW window
 		DisplayBar( !IsVisible() );
 	}
 
@@ -1986,8 +1999,9 @@ public:
 		return TRUE;
 	}
 
-	void OnEvents( HWND /*hwndView*/, UINT nEvent, LPARAM lParam )
+	void OnEvents( HWND hwndView, UINT nEvent, LPARAM lParam )
 	{
+		m_hwndView = hwndView;
 		if( nEvent & EVENT_CREATE_FRAME ){
 			LoadProfile();
 			TCHAR szConfigName[ MAX_CONFIG_NAME ] = { 0 };
@@ -2168,6 +2182,7 @@ public:
 		m_bPreviewOn = false;
 		m_b407Alive = false;
 		m_bPanesRestored = false;
+		m_hwndView = NULL;
 		m_nBand = (UINT)-1;
 	}
 
@@ -2340,9 +2355,37 @@ public:
 		if( hMod ){
 			void (WINAPI *pfnOnCommand)( HWND ) = (void (WINAPI *)( HWND ))GetProcAddress( hMod, "OnCommand" );
 			if( pfnOnCommand ){
-				pfnOnCommand( m_hWnd );
+				// the plug-in OnCommand contract takes the VIEW window, not the
+				// frame (m_hWnd); passing the frame made WebPreview misbehave
+				// (external browser, unconverted Markdown, lost state)
+				HWND hwndView = m_hwndView ? m_hwndView : m_hWnd;
+				RbLogF( "WebPreview.OnCommand view=%p frame=%p", hwndView, m_hWnd );
+				pfnOnCommand( hwndView );
+			}
+			else {
+				RbLogF( "WebPreview.OnCommand NOT FOUND (mod=%p)", hMod );
 			}
 		}
+		else {
+			RbLogF( "WebPreview.dll NOT LOADED" );
+		}
+	}
+
+	// TEMPORARY trace for the preview path; remove once the preview
+	// behavior is confirmed stable
+	void RbLogF( const char* pszFmt, ... )
+	{
+		FILE* f = _wfopen( L"E:\\\\Projects\\\\RichBar\\\\rb_debug.log", L"a" );
+		if( !f )  return;
+		SYSTEMTIME st;
+		GetLocalTime( &st );
+		fprintf( f, "[%02d:%02d:%02d] ", st.wHour, st.wMinute, st.wSecond );
+		va_list args;
+		va_start( args, pszFmt );
+		vfprintf( f, pszFmt, args );
+		va_end( args );
+		fprintf( f, "\n" );
+		fclose( f );
 	}
 
 	void OnPropCommand( HWND hDlg, WPARAM wParam )
@@ -2939,9 +2982,16 @@ public:
 				m_bPreviewOn = ( SendMessage( m_hwndToolbar, TB_GETSTATE, wParam, 0 ) & TBSTATE_CHECKED ) != 0;
 				SaveProfile();
 				ApplyToggleStates();
-				// the official WebPreview plug-in previews the current
-				// HTML/Markdown document directly, in both modes
-				RunWebPreviewPlugin();
+				if( m_iMode == MODE_MD ){
+					// EmEditor's own Markdown preview command: converts the
+					// document and renders it
+					RbLogF( "preview click: MD -> EEID_MARKDOWN_PREVIEW" );
+					PostMessage( m_hWnd, WM_COMMAND, MAKEWPARAM( EEID_MARKDOWN_PREVIEW, 0 ), 0 );
+				}
+				else {
+					RbLogF( "preview click: HTML -> WebPreview" );
+					RunWebPreviewPlugin();
+				}
 			}
 		}
 

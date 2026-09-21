@@ -14,6 +14,30 @@ this code base:
 | `0.4.x`       | Compatibility fixes that make the original plug-in build and load correctly on modern EmEditor (v26). |
 | `0.9.0` – `0.17.x` | The HTML + Markdown dual-mode toolbar, heading towards `1.0.0`. |
 
+## [0.21.0] - 2026-09-21
+
+### Fixed
+
+- **The WebPreview plug-in is now invoked with the VIEW window**, per the
+  plug-in `OnCommand(HWND hwndView)` contract from the SDK headers — we
+  were passing the frame window, which made WebPreview misbehave
+  (external browser, unconverted Markdown, lost toggle state). The view
+  hwnd is cached at both plug-in entry points and forwarded; the frame
+  remains a fallback.
+- **The two toggle buttons are independent again**: plain `BTNS_CHECK`
+  without `BTNS_GROUP` — `BTNS_GROUP` is radio semantics (clicking one
+  unchecks the sibling), which produced the mutual cancellation and the
+  scrambled states of 0.20.10–0.20.11. `[H][M]` keep their group because
+  the modes are exclusive.
+- **Preview routing is mode-aware again**: Markdown documents run the
+  official Markdown preview command (`EEID_MARKDOWN_PREVIEW`, converts
+  before rendering — verified against the EmEditor command reference);
+  HTML documents run the WebPreview plug-in. The startup pane restore
+  follows the same routing.
+- A temporary trace (`rb_debug.log`, preview path only) is included to
+  close any remaining gap with data instead of guesses; it will be
+  removed once confirmed stable.
+
 ## [0.20.11] - 2026-09-20
 
 ### Fixed
