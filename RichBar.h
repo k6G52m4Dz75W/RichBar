@@ -169,7 +169,7 @@ WCHAR OctToDec( LPWSTR& p )
 #define IDT_HOVER_MENU			1
 // state sync (m_hDlg): pane toggles produce no notification, so the
 // design-view state is polled and the bar repainted only on change
-#define IDT_STATE_SYNC			2
+#define IDT_STARTUP_RESTORE		2
 // preview auto-refresh debounce (m_hDlg): one reload after typing pauses
 #define IDT_PREVIEW_REFRESH		3
 // runtime-drawn glyphs appended to every toolbar image list
@@ -420,7 +420,7 @@ public:
 	bool m_bPreviewOn;			// preview pane on (synced to the pane window's visibility)
 	HWND m_hwndView;				// the EmEditor VIEW window (plug-in OnCommand contract)
 	bool m_bPanesRestored;		// startup pane restore done (first state-sync tick)
-	DWORD m_dwPreviewGuard;		// tick of our last preview toggle; sync pauses while the pane settles
+	HWINEVENTHOOK m_hPreviewWinHook;	// push source for the preview pane window show/hide/destroy
 	UINT m_nHoverMenuCmd;		// dropdown command waiting for the hover-open timer
 	UINT m_nLastMenuCmd;		// dropdown whose menu closed last; reopen only after the mouse leaves it
 	bool m_bLastMenuLeft;		// the mouse has left m_nLastMenuCmd since its menu closed
@@ -1746,7 +1746,10 @@ public:
 			ShowWindow( hwndToolbar, m_bVisible );
 			// pane toggles (design view / preview) produce no notification;
 			// poll the state so the buttons stay in sync
-			SetTimer( m_hDlg, IDT_STATE_SYNC, 500, NULL );
+			// the one-shot startup restore; pane open/close sync is
+			// push-driven (EVENT_CUSTOM_BAR_CLOSED + WinEvent hook)
+			SetTimer( m_hDlg, IDT_STARTUP_RESTORE, 800, NULL );
+			InstallPreviewWinHook();
 		}
 	}
 	}
@@ -1961,41 +1964,70 @@ public:
 		RbLogF( "auto-refresh: EI_OPEN_WEB ret=%p", (void*)lr );
 	}
 
-	// state sync poll: the preview pane's visibility (the pane can be
-	// toggled from EmEditor's own UI) fires no notification
-	void OnStateSyncTimer()
+	// one-shot startup restore: reopen the panes that were on when the
+	// previous session ended (EmEditor persists neither pane itself -
+	// verified by registry runtime diff - so our profile flags are the memory)
+	void OnStartupRestore()
+	{
+		if( !m_hwndToolbar || m_bPanesRestored ){
+			return;
+		}
+		m_bPanesRestored = true;
+		if( m_bPreviewOn && !IsPreviewPaneVisible() ){
+			RbLogF( "startup restore: preview (mode=%d)", m_iMode );
+			PostMessage( m_hWnd, WM_COMMAND, MAKEWPARAM( EEID_MARKDOWN_PREVIEW, 0 ), 0 );
+		}
+		if( m_bDesignViewOn ){
+			RbLogF( "startup restore: design view" );
+			PostMessage( m_hWnd, WM_COMMAND, MAKEWPARAM( EEID_MARKDOWN_VIEW, 0 ), 0 );
+		}
+	}
+
+	// reconcile the Preview button with the pane actual visibility; called
+	// from push signals only (custom-bar-closed event, WinEvent hook)
+	void SyncPreviewToPane()
 	{
 		if( !m_hwndToolbar ){
 			return;
 		}
 		bool bPane = IsPreviewPaneVisible();
-		// one-shot startup restore: reopen the panes that were on when the
-		// previous session ended
-		if( !m_bPanesRestored ){
-			m_bPanesRestored = true;
-			if( m_bPreviewOn && !bPane ){
-				RbLogF( "startup restore: preview (mode=%d)", m_iMode );
-				m_dwPreviewGuard = GetTickCount();	// WebView2 opens the pane asynchronously
-				PostMessage( m_hWnd, WM_COMMAND, MAKEWPARAM( EEID_MARKDOWN_PREVIEW, 0 ), 0 );
-			}
-			// EmEditor does not persist the design view itself (verified by
-			// registry runtime diff) — our profile flag is the memory. The
-			// 407 query is NOT consulted: it lags and flaps (per-document,
-			// preview-pane-sensitive), which used to undo every click
-			if( m_bDesignViewOn ){
-				RbLogF( "startup restore: design view" );
-				PostMessage( m_hWnd, WM_COMMAND, MAKEWPARAM( EEID_MARKDOWN_VIEW, 0 ), 0 );
-			}
-		}
-		// follow the pane, never our memory of it; skip briefly after our own
-		// click while the WebView2 pane is still opening or closing
-		else if( bPane != m_bPreviewOn && GetTickCount() - m_dwPreviewGuard > 2000 ){
-			RbLogF( "sync: pane=%d previewOn=%d", (int)bPane, (int)m_bPreviewOn );
+		if( bPane != m_bPreviewOn ){
+			RbLogF( "event sync: pane=%d previewOn=%d", (int)bPane, (int)m_bPreviewOn );
 			m_bPreviewOn = bPane;
 			SaveProfile();
 			ApplyToggleStates();
 		}
 	}
+
+	// OS-level push for the pane window appearing/disappearing - covers pane
+	// opens from EmEditor own UI, which fires no plug-in event
+	static VOID CALLBACK PreviewWinEventProc( HWINEVENTHOOK, DWORD, HWND hwnd, LONG idObject, LONG, DWORD, DWORD )
+	{
+		if( idObject != OBJID_WINDOW || hwnd == NULL ){
+			return;
+		}
+		WCHAR szCls[32];
+		if( GetClassNameW( hwnd, szCls, _countof( szCls ) ) == 0 ||
+			lstrcmpW( szCls, L"EmEditorWebPreview2" ) != 0 ){
+			return;
+		}
+		CMyFrame* pFrame = static_cast<CMyFrame*>(GetFrame( hwnd ));
+		if( pFrame && pFrame->m_hDlg ){
+			PostMessage( pFrame->m_hDlg, WM_APP + 0x31, 0, 0 );
+		}
+	}
+
+	void InstallPreviewWinHook()
+	{
+		if( m_hPreviewWinHook ){
+			return;
+		}
+		// destroy/show/hide of the pane window, this process only, delivered
+		// on this thread message pump
+		m_hPreviewWinHook = SetWinEventHook( EVENT_OBJECT_DESTROY, EVENT_OBJECT_HIDE, NULL,
+			PreviewWinEventProc, GetCurrentProcessId(), 0, WINEVENT_OUTOFCONTEXT );
+	}
+
 
 	// The dropdown arrow, drawn live in NM_CUSTOMDRAW's item-post-paint
 	// stage: right-anchored inside the button's ACTUAL rect, so the control's
@@ -2060,7 +2092,7 @@ public:
 	void CustomBarClosed()
 	{
 		if( m_hDlg ){
-			KillTimer( m_hDlg, IDT_STATE_SYNC );
+			KillTimer( m_hDlg, IDT_STARTUP_RESTORE );
 		}
 		if( m_hwndToolbar ){
 			if( IsWindow( m_hwndToolbar ) ){
@@ -2199,6 +2231,11 @@ public:
 				}
 			}
 		}
+		if( nEvent & EVENT_CUSTOM_BAR_CLOSED ){
+			// the WebPreview pane is a custom bar: its close is pushed here;
+			// re-walk and reconcile (cheap no-op for other bars)
+			SyncPreviewToPane();
+		}
 		if( nEvent & EVENT_CHANGE ){
 			// every buffer modification re-arms the debounce; one Chromium
 			// reload fires when the typing pauses (see RefreshPreviewPane)
@@ -2279,13 +2316,17 @@ public:
 		m_bDesignViewOn = false;
 		m_bPreviewOn = false;
 		m_bPanesRestored = false;
-		m_dwPreviewGuard = 0;
+		m_hPreviewWinHook = NULL;
 		m_hwndView = NULL;
 		m_nBand = (UINT)-1;
 	}
 
 	~CMyFrame()
 	{
+		if( m_hPreviewWinHook ){
+			UnhookWinEvent( m_hPreviewWinHook );
+			m_hPreviewWinHook = NULL;
+		}
 		CustomBarClosed();
 	}
 
@@ -3046,7 +3087,6 @@ public:
 				ApplyToggleStates();
 				if( bWant != bPane ){
 					RbLogF( "preview click: want=%d pane=%d -> EEID_MARKDOWN_PREVIEW", (int)bWant, (int)bPane );
-					m_dwPreviewGuard = GetTickCount();
 					PostMessage( m_hWnd, WM_COMMAND, MAKEWPARAM( EEID_MARKDOWN_PREVIEW, 0 ), 0 );
 				}
 			}
@@ -4039,6 +4079,14 @@ INT_PTR CALLBACK NewProc( HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam )
 			nResult = TRUE;
 		}
 		break;
+	case WM_APP + 0x31:
+		{
+			CMyFrame* pFrame = static_cast<CMyFrame*>(GetFrame( hwnd ));
+			if( pFrame ){
+				pFrame->SyncPreviewToPane();	// posted by the WinEvent hook
+			}
+		}
+		return 0;
 	case WM_TIMER:
 		if( wParam == IDT_HOVER_MENU ){
 			CMyFrame* pFrame = static_cast<CMyFrame*>(GetFrame( hwnd ));
@@ -4047,10 +4095,11 @@ INT_PTR CALLBACK NewProc( HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam )
 			}
 			return 0;
 		}
-			else if( wParam == IDT_STATE_SYNC ){
+			else if( wParam == IDT_STARTUP_RESTORE ){
+				KillTimer( hwnd, IDT_STARTUP_RESTORE );
 				CMyFrame* pFrame = static_cast<CMyFrame*>(GetFrame( hwnd ));
 				if( pFrame ){
-					pFrame->OnStateSyncTimer();
+					pFrame->OnStartupRestore();
 				}
 				return 0;
 			}

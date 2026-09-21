@@ -14,6 +14,22 @@ this code base:
 | `0.4.x`       | Compatibility fixes that make the original plug-in build and load correctly on modern EmEditor (v26). |
 | `0.9.0` – `0.17.x` | The HTML + Markdown dual-mode toolbar, heading towards `1.0.0`. |
 
+## [0.21.4] - 2026-09-21
+
+### Changed
+
+- **The 500 ms state-sync poll is gone** (user request — the polling was
+  never liked). Pane state is now fully push-driven: closing the preview
+  pane is notified by `EVENT_CUSTOM_BAR_CLOSED`, and the pane window
+  appearing/disappearing (opens from EmEditor's own UI included, which
+  fires no plug-in event) is caught by a process-scoped WinEvent hook
+  (`EVENT_OBJECT_DESTROY..HIDE` on the `EmEditorWebPreview2` window).
+  Both paths reconcile the button against the pane's real visibility. The
+  only timer left besides the edit-debounce is a one-shot 800 ms startup
+  restore that reopens the panes saved in the profile and then kills
+  itself. Self-probe verified: pane toggles produce exact `event sync`
+  log lines with no timer running.
+
 ## [0.21.3] - 2026-09-21
 
 ### Fixed
