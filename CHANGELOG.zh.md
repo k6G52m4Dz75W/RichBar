@@ -10,6 +10,31 @@
 | `0.4.x`  | 兼容性修复，使原插件能够在现代 EmEditor（v26）上正确编译和加载。 |
 | `0.9.0` – `0.17.x` | HTML + Markdown 双模式工具栏，向 `1.0.0` 迈进。 |
 
+## [0.22.0] - 2026-09-24
+
+### 新增
+
+- **RichBar 实时预览——自建 WebView2 面板**（彻底取代官方 WebPreview 路由）。
+  与你共同取证确认：官方面板从根本上做不到实时——它的渲染页抓取的是**磁盘
+  上的保存文件**（或面板打开瞬间的临时快照），连面板自己的右键刷新都看不到
+  未保存的编辑。新预览是第二个自定义条（"RichBar Preview"，停靠右侧），宿主
+  我们自己的 WebView2：所有 `https://document/*` 抓取都由
+  `WebResourceRequested` 处理器应答，内容**每次都从当前缓冲区现取**——编辑
+  停顿 400ms 后的一次重载即为真正的实时同步。Markdown 复用 EmEditor 自带的
+  marked.js 渲染模板（`PlugIns\markdown-renderer.html`）；HTML 文档直接从
+  缓冲区以原始 HTML 呈现。切换文档/模式自动重定向面板；条关闭事件与框架关
+  闭都会释放 COM 侧；WebView2 环境每会话只创建一次（独立用户数据目录
+  `%LOCALAPPDATA%\EmEditor\RichBar.WebView2`），重开面板瞬时完成。若加载器
+  或 WebView2 运行时缺失，预览按钮回退到官方 `EEID_MARKDOWN_PREVIEW` 命令。
+  WebView2 Loader DLL（Microsoft.Web.WebView2 NuGet）已入库
+  `third_party/webview2`，随 `RichBar.dll` 一同分发；动态加载（无导入库依
+  赖），许可注记已加入 `LICENSE.third-party`。
+
+### 移除
+
+- 官方面板跟踪机制全部退场：WinEvent 钩子、面板子类诊断、`EI_OPEN_WEB`
+  重导航（后者已证实会打开外部浏览器）——预览按钮现在只驱动我们自己的面板。
+
 ## [0.21.6] - 2026-09-21
 
 ### 变更

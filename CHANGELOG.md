@@ -14,6 +14,39 @@ this code base:
 | `0.4.x`       | Compatibility fixes that make the original plug-in build and load correctly on modern EmEditor (v26). |
 | `0.9.0` – `0.17.x` | The HTML + Markdown dual-mode toolbar, heading towards `1.0.0`. |
 
+## [0.22.0] - 2026-09-24
+
+### Added
+
+- **RichBar live preview — our own WebView2 pane** (replaces the official
+  WebPreview routing entirely). Forensics with the user established that
+  the official pane is fundamentally non-live: its renderer fetches the
+  SAVED disk file (or a pane-open-time temp snapshot), so even the pane's
+  own right-click Refresh cannot show unsaved edits. The new preview is a
+  second custom bar ("RichBar Preview", right-docked) hosting our own
+  WebView2: every `https://document/*` fetch is answered by a
+  `WebResourceRequested` handler that reads the CURRENT buffer, so a
+  debounced reload (400 ms after typing pauses) is a true live sync.
+  Markdown documents reuse EmEditor's own marked.js renderer template from
+  `PlugIns\markdown-renderer.html`; HTML documents are served raw from the
+  buffer. Document/mode switches re-target the pane; the bar-close event
+  and the frame-close release the COM side; the WebView2 environment is
+  created once per session with a private user-data folder
+  (`%LOCALAPPDATA%\EmEditor\RichBar.WebView2`) and cached for instant
+  reopen. If the loader or the WebView2 runtime is missing, the Preview
+  button falls back to the official `EEID_MARKDOWN_PREVIEW` command.
+  The WebView2 Loader DLL (Microsoft.Web.WebView2 NuGet) is vendored under
+  `third_party/webview2` and ships beside `RichBar.dll`; the loader is
+  bound dynamically (no import-lib dependency) and the license notice is
+  added to `LICENSE.third-party`.
+
+### Removed
+
+- The official-pane tracking machinery: the WinEvent hook, the pane
+  subclass diagnostic, and the `EI_OPEN_WEB` re-navigation (which had
+  turned out to open the external browser) are all gone — the Preview
+  button now drives our own pane only.
+
 ## [0.21.6] - 2026-09-21
 
 ### Changed

@@ -195,3 +195,12 @@ How to Apply This License
 
    When distributing the complete Icon library or substantial portions of it,
    include a copy of this License.
+
+--------------------------------------------------------------------------------
+Microsoft WebView2 Loader (third_party/webview2/x64/WebView2Loader.dll)
+
+   This project ships the WebView2 Loader DLL from the Microsoft Web View2
+   SDK (NuGet package Microsoft.Web.WebView2), copyright (c) Microsoft
+   Corporation. It is redistributed under the terms of the Microsoft
+   WebView2 SDK license, which permits redistribution as part of an
+   application. See: https://www.microsoft.com/web/webview2/

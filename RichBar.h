@@ -4,6 +4,8 @@
 #include <cstdio>
 #include <cstdarg>
 
+#include <WebView2.h>
+
 #define MAX_BUTTON_TITLE	260
 #define MAX_TAG_FIELD		260
 #define BUTTON_SIZE_SMALL   22
@@ -12,6 +14,16 @@
 
 #define MAX_RECENT_FONT		8
 #define ID_COMMAND_BASE		100
+
+// RichBar's own live preview: a second custom bar hosting OUR WebView2.
+// Unlike the official WebPreview plug-in — whose renderer fetches the
+// SAVED file (or the pane-open-time temp snapshot), which is why even its
+// right-click Refresh shows stale content — our WebResourceRequested
+// handler serves the CURRENT buffer on every fetch, so a reload always
+// shows the text as typed
+#define WV2_PREVIEW_HOST_CLASS	_T("RichBarPreviewHost")
+#define WV2_PREVIEW_BAR_TITLE	_T("RichBar Preview")
+#define WV2_PREVIEW_UDATA		_T("\\EmEditor\\RichBar.WebView2")
 
 #define ZERO_INIT_FIRST_MEM(classname, firstmem)  ZeroMemory( &firstmem, sizeof( classname ) - ((char*)&firstmem - (char*)this) );
 
@@ -160,7 +172,6 @@ WCHAR OctToDec( LPWSTR& p )
 #define EEID_MARKDOWN_VIEW		23255	// Markdown design view toggle
 #define EEID_MARKDOWN_PREVIEW	23275	// Markdown rendered preview toggle
 #define EI_GET_MARKDOWN_PREVIEW	407		// TRUE if the design view is on
-#define EI_OPEN_WEB				406		// opens a URL in the web view pane
 
 // toolbar mode-switch buttons (command IDs below ID_COMMAND_BASE)
 #define ID_MODE_HTML			90
@@ -420,9 +431,14 @@ public:
 	bool m_bPreviewOn;			// preview pane on (synced to the pane window's visibility)
 	HWND m_hwndView;				// the EmEditor VIEW window (plug-in OnCommand contract)
 	bool m_bPanesRestored;		// startup pane restore done (first state-sync tick)
-	HWINEVENTHOOK m_hPreviewWinHook;	// push source for the preview pane window show/hide/destroy
-	HWND m_hwndSubclassedPane;		// TEMP diagnostic: the subclassed preview pane window
-	WNDPROC m_pfnPaneOrigProc;		// TEMP diagnostic: its original window procedure
+	UINT m_nPreviewBarID;		// custom-bar id of the live preview pane
+	HWND m_hwndPreviewHost;		// client window the WebView2 controller binds to
+	ICoreWebView2Environment* m_pWV2Env;	// shared WebView2 environment (session-lifetime)
+	ICoreWebView2Controller* m_pWV2Controller;
+	ICoreWebView2* m_pWV2;
+	EventRegistrationToken m_tWV2ResReq;
+	bool m_bWV2InitFailed;		// loader/runtime missing: Preview falls back to the official command
+	bool m_bWV2InitPending;		// environment creation in flight
 	UINT m_nHoverMenuCmd;		// dropdown command waiting for the hover-open timer
 	UINT m_nLastMenuCmd;		// dropdown whose menu closed last; reopen only after the mouse leaves it
 	bool m_bLastMenuLeft;		// the mouse has left m_nLastMenuCmd since its menu closed
@@ -1746,12 +1762,9 @@ public:
 			}
 
 			ShowWindow( hwndToolbar, m_bVisible );
-			// pane toggles (design view / preview) produce no notification;
-			// poll the state so the buttons stay in sync
 			// the one-shot startup restore; pane open/close sync is
-			// push-driven (EVENT_CUSTOM_BAR_CLOSED + WinEvent hook)
+			// push-driven (EVENT_CUSTOM_BAR_CLOSED)
 			SetTimer( m_hDlg, IDT_STARTUP_RESTORE, 800, NULL );
-			InstallPreviewWinHook();
 		}
 	}
 	}
@@ -1876,102 +1889,531 @@ public:
 		}
 	}
 
-	// the WebPreview pane exposes no SDK query; the pane window's presence
-	// under the frame IS its state (the plug-in creates it as class
-	// EmEditorWebPreview2 inside an EEPaneContainer)
-	static BOOL CALLBACK FindPreviewPaneProc( HWND hwnd, LPARAM lParam )
-	{
-		WCHAR szCls[32];
-		if( GetClassNameW( hwnd, szCls, _countof( szCls ) ) == 0 ||
-			lstrcmpW( szCls, L"EmEditorWebPreview2" ) != 0 ){
-			return TRUE;
-		}
-		*(HWND*)lParam = hwnd;
-		return FALSE;
-	}
+	// ================= RichBar live preview (our own WebView2) =================
 
-	bool IsPreviewPaneVisible()
-	{
-		HWND hwndPane = NULL;
-		EnumChildWindows( m_hWnd, FindPreviewPaneProc, (LPARAM)&hwndPane );
-		return hwndPane != NULL;
-	}
+	// The official WebPreview pane shows the SAVED file (its renderer fetches
+	// the disk file, or a pane-open-time temp snapshot for modified buffers),
+	// so even its right-click Refresh cannot show unsaved edits - verified by
+	// the user. This preview hosts OUR WebView2 in a second custom bar and
+	// answers every https://document/* fetch from the CURRENT buffer, so a
+	// debounced reload after each edit is a true live sync. Markdown reuses
+	// EmEditor own marked.js renderer template; HTML documents are served raw.
 
-	// TEMPORARY diagnostic kept from 0.21.5: the pane window is subclassed
-	// and every WM_COMMAND it receives is logged, in case an in-pane trigger
-	// ever surfaces as a Win32 command (the WebView2 context menu does not)
-	static LRESULT CALLBACK PaneSubclassProc( HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam )
+	static void UrlAppendEncoded( tstring& s, LPCTSTR psz, bool bKeepSlashColon )
 	{
-		CMyFrame* pFrame = static_cast<CMyFrame*>(GetFrame( hwnd ));
-		if( uMsg == WM_NCDESTROY && pFrame && pFrame->m_hwndSubclassedPane == hwnd ){
-			if( pFrame->m_pfnPaneOrigProc ){
-				SetWindowLongPtrW( hwnd, GWLP_WNDPROC, (LONG_PTR)pFrame->m_pfnPaneOrigProc );
+		char utf8[MAX_PATH * 3];
+		int n = WideCharToMultiByte( CP_UTF8, 0, psz, -1, utf8, (int)sizeof( utf8 ), NULL, NULL );
+		for( int i = 0; i < n - 1; i++ ){
+			unsigned char c = (unsigned char)utf8[i];
+			if( ( c >= 'A' && c <= 'Z' ) || ( c >= 'a' && c <= 'z' ) || ( c >= '0' && c <= '9' ) ||
+				c == '.' || c == '-' || c == '_' || ( bKeepSlashColon && ( c == '/' || c == ':' ) ) ){
+				s += (TCHAR)c;
 			}
-			pFrame->m_hwndSubclassedPane = NULL;
-			pFrame->m_pfnPaneOrigProc = NULL;
+			else {
+				TCHAR hex[4];
+				StringPrintf( hex, _countof( hex ), _T("%%%02X"), c );
+				s += hex;
+			}
 		}
-		if( pFrame && uMsg == WM_COMMAND && LOWORD( wParam ) ){
-			pFrame->RbLogF( "pane WM_COMMAND: id=%d code=%d hwndCtl=%p", LOWORD( wParam ), HIWORD( wParam ), (void*)lParam );
+	}
+
+	// the whole document text, line by line (the SDK has no whole-text API)
+	bool GetDocTextAll( tstring& sText )
+	{
+		UINT_PTR nLines = Editor_GetLines( m_hWnd, FALSE );
+		if( nLines == 0 || nLines > 2000000 ){
+			return false;
 		}
-		if( pFrame && pFrame->m_pfnPaneOrigProc ){
-			return CallWindowProc( pFrame->m_pfnPaneOrigProc, hwnd, uMsg, wParam, lParam );
+		UINT_PTR cchBuf = 4096;
+		LPWSTR pszBuf = (LPWSTR)malloc( cchBuf * sizeof( WCHAR ) );
+		if( !pszBuf ){
+			return false;
+		}
+		bool bOK = true;
+		for( UINT_PTR y = 0; y < nLines; y++ ){
+			GET_LINE_INFO gli;
+			ZeroMemory( &gli, sizeof( gli ) );
+			gli.yLine = y;
+			gli.cch = 0;
+			UINT_PTR cchNeed = Editor_GetLineW( m_hWnd, &gli, NULL );
+			if( cchNeed == (UINT_PTR)-1 ){ bOK = false; break; }
+			if( cchNeed + 1 > cchBuf ){
+				cchBuf = cchNeed + 256;
+				LPWSTR pszNew = (LPWSTR)realloc( pszBuf, cchBuf * sizeof( WCHAR ) );
+				if( !pszNew ){ bOK = false; break; }
+				pszBuf = pszNew;
+			}
+			gli.cch = cchBuf;
+			UINT_PTR cch = Editor_GetLineW( m_hWnd, &gli, pszBuf );
+			if( cch == (UINT_PTR)-1 ){ bOK = false; break; }
+			if( cch > cchNeed )  cch = cchNeed;
+			sText.append( pszBuf, cch );
+			if( y + 1 < nLines ){
+				sText += _T("\r\n");
+			}
+		}
+		free( pszBuf );
+		return bOK;
+	}
+
+	void ServeBufferResponse( ICoreWebView2WebResourceRequestedEventArgs* pArgs )
+	{
+		ICoreWebView2WebResourceResponse* pResp = NULL;
+		tstring sText;
+		if( m_pWV2Env && GetDocTextAll( sText ) ){
+			int cb = WideCharToMultiByte( CP_UTF8, 0, sText.c_str(), (int)sText.size(), NULL, 0, NULL, NULL );
+			HGLOBAL hG = GlobalAlloc( GMEM_MOVEABLE, ( cb > 0 ) ? (SIZE_T)cb : 1 );
+			if( hG ){
+				void* pv = GlobalLock( hG );
+				if( pv ){
+					if( cb > 0 ){
+						WideCharToMultiByte( CP_UTF8, 0, sText.c_str(), (int)sText.size(), (char*)pv, cb, NULL, NULL );
+					}
+					GlobalUnlock( hG );
+				}
+				IStream* pStream = NULL;
+				if( SUCCEEDED( CreateStreamOnHGlobal( hG, TRUE, &pStream ) ) ){
+					m_pWV2Env->CreateWebResourceResponse( pStream, 200, L"OK",
+						L"Content-Type: text/html; charset=utf-8\r\nAccess-Control-Allow-Origin: *", &pResp );
+					pStream->Release();	// owns hG on success
+				}
+				else {
+					GlobalFree( hG );
+				}
+			}
+		}
+		if( pResp ){
+			pArgs->put_Response( pResp );
+			pResp->Release();
+		}
+	}
+
+	// COM callback: WebResourceRequested - every https://document/* fetch
+	// lands here and is answered from the live buffer
+	class CWV2ResReqHandler : public ICoreWebView2WebResourceRequestedEventHandler
+	{
+	public:
+		CWV2ResReqHandler( CMyFrame* p ) : m_pFrame( p ), m_cRef( 1 ) {}
+		STDMETHODIMP QueryInterface( REFIID riid, void** ppvObject ) override
+		{
+			if( riid == __uuidof( IUnknown ) || riid == __uuidof( ICoreWebView2WebResourceRequestedEventHandler ) ){
+				*ppvObject = static_cast< ICoreWebView2WebResourceRequestedEventHandler* >( this );
+				AddRef();
+				return S_OK;
+			}
+			*ppvObject = NULL;
+			return E_NOINTERFACE;
+		}
+		STDMETHODIMP_(ULONG) AddRef() override { return InterlockedIncrement( &m_cRef ); }
+		STDMETHODIMP_(ULONG) Release() override
+		{
+			ULONG c = InterlockedDecrement( &m_cRef );
+			if( c == 0 ){ delete this; }
+			return c;
+		}
+		STDMETHODIMP Invoke( ICoreWebView2*, ICoreWebView2WebResourceRequestedEventArgs* pArgs ) override
+		{
+			m_pFrame->ServeBufferResponse( pArgs );
+			return S_OK;
+		}
+	private:
+		~CWV2ResReqHandler() {}
+		CMyFrame* m_pFrame;
+		LONG m_cRef;
+	};
+
+	// COM callback: environment creation completed
+	class CWV2EnvHandler : public ICoreWebView2CreateCoreWebView2EnvironmentCompletedHandler
+	{
+	public:
+		CWV2EnvHandler( CMyFrame* p ) : m_pFrame( p ), m_cRef( 1 ) {}
+		STDMETHODIMP QueryInterface( REFIID riid, void** ppvObject ) override
+		{
+			if( riid == __uuidof( IUnknown ) || riid == __uuidof( ICoreWebView2CreateCoreWebView2EnvironmentCompletedHandler ) ){
+				*ppvObject = static_cast< ICoreWebView2CreateCoreWebView2EnvironmentCompletedHandler* >( this );
+				AddRef();
+				return S_OK;
+			}
+			*ppvObject = NULL;
+			return E_NOINTERFACE;
+		}
+		STDMETHODIMP_(ULONG) AddRef() override { return InterlockedIncrement( &m_cRef ); }
+		STDMETHODIMP_(ULONG) Release() override
+		{
+			ULONG c = InterlockedDecrement( &m_cRef );
+			if( c == 0 ){ delete this; }
+			return c;
+		}
+		STDMETHODIMP Invoke( HRESULT errorCode, ICoreWebView2Environment* pEnv ) override
+		{
+			m_pFrame->OnWV2EnvCreated( errorCode, pEnv );
+			return S_OK;
+		}
+	private:
+		~CWV2EnvHandler() {}
+		CMyFrame* m_pFrame;
+		LONG m_cRef;
+	};
+
+	// COM callback: controller creation completed
+	class CWV2CtrlHandler : public ICoreWebView2CreateCoreWebView2ControllerCompletedHandler
+	{
+	public:
+		CWV2CtrlHandler( CMyFrame* p ) : m_pFrame( p ), m_cRef( 1 ) {}
+		STDMETHODIMP QueryInterface( REFIID riid, void** ppvObject ) override
+		{
+			if( riid == __uuidof( IUnknown ) || riid == __uuidof( ICoreWebView2CreateCoreWebView2ControllerCompletedHandler ) ){
+				*ppvObject = static_cast< ICoreWebView2CreateCoreWebView2ControllerCompletedHandler* >( this );
+				AddRef();
+				return S_OK;
+			}
+			*ppvObject = NULL;
+			return E_NOINTERFACE;
+		}
+		STDMETHODIMP_(ULONG) AddRef() override { return InterlockedIncrement( &m_cRef ); }
+		STDMETHODIMP_(ULONG) Release() override
+		{
+			ULONG c = InterlockedDecrement( &m_cRef );
+			if( c == 0 ){ delete this; }
+			return c;
+		}
+		STDMETHODIMP Invoke( HRESULT errorCode, ICoreWebView2Controller* pCtrl ) override
+		{
+			m_pFrame->OnWV2ControllerCreated( errorCode, pCtrl );
+			return S_OK;
+		}
+	private:
+		~CWV2CtrlHandler() {}
+		CMyFrame* m_pFrame;
+		LONG m_cRef;
+	};
+
+	static LRESULT CALLBACK PreviewHostProc( HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam )
+	{
+		if( uMsg == WM_SIZE && wParam != SIZE_MINIMIZED ){
+			CMyFrame* pFrame = static_cast< CMyFrame* >( GetFrame( hwnd ) );
+			if( pFrame ){
+				pFrame->OnPreviewHostSize();
+			}
+		}
+		if( uMsg == WM_ERASEBKGND ){
+			return 1;	// the web content covers the client; avoid flicker
 		}
 		return DefWindowProc( hwnd, uMsg, wParam, lParam );
 	}
 
-	void SubclassPreviewPane( HWND hwndPane )
+	bool RegisterPreviewHostClass()
 	{
-		if( !hwndPane || hwndPane == m_hwndSubclassedPane ){
-			return;
+		static bool bRegistered = false;
+		if( bRegistered ){
+			return true;
 		}
-		m_hwndSubclassedPane = hwndPane;
-		m_pfnPaneOrigProc = (WNDPROC)SetWindowLongPtrW( hwndPane, GWLP_WNDPROC, (LONG_PTR)PaneSubclassProc );
-		RbLogF( "pane subclassed: hwnd=%p", hwndPane );
+		WNDCLASS wc;
+		ZeroMemory( &wc, sizeof( wc ) );
+		wc.lpfnWndProc = PreviewHostProc;
+		wc.hInstance = EEGetInstanceHandle();
+		wc.hCursor = LoadCursor( NULL, IDC_ARROW );
+		wc.hbrBackground = NULL;
+		wc.lpszClassName = WV2_PREVIEW_HOST_CLASS;
+		bRegistered = RegisterClass( &wc ) != 0;
+		return bRegistered;
 	}
 
-	// one refresh of the preview pane: post a Chromium reload to the pane WebView2 window. The renderer page refetches the document from the plug-in virtual host on every page load and the host serves the current buffer, so a reload resyncs the pane with the edited text — the same effect as the pane right-click Refresh. Two channels are posted together (F5 key pair and the WM_APPCOMMAND browser-refresh app command): both are standard Chromium reload triggers, and an in-pane reload cannot be observed from outside, so the user verifies which channel (if either) lands. A posted F5 was once declared a dead end, but that verdict relied on a temp-file observation channel later proven blind in clean sessions — it is being re-tested here.
-	static BOOL CALLBACK FindChromeChildProc( HWND hwnd, LPARAM lParam )
+	static HMODULE LoadWV2Loader()
 	{
-		WCHAR szCls[32];
-		if( GetClassNameW( hwnd, szCls, _countof( szCls ) ) != 0 &&
-			lstrcmpW( szCls, L"Chrome_WidgetWin_1" ) == 0 ){
-			*(HWND*)lParam = hwnd;
-			return FALSE;
+		HMODULE hMod = GetModuleHandle( _T("WebView2Loader.dll") );
+		if( hMod ){
+			return hMod;
 		}
-		return TRUE;
+		TCHAR szPath[MAX_PATH];
+		for( int i = 0; i < 2 && !hMod; i++ ){
+			DWORD cch = GetModuleFileName( ( i == 0 ) ? EEGetInstanceHandle() : NULL, szPath, MAX_PATH );
+			if( cch == 0 || cch >= MAX_PATH ){
+				break;
+			}
+			LPTSTR p = szPath + cch;
+			while( p > szPath && p[-1] != _T('\\') )  p--;
+			*p = 0;
+			lstrcat( szPath, _T("WebView2Loader.dll") );	// beside this DLL, then beside EmEditor.exe
+			hMod = LoadLibrary( szPath );
+		}
+		return hMod;
 	}
 
-	void RefreshPreviewPane()
+	void FallbackOfficialPreview()
 	{
-		HWND hwndPane = NULL;
-		EnumChildWindows( m_hWnd, FindPreviewPaneProc, (LPARAM)&hwndPane );
-		if( !hwndPane ){
-			return;		// never open the pane as a side effect of refreshing
+		// WebView2 unavailable: at least give the user the official (stale)
+		// pane instead of a dead button
+		RbLogF( "wv2 unavailable -> fallback EEID_MARKDOWN_PREVIEW" );
+		PostMessage( m_hWnd, WM_COMMAND, MAKEWPARAM( EEID_MARKDOWN_PREVIEW, 0 ), 0 );
+	}
+
+	void OnPreviewHostSize()
+	{
+		if( m_pWV2Controller && m_hwndPreviewHost && IsWindow( m_hwndPreviewHost ) ){
+			RECT rc;
+			GetClientRect( m_hwndPreviewHost, &rc );
+			const double scale = (double)GetDpiForWindow( m_hwndPreviewHost ) / 96.0;
+			RECT rcDip;
+			rcDip.left   = (LONG)( rc.left   / scale );
+			rcDip.top    = (LONG)( rc.top    / scale );
+			rcDip.right  = (LONG)( rc.right  / scale );
+			rcDip.bottom = (LONG)( rc.bottom / scale );
+			m_pWV2Controller->put_Bounds( rcDip );
 		}
-		SubclassPreviewPane( hwndPane );	// keep the WM_COMMAND diagnostic fresh
-		HWND hwndChrome = NULL;
-		EnumChildWindows( hwndPane, FindChromeChildProc, (LPARAM)&hwndChrome );
-		if( !hwndChrome ){
+	}
+
+	void BuildPreviewUrl( tstring& sUrl )
+	{
+		TCHAR szFile[MAX_PATH] = { 0 };
+		Editor_Info( m_hWnd, EI_GET_FILE_NAMEW, (LPARAM)szFile );
+		TCHAR szName[MAX_PATH], szFolder[MAX_PATH];
+		if( szFile[0] ){
+			StringCopy( szFolder, _countof( szFolder ), szFile );
+			LPTSTR pszSlash = szFolder;
+			for( LPTSTR p = szFolder; *p; p++ ){
+				if( *p == _T('\\') || *p == _T('/') ){
+					pszSlash = p;
+				}
+			}
+			StringCopy( szName, _countof( szName ), pszSlash + ( *pszSlash ? 1 : 0 ) );
+			*pszSlash = 0;
+		}
+		else {
+			// untitled: a virtual name under %TEMP% (the renderer only uses the
+			// folder to resolve image/link URLs)
+			GetTempPath( MAX_PATH, szFolder );
+			int nLen = lstrlen( szFolder );
+			if( nLen > 0 && szFolder[nLen - 1] == _T('\\') ){
+				szFolder[nLen - 1] = 0;
+			}
+			StringCopy( szName, _countof( szName ), _T("untitled.html") );
+		}
+		if( m_iMode == MODE_MD ){
+			// EmEditor own renderer (marked.js): it refetches the document from
+			// https://document/<name>, which our handler serves from the buffer
+			TCHAR szRenderer[MAX_PATH];
+			DWORD cch = GetModuleFileName( NULL, szRenderer, MAX_PATH );
+			if( cch == 0 || cch >= MAX_PATH ){
+				return;
+			}
+			LPTSTR p = szRenderer + cch;
+			while( p > szRenderer && p[-1] != _T('\\') )  p--;
+			*p = 0;
+			StringCat( szRenderer, MAX_PATH, _T("PlugIns\\markdown-renderer.html") );
+			for( p = szRenderer; *p; p++ ){
+				if( *p == _T('\\') ){
+					*p = _T('/');
+				}
+			}
+			sUrl = _T("file:///");
+			UrlAppendEncoded( sUrl, szRenderer, true );
+			sUrl += _T("?documentName=");
+			UrlAppendEncoded( sUrl, szName, false );
+			sUrl += _T("&documentFolder=");
+			UrlAppendEncoded( sUrl, szFolder, false );
+		}
+		else {
+			// HTML: the browser renders the buffer directly
+			sUrl = _T("https://document/");
+			UrlAppendEncoded( sUrl, szName, false );
+		}
+	}
+
+	void NavigateLivePreview()
+	{
+		if( !m_pWV2 ){
 			return;
 		}
-		PostMessage( hwndChrome, WM_KEYDOWN, VK_F5, 0 );
-		PostMessage( hwndChrome, WM_KEYUP, VK_F5, 0 );
-		PostMessage( hwndChrome, WM_APPCOMMAND, 0, MAKELPARAM( 0, APPCOMMAND_BROWSER_REFRESH ) );
-		RbLogF( "auto-refresh: F5+APPCOMMAND -> chrome=%p", hwndChrome );
+		tstring sUrl;
+		BuildPreviewUrl( sUrl );
+		if( !sUrl.empty() ){
+			RbLogF( "preview navigate: %S", sUrl.c_str() );
+			m_pWV2->Navigate( sUrl.c_str() );
+		}
+	}
+
+	void OnWV2EnvCreated( HRESULT hr, ICoreWebView2Environment* pEnv )
+	{
+		m_bWV2InitPending = false;
+		if( FAILED( hr ) || !pEnv ){
+			m_bWV2InitFailed = true;
+			RbLogF( "wv2 env FAILED 0x%08X", (unsigned)hr );
+			FallbackOfficialPreview();
+			return;
+		}
+		if( !m_hwndPreviewHost ){
+			pEnv->Release();	// the bar was closed while initializing
+			return;
+		}
+		m_pWV2Env = pEnv;	// kept for the whole session: reopen is fast
+		pEnv->CreateCoreWebView2Controller( m_hwndPreviewHost, new CWV2CtrlHandler( this ) );
+	}
+
+	void OnWV2ControllerCreated( HRESULT hr, ICoreWebView2Controller* pCtrl )
+	{
+		if( FAILED( hr ) || !pCtrl ){
+			m_bWV2InitFailed = true;
+			RbLogF( "wv2 controller FAILED 0x%08X", (unsigned)hr );
+			FallbackOfficialPreview();
+			return;
+		}
+		if( !m_hwndPreviewHost ){
+			pCtrl->Close();
+			pCtrl->Release();
+			return;
+		}
+		m_pWV2Controller = pCtrl;
+		pCtrl->get_CoreWebView2( &m_pWV2 );
+		OnPreviewHostSize();
+		CWV2ResReqHandler* pHandler = new CWV2ResReqHandler( this );
+		m_pWV2->AddWebResourceRequestedFilter( L"https://document/*", COREWEBVIEW2_WEB_RESOURCE_CONTEXT_ALL );
+		m_pWV2->add_WebResourceRequested( pHandler, &m_tWV2ResReq );
+		pHandler->Release();	// the webview holds its own reference
+		NavigateLivePreview();
+	}
+
+	void EnsureWebView2()
+	{
+		if( m_pWV2 || m_bWV2InitFailed || m_bWV2InitPending ){
+			return;
+		}
+		typedef HRESULT (STDAPICALLTYPE *PFN_GetVer)( PCWSTR, LPWSTR* );
+		typedef HRESULT (STDAPICALLTYPE *PFN_CreateEnv)( PCWSTR, PCWSTR, ICoreWebView2EnvironmentOptions*, ICoreWebView2CreateCoreWebView2EnvironmentCompletedHandler* );
+		HMODULE hLoader = LoadWV2Loader();
+		PFN_GetVer pfnGetVer = hLoader ? (PFN_GetVer)GetProcAddress( hLoader, "GetAvailableCoreWebView2BrowserVersionString" ) : NULL;
+		PFN_CreateEnv pfnCreate = hLoader ? (PFN_CreateEnv)GetProcAddress( hLoader, "CreateCoreWebView2EnvironmentWithOptions" ) : NULL;
+		if( !pfnGetVer || !pfnCreate ){
+			m_bWV2InitFailed = true;
+			RbLogF( "wv2 loader NOT FOUND" );
+			FallbackOfficialPreview();
+			return;
+		}
+		LPWSTR pszVer = NULL;
+		if( FAILED( pfnGetVer( NULL, &pszVer ) ) || !pszVer ){
+			m_bWV2InitFailed = true;
+			RbLogF( "wv2 runtime NOT INSTALLED" );
+			FallbackOfficialPreview();
+			return;
+		}
+		CoTaskMemFree( pszVer );
+		// a per-user data folder of our own: never touches EmEditor/WebPreview state
+		TCHAR szUd[MAX_PATH];
+		DWORD cch = GetEnvironmentVariable( _T("LOCALAPPDATA"), szUd, MAX_PATH );
+		if( cch == 0 || cch >= MAX_PATH - 40 ){
+			m_bWV2InitFailed = true;
+			FallbackOfficialPreview();
+			return;
+		}
+		StringCat( szUd, MAX_PATH, WV2_PREVIEW_UDATA );
+		CreateDirectory( szUd, NULL );
+		m_bWV2InitPending = true;
+		RbLogF( "wv2 creating env, udata=%S", szUd );
+		pfnCreate( NULL, szUd, NULL, new CWV2EnvHandler( this ) );
+	}
+
+	bool IsLivePreviewOpen()
+	{
+		return m_hwndPreviewHost && IsWindow( m_hwndPreviewHost );
+	}
+
+	void OpenLivePreview()
+	{
+		if( !IsLivePreviewOpen() ){
+			if( !RegisterPreviewHostClass() ){
+				FallbackOfficialPreview();
+				return;
+			}
+			int nDPI = (int)Editor_DocInfo( m_hWnd, 0, EI_GET_DPI, 0 );
+			m_hwndPreviewHost = CreateWindowEx( 0, WV2_PREVIEW_HOST_CLASS, NULL,
+				WS_CHILD | WS_VISIBLE | WS_CLIPCHILDREN, 0, 0, 10, 10, m_hDlg, NULL, EEGetInstanceHandle(), NULL );
+			if( !m_hwndPreviewHost ){
+				FallbackOfficialPreview();
+				return;
+			}
+			SetWindowLongPtr( m_hwndPreviewHost, GWLP_USERDATA, (LONG_PTR)this );
+			TOOLBAR_INFO cri;
+			ZeroMemory( &cri, sizeof( cri ) );
+			cri.cbSize = sizeof( cri );
+			cri.nMask = TIM_CLIENT | TIM_TITLE | TIM_FLAGS | TIM_STYLE | TIM_MINCHILD | TIM_CX | TIM_PLUG_IN_CMD_ID;
+			cri.wPlugInCmdID = EEGetCmdID();
+			cri.pszTitle = WV2_PREVIEW_BAR_TITLE;
+			cri.hwndClient = m_hwndPreviewHost;
+			cri.nFlags = CUSTOM_BAR_RIGHT;
+			cri.cxMinChild = 0;
+			cri.cyMinChild = 0;
+			cri.cx = MulDiv( 460, nDPI, DEFAULT_DPI );
+			m_nPreviewBarID = Editor_ToolbarOpen( m_hWnd, &cri );
+			RbLogF( "preview bar open: id=%u host=%p", m_nPreviewBarID, m_hwndPreviewHost );
+			if( !m_nPreviewBarID ){
+				DestroyWindow( m_hwndPreviewHost );
+				m_hwndPreviewHost = NULL;
+				FallbackOfficialPreview();
+				return;
+			}
+		}
+		if( m_pWV2 ){
+			NavigateLivePreview();
+		}
+		else {
+			EnsureWebView2();
+		}
+	}
+
+	void CloseLivePreview()
+	{
+		if( m_nPreviewBarID ){
+			Editor_ToolbarClose( m_hWnd, m_nPreviewBarID );	// the closed event releases the COM side
+		}
+		else if( m_hwndPreviewHost ){
+			PreviewBarGone();
+		}
+	}
+
+	void PreviewBarGone()
+	{
+		m_nPreviewBarID = 0;
+		if( m_hwndPreviewHost ){
+			if( IsWindow( m_hwndPreviewHost ) ){
+				DestroyWindow( m_hwndPreviewHost );
+			}
+			m_hwndPreviewHost = NULL;
+		}
+		if( m_pWV2Controller ){
+			m_pWV2Controller->Close();
+			m_pWV2Controller->Release();
+			m_pWV2Controller = NULL;
+		}
+		if( m_pWV2 ){
+			m_pWV2->Release();
+			m_pWV2 = NULL;
+		}
+		if( m_bPreviewOn ){
+			m_bPreviewOn = false;
+			SaveProfile();
+			ApplyToggleStates();
+		}
+	}
+
+	void ReloadLivePreview()
+	{
+		if( m_pWV2 && IsLivePreviewOpen() ){
+			m_pWV2->Reload();
+		}
 	}
 
 	// one-shot startup restore: reopen the panes that were on when the
-	// previous session ended (EmEditor persists neither pane itself -
-	// verified by registry runtime diff - so our profile flags are the memory)
+	// previous session ended (EmEditor persists neither pane itself —
+	// verified by registry runtime diff — so our profile flags are the memory)
 	void OnStartupRestore()
 	{
 		if( !m_hwndToolbar || m_bPanesRestored ){
 			return;
 		}
 		m_bPanesRestored = true;
-		if( m_bPreviewOn && !IsPreviewPaneVisible() ){
+		if( m_bPreviewOn && !IsLivePreviewOpen() ){
 			RbLogF( "startup restore: preview (mode=%d)", m_iMode );
-			PostMessage( m_hWnd, WM_COMMAND, MAKEWPARAM( EEID_MARKDOWN_PREVIEW, 0 ), 0 );
+			OpenLivePreview();
 		}
 		if( m_bDesignViewOn ){
 			RbLogF( "startup restore: design view" );
@@ -1979,53 +2421,6 @@ public:
 		}
 	}
 
-	// reconcile the Preview button with the pane actual visibility; called
-	// from push signals only (custom-bar-closed event, WinEvent hook)
-	void SyncPreviewToPane()
-	{
-		if( !m_hwndToolbar ){
-			return;
-		}
-		bool bPane = IsPreviewPaneVisible();
-		if( bPane != m_bPreviewOn ){
-			RbLogF( "event sync: pane=%d previewOn=%d", (int)bPane, (int)m_bPreviewOn );
-			m_bPreviewOn = bPane;
-			SaveProfile();
-			ApplyToggleStates();
-		}
-	}
-
-	// OS-level push for the pane window appearing/disappearing - covers pane
-	// opens from EmEditor own UI, which fires no plug-in event
-	static VOID CALLBACK PreviewWinEventProc( HWINEVENTHOOK, DWORD, HWND hwnd, LONG idObject, LONG, DWORD, DWORD )
-	{
-		if( idObject != OBJID_WINDOW || hwnd == NULL ){
-			return;
-		}
-		WCHAR szCls[32];
-		if( GetClassNameW( hwnd, szCls, _countof( szCls ) ) == 0 ||
-			lstrcmpW( szCls, L"EmEditorWebPreview2" ) != 0 ){
-			return;
-		}
-		CMyFrame* pFrame = static_cast<CMyFrame*>(GetFrame( hwnd ));
-		if( pFrame ){
-			pFrame->SubclassPreviewPane( hwnd );
-			if( pFrame->m_hDlg ){
-				PostMessage( pFrame->m_hDlg, WM_APP + 0x31, 0, 0 );
-			}
-		}
-	}
-
-	void InstallPreviewWinHook()
-	{
-		if( m_hPreviewWinHook ){
-			return;
-		}
-		// destroy/show/hide of the pane window, this process only, delivered
-		// on this thread message pump
-		m_hPreviewWinHook = SetWinEventHook( EVENT_OBJECT_DESTROY, EVENT_OBJECT_HIDE, NULL,
-			PreviewWinEventProc, GetCurrentProcessId(), 0, WINEVENT_OUTOFCONTEXT );
-	}
 
 
 	// The dropdown arrow, drawn live in NM_CUSTOMDRAW's item-post-paint
@@ -2179,6 +2574,9 @@ public:
 			// any document or configuration change returns the bar to auto detection
 			m_iModeOverride = -1;
 			int iNewMode = DetectMode();
+			if( IsLivePreviewOpen() ){
+				NavigateLivePreview();	// new document/mode: retarget the pane
+			}
 			if( iNewMode != m_iMode ){
 				m_iMode = iNewMode;
 				if( m_hwndToolbar && m_bVisible ){
@@ -2231,13 +2629,15 @@ public:
 			}
 		}
 		if( nEvent & EVENT_CUSTOM_BAR_CLOSED ){
-			// the WebPreview pane is a custom bar: its close is pushed here;
-			// re-walk and reconcile (cheap no-op for other bars)
-			SyncPreviewToPane();
+			CUSTOM_BAR_CLOSE_INFO* pCI = (CUSTOM_BAR_CLOSE_INFO*)lParam;
+			if( pCI->nID == m_nPreviewBarID ){
+				// the user closed OUR preview bar from its own UI
+				PreviewBarGone();
+			}
 		}
 		if( nEvent & EVENT_CHANGE ){
-			// every buffer modification re-arms the debounce; one Chromium
-			// reload fires when the typing pauses (see RefreshPreviewPane)
+			// every buffer modification re-arms the debounce; one WebView2
+			// reload fires when the typing pauses (see ReloadLivePreview)
 			if( m_hDlg ){
 				SetTimer( m_hDlg, IDT_PREVIEW_REFRESH, 400, NULL );
 			}
@@ -2315,20 +2715,23 @@ public:
 		m_bDesignViewOn = false;
 		m_bPreviewOn = false;
 		m_bPanesRestored = false;
-		m_hPreviewWinHook = NULL;
-		m_hwndSubclassedPane = NULL;
-		m_pfnPaneOrigProc = NULL;
+		m_nPreviewBarID = 0;
+		m_hwndPreviewHost = NULL;
+		m_pWV2Env = NULL;
+		m_pWV2Controller = NULL;
+		m_pWV2 = NULL;
+		m_bWV2InitFailed = false;
+		m_bWV2InitPending = false;
 		m_hwndView = NULL;
 		m_nBand = (UINT)-1;
 	}
 
 	~CMyFrame()
 	{
-		if( m_hPreviewWinHook ){
-			UnhookWinEvent( m_hPreviewWinHook );
-			m_hPreviewWinHook = NULL;
-		m_hwndSubclassedPane = NULL;
-		m_pfnPaneOrigProc = NULL;
+		CloseLivePreview();
+		if( m_pWV2Env ){
+			m_pWV2Env->Release();
+			m_pWV2Env = NULL;
 		}
 		CustomBarClosed();
 	}
@@ -2953,6 +3356,9 @@ public:
 		Editor_SetConfigW( m_hWnd, ( iMode == MODE_MD ) ? L"Markdown" : L"HTML" );
 		if( m_iMode != iMode ){
 			m_iMode = iMode;
+			if( IsLivePreviewOpen() ){
+				NavigateLivePreview();	// retarget the pane to the new mode
+			}
 			if( m_hwndToolbar && m_bVisible ){
 				// re-create the custom bar so it shows the other mode's button set
 				Editor_ToolbarClose( m_hWnd, m_nClientID );
@@ -3079,18 +3485,21 @@ public:
 				PostMessage( m_hWnd, WM_COMMAND, MAKEWPARAM( EEID_MARKDOWN_VIEW, 0 ), 0 );
 			}
 			else if( cmd.m_iCmd == CMD_PREVIEW ){
-				// same reconciliation for the preview pane: 23275 toggles,
-				// so post only when the pane's actual visibility differs
-				// from the wanted state — never close a pane the user just
-				// asked to open (or vice versa)
+				// our own live preview pane: the control state IS the wanted
+				// state and the bar follows it directly
 				bool bWant = ( SendMessage( m_hwndToolbar, TB_GETSTATE, wParam, 0 ) & TBSTATE_CHECKED ) != 0;
-				bool bPane = IsPreviewPaneVisible();
+				bool bPane = IsLivePreviewOpen();
 				m_bPreviewOn = bWant;
 				SaveProfile();
 				ApplyToggleStates();
 				if( bWant != bPane ){
-					RbLogF( "preview click: want=%d pane=%d -> EEID_MARKDOWN_PREVIEW", (int)bWant, (int)bPane );
-					PostMessage( m_hWnd, WM_COMMAND, MAKEWPARAM( EEID_MARKDOWN_PREVIEW, 0 ), 0 );
+					RbLogF( "preview click: want=%d pane=%d", (int)bWant, (int)bPane );
+					if( bWant ){
+						OpenLivePreview();
+					}
+					else {
+						CloseLivePreview();
+					}
 				}
 			}
 		}
@@ -4082,14 +4491,6 @@ INT_PTR CALLBACK NewProc( HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam )
 			nResult = TRUE;
 		}
 		break;
-	case WM_APP + 0x31:
-		{
-			CMyFrame* pFrame = static_cast<CMyFrame*>(GetFrame( hwnd ));
-			if( pFrame ){
-				pFrame->SyncPreviewToPane();	// posted by the WinEvent hook
-			}
-		}
-		return 0;
 	case WM_TIMER:
 		if( wParam == IDT_HOVER_MENU ){
 			CMyFrame* pFrame = static_cast<CMyFrame*>(GetFrame( hwnd ));
@@ -4110,7 +4511,7 @@ INT_PTR CALLBACK NewProc( HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam )
 				KillTimer( hwnd, IDT_PREVIEW_REFRESH );
 				CMyFrame* pFrame = static_cast<CMyFrame*>(GetFrame( hwnd ));
 				if( pFrame ){
-					pFrame->RefreshPreviewPane();
+					pFrame->ReloadLivePreview();	// debounced live sync
 				}
 				return 0;
 			}
