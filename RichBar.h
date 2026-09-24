@@ -1897,11 +1897,9 @@ public:
 		return hwndPane != NULL;
 	}
 
-	// TEMPORARY diagnostic (0.21.5): the pane own right-click Refresh works,
-	// but its trigger is unknown — EI_OPEN_WEB opens an EXTERNAL browser
-	// (user-verified) and a posted VK_F5 never reaches WebView2. Subclass the
-	// pane window and log every WM_COMMAND it receives, so ONE manual Refresh
-	// teaches us the command to send; auto-refresh ships once the ID is known.
+	// TEMPORARY diagnostic kept from 0.21.5: the pane window is subclassed
+	// and every WM_COMMAND it receives is logged, in case an in-pane trigger
+	// ever surfaces as a Win32 command (the WebView2 context menu does not)
 	static LRESULT CALLBACK PaneSubclassProc( HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam )
 	{
 		CMyFrame* pFrame = static_cast<CMyFrame*>(GetFrame( hwnd ));
@@ -1931,15 +1929,35 @@ public:
 		RbLogF( "pane subclassed: hwnd=%p", hwndPane );
 	}
 
+	// one refresh of the preview pane: post a Chromium reload to the pane WebView2 window. The renderer page refetches the document from the plug-in virtual host on every page load and the host serves the current buffer, so a reload resyncs the pane with the edited text — the same effect as the pane right-click Refresh. Two channels are posted together (F5 key pair and the WM_APPCOMMAND browser-refresh app command): both are standard Chromium reload triggers, and an in-pane reload cannot be observed from outside, so the user verifies which channel (if either) lands. A posted F5 was once declared a dead end, but that verdict relied on a temp-file observation channel later proven blind in clean sessions — it is being re-tested here.
+	static BOOL CALLBACK FindChromeChildProc( HWND hwnd, LPARAM lParam )
+	{
+		WCHAR szCls[32];
+		if( GetClassNameW( hwnd, szCls, _countof( szCls ) ) != 0 &&
+			lstrcmpW( szCls, L"Chrome_WidgetWin_1" ) == 0 ){
+			*(HWND*)lParam = hwnd;
+			return FALSE;
+		}
+		return TRUE;
+	}
+
 	void RefreshPreviewPane()
 	{
-		// suspend the reload itself until the refresh command is captured;
-		// keep the pane subclassed on every opportunity
 		HWND hwndPane = NULL;
 		EnumChildWindows( m_hWnd, FindPreviewPaneProc, (LPARAM)&hwndPane );
-		if( hwndPane ){
-			SubclassPreviewPane( hwndPane );
+		if( !hwndPane ){
+			return;		// never open the pane as a side effect of refreshing
 		}
+		SubclassPreviewPane( hwndPane );	// keep the WM_COMMAND diagnostic fresh
+		HWND hwndChrome = NULL;
+		EnumChildWindows( hwndPane, FindChromeChildProc, (LPARAM)&hwndChrome );
+		if( !hwndChrome ){
+			return;
+		}
+		PostMessage( hwndChrome, WM_KEYDOWN, VK_F5, 0 );
+		PostMessage( hwndChrome, WM_KEYUP, VK_F5, 0 );
+		PostMessage( hwndChrome, WM_APPCOMMAND, 0, MAKELPARAM( 0, APPCOMMAND_BROWSER_REFRESH ) );
+		RbLogF( "auto-refresh: F5+APPCOMMAND -> chrome=%p", hwndChrome );
 	}
 
 	// one-shot startup restore: reopen the panes that were on when the

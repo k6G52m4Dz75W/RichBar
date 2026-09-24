@@ -14,6 +14,20 @@ this code base:
 | `0.4.x`       | Compatibility fixes that make the original plug-in build and load correctly on modern EmEditor (v26). |
 | `0.9.0` – `0.17.x` | The HTML + Markdown dual-mode toolbar, heading towards `1.0.0`. |
 
+## [0.21.6] - 2026-09-21
+
+### Changed
+
+- **Auto-refresh re-test on two reload channels**: the log analysis showed
+  the pane's right-click Refresh is WebView2's own context menu — it never
+  emits a Win32 command, which is why the 0.21.5 subclass captured nothing
+  (the diagnostic stays in place regardless). The once-declared-dead F5
+  verdict relied on a temp-file observation channel later proven blind in
+  clean sessions, so the reload is re-tested: every edit now posts an F5
+  key pair AND the `WM_APPCOMMAND` browser-refresh app command to the
+  pane's WebView2 window; the user visually confirms which channel lands.
+  The subclass stays as the in-pane command trap.
+
 ## [0.21.5] - 2026-09-21
 
 ### Fixed
