@@ -2438,6 +2438,41 @@ public:
 		PreviewBarGone();
 	}
 
+	// the OFFICIAL WebPreview pane (EmEditorWebPreview2) - the Preview button
+	// drives it via 23275, and its real visibility is the button truth (the
+	// pane can auto-open at startup or be toggled from EmEditor's own UI)
+	static BOOL CALLBACK FindOfficialPaneProc( HWND hwnd, LPARAM lParam )
+	{
+		WCHAR szCls[32];
+		if( GetClassNameW( hwnd, szCls, _countof( szCls ) ) == 0 ||
+			lstrcmpW( szCls, L"EmEditorWebPreview2" ) != 0 ){
+			return TRUE;
+		}
+		*(HWND*)lParam = hwnd;
+		return FALSE;
+	}
+
+	bool IsOfficialPaneVisible()
+	{
+		HWND hwndPane = NULL;
+		EnumChildWindows( m_hWnd, FindOfficialPaneProc, (LPARAM)&hwndPane );
+		return hwndPane != NULL;
+	}
+
+	void SyncPreviewToPane()
+	{
+		if( !m_hwndToolbar ){
+			return;
+		}
+		bool bPane = IsOfficialPaneVisible();
+		if( bPane != m_bPreviewOn ){
+			RbLogF( "pane sync: visible=%d previewOn=%d", (int)bPane, (int)m_bPreviewOn );
+			m_bPreviewOn = bPane;
+			SaveProfile();
+			ApplyToggleStates();
+		}
+	}
+
 	// release the WebView2 objects. SEH-guarded: a fault inside the WebView2
 	// teardown (its controller state can be tainted when EmEditor reparents
 	// the host window) must never take EmEditor down
@@ -2524,7 +2559,7 @@ public:
 			return;
 		}
 		m_bPanesRestored = true;
-		if( m_bPreviewOn ){
+		if( m_bPreviewOn && !IsOfficialPaneVisible() ){
 			RbLogF( "startup restore: preview (mode=%d) -> official 23275", m_iMode );
 			PostMessage( m_hWnd, WM_COMMAND, MAKEWPARAM( EEID_MARKDOWN_PREVIEW, 0 ), 0 );
 		}
@@ -2769,6 +2804,7 @@ public:
 		}
 		if( nEvent & EVENT_CUSTOM_BAR_CLOSED ){
 			HandleBarClosedGuarded( this, (CUSTOM_BAR_CLOSE_INFO*)lParam );
+			SyncPreviewToPane();	// the official pane may have been closed from its own UI
 		}
 		if( nEvent & EVENT_CHANGE ){
 			// every buffer modification re-arms the debounce; one WebView2
@@ -3623,12 +3659,12 @@ public:
 				// our own live preview pane: the control state IS the wanted
 				// state and the bar follows it directly
 				bool bWant = ( SendMessage( m_hwndToolbar, TB_GETSTATE, wParam, 0 ) & TBSTATE_CHECKED ) != 0;
-				bool bPane = IsLivePreviewOpen();
+				bool bPane = IsOfficialPaneVisible();
 				m_bPreviewOn = bWant;
 				SaveProfile();
 				ApplyToggleStates();
 				if( bWant != bPane ){
-					RbLogF( "preview click: want=%d -> official 23275 (WebView2 pane dormant)", (int)bWant );
+					RbLogF( "preview click: want=%d pane=%d -> official 23275", (int)bWant, (int)bPane );
 					PostMessage( m_hWnd, WM_COMMAND, MAKEWPARAM( EEID_MARKDOWN_PREVIEW, 0 ), 0 );
 				}
 			}
