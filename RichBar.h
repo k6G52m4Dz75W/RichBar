@@ -3663,11 +3663,12 @@ public:
 	{
 		// manual override: sticks until the document or configuration changes
 		m_iModeOverride = iMode;
-		// keep the document's configuration in step with the mode: WebPreview
-		// picks its rendering pipeline from the config NAME (it converts only
-		// Markdown-config documents; anything else previews as plain HTML),
-		// so MD mode must sit on the Markdown config for previews to convert
-		Editor_SetConfigW( m_hWnd, ( iMode == MODE_MD ) ? L"Markdown" : L"HTML" );
+		// NOTE: the document configuration is deliberately NOT touched here.
+		// Switching the config re-evaluates EmEditor's per-config toolbar
+		// visibility, which resurrects the OFFICIAL toolbar the user hid and
+		// can drop our custom bar during the relayout. Saved .md/.html files
+		// already sit on the right config via associations; the preview
+		// pipeline cost for mismatched unsaved docs is the lesser evil.
 		if( m_iMode != iMode ){
 			m_iMode = iMode;
 			if( IsLivePreviewOpen() ){
