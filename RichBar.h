@@ -440,6 +440,7 @@ public:
 	bool m_bWV2InitFailed;		// loader/runtime missing: Preview falls back to the official command
 	vector<tstring> m_vPreviewDocs;	// documents (by name key) whose preview the user turned ON
 	vector<tstring> m_vDesignDocs;	// documents (by name key) whose design view is on
+	bool m_bDesignActual;		// our model of the view's ACTUAL design-view state
 	bool m_bWV2InitPending;		// environment creation in flight
 	UINT m_nHoverMenuCmd;		// dropdown command waiting for the hover-open timer
 	UINT m_nLastMenuCmd;		// dropdown whose menu closed last; reopen only after the mouse leaves it
@@ -2638,6 +2639,7 @@ public:
 			// memory and one toggle turns it on
 			RbLogF( "startup restore: design view" );
 			PostMessage( m_hWnd, WM_COMMAND, MAKEWPARAM( EEID_MARKDOWN_VIEW, 0 ), 0 );
+			m_bDesignActual = true;
 		}
 	}
 
@@ -2823,7 +2825,17 @@ public:
 			// the design view is PER-DOCUMENT (user-verified against the official
 			// button): restore this document's remembered state — toggles made
 			// from EmEditor's own UI are not visible to us and can desync
-			m_bDesignViewOn = IsDesignDocOn();
+			{
+				bool bWant = IsDesignDocOn();
+				// every toggle goes through us, so m_bDesignActual IS the view's
+				// state; drive it to the target document's memory
+				if( bWant != m_bDesignActual ){
+					RbLogF( "doc switch: design want=%d actual=%d -> 23255", (int)bWant, (int)m_bDesignActual );
+					PostMessage( m_hWnd, WM_COMMAND, MAKEWPARAM( EEID_MARKDOWN_VIEW, 0 ), 0 );
+					m_bDesignActual = bWant;
+				}
+				m_bDesignViewOn = bWant;
+			}
 			{
 				bool bWant = IsPreviewDocOn();
 				bool bPane = IsOfficialPaneVisible();
@@ -2969,6 +2981,7 @@ public:
 		m_crCustomIcon = RGB( 224, 224, 224 );
 		m_bIconColorDirty = false;
 		m_bDesignViewOn = false;
+		m_bDesignActual = false;	// a fresh session always starts with the view off
 		m_bPreviewOn = false;
 		m_bPanesRestored = false;
 		m_nPreviewBarID = 0;
@@ -3736,8 +3749,9 @@ public:
 				// design view (returned 0 even while the view was visibly on)
 				m_bDesignViewOn = ( SendMessage( m_hwndToolbar, TB_GETSTATE, wParam, 0 ) & TBSTATE_CHECKED ) != 0;
 				SetDesignDocOn( m_bDesignViewOn );	// per-document memory
-				SaveProfile();
+				SaveProfile();				// persists the global flag for cross-session restore
 				ApplyToggleStates();
+				m_bDesignActual = m_bDesignViewOn;
 				RbLogF( "design click: want=%d -> EEID_MARKDOWN_VIEW", (int)m_bDesignViewOn );
 				PostMessage( m_hWnd, WM_COMMAND, MAKEWPARAM( EEID_MARKDOWN_VIEW, 0 ), 0 );
 			}
