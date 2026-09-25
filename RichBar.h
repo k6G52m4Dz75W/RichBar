@@ -171,6 +171,7 @@ WCHAR OctToDec( LPWSTR& p )
 #define EEID_MARKDOWN_VIEW		23255	// Markdown design view toggle
 #define EEID_MARKDOWN_PREVIEW	23275	// Markdown rendered preview toggle
 #define EI_GET_MARKDOWN_PREVIEW	407		// TRUE if the design view is on
+#define EI_SET_MARKDOWN_PREVIEW	408		// sets the design view to (BOOL)lParam (official EE_INFO docs: value-based, not a toggle)
 
 // toolbar mode-switch buttons (command IDs below ID_COMMAND_BASE)
 #define ID_MODE_HTML			90
@@ -3789,17 +3790,23 @@ public:
 			}
 			else if( cmd.m_iCmd == CMD_MD_VIEW ){
 				// BTNS_CHECK toggled the control state before this command
-				// arrived; 23255 toggles the view. Button and state flip in the
-				// SAME direction on every click, so an unconditional post keeps
-				// them aligned. 407 is NOT consulted: it never tracks the
-				// design view (returned 0 even while the view was visibly on)
+				// arrived: that is the WANTED state. PRIMARY setter is the
+				// value-based EI_SET_MARKDOWN_PREVIEW (official EE_INFO docs;
+				// self-consistent with 407, no toggle). FALLBACK: if the set
+				// did not take, use the 23255 toggle command
 				m_bDesignViewOn = ( SendMessage( m_hwndToolbar, TB_GETSTATE, wParam, 0 ) & TBSTATE_CHECKED ) != 0;
 				SetDesignDocOn( m_bDesignViewOn );	// per-document memory
 				SaveProfile();				// persists the global flag for cross-session restore
 				ApplyToggleStates();
-				m_bDesignActual = m_bDesignViewOn;
-				RbLogF( "design click: want=%d -> EEID_MARKDOWN_VIEW", (int)m_bDesignViewOn );
-				PostMessage( m_hWnd, WM_COMMAND, MAKEWPARAM( EEID_MARKDOWN_VIEW, 0 ), 0 );
+				Editor_Info( m_hWnd, EI_SET_MARKDOWN_PREVIEW, (LPARAM)( m_bDesignViewOn ? 1 : 0 ) );
+				BOOL bLive = Editor_Info( m_hWnd, EI_GET_MARKDOWN_PREVIEW, 0 );
+				RbLogF( "design click: want=%d set408 live=%d", (int)m_bDesignViewOn, (int)bLive );
+				m_bDesignActual = !!bLive;
+				if( !!bLive != m_bDesignViewOn ){
+					RbLogF( "design click: 408 no-op -> 23255 fallback" );
+					PostMessage( m_hWnd, WM_COMMAND, MAKEWPARAM( EEID_MARKDOWN_VIEW, 0 ), 0 );
+					m_bDesignActual = m_bDesignViewOn;
+				}
 			}
 			else if( cmd.m_iCmd == CMD_PREVIEW ){
 				// our own live preview pane: the control state IS the wanted
