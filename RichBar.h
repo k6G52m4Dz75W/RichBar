@@ -2833,6 +2833,7 @@ public:
 					m_bDesignActual = bWant;
 				}
 				m_bDesignViewOn = bWant;
+				SaveProfile();	// the flag must match the last-active doc at exit
 			}
 			{
 				bool bWant = IsPreviewDocOn();
@@ -3271,6 +3272,17 @@ public:
 			m_bAutoDisplay = !!GetProfileInt( _T("AutoDisplay"), FALSE );
 			m_bDesignViewOn = !!GetProfileInt( _T("DesignViewOn"), FALSE );
 			m_bPreviewOn = !!GetProfileInt( _T("PreviewOn"), FALSE );
+			{
+				WCHAR szDocs[4096];
+				GetProfileString( _T("DesignDocs"), szDocs, _countof( szDocs ), _T("") );
+				m_vDesignDocs.clear();
+				for( LPWSTR pszCtx = NULL, pszTok = wcstok_s( szDocs, L"\n", &pszCtx ); pszTok;
+					pszTok = wcstok_s( NULL, L"\n", &pszCtx ) ){
+					if( pszTok[0] ){
+						m_vDesignDocs.push_back( pszTok );
+					}
+				}
+			}
 			m_bCustomIconColor = !!GetProfileInt( _T("IconColorMode"), FALSE );
 			m_crCustomIcon = (COLORREF)GetProfileInt( _T("IconColor"), (int)RGB( 224, 224, 224 ) );
 			m_cx = GetProfileInt( _T("cx"), 0 );
@@ -3291,6 +3303,18 @@ public:
 		WriteProfileInt( _T("AutoDisplay"), !!m_bAutoDisplay );
 		WriteProfileInt( _T("DesignViewOn"), !!m_bDesignViewOn );
 		WriteProfileInt( _T("PreviewOn"), !!m_bPreviewOn );
+		{
+			// per-document design-view memory, cross-session (paths never
+			// contain newlines, so \n is a safe separator)
+			tstring sDocs;
+			for( size_t i = 0; i < m_vDesignDocs.size(); i++ ){
+				if( i > 0 ){
+					sDocs += _T("\n");
+				}
+				sDocs += m_vDesignDocs[i];
+			}
+			WriteProfileString( _T("DesignDocs"), sDocs.c_str() );
+		}
 		WriteProfileInt( _T("IconColorMode"), !!m_bCustomIconColor );
 		WriteProfileInt( _T("IconColorMode"), !!m_bCustomIconColor );
 		WriteProfileInt( _T("IconColor"), (int)m_crCustomIcon );
