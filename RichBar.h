@@ -439,6 +439,7 @@ public:
 	EventRegistrationToken m_tWV2ResReq;
 	bool m_bWV2InitFailed;		// loader/runtime missing: Preview falls back to the official command
 	vector<tstring> m_vPreviewDocs;	// documents (by name key) whose preview the user turned ON
+	vector<tstring> m_vDesignDocs;	// documents (by name key) whose design view is on
 	bool m_bWV2InitPending;		// environment creation in flight
 	UINT m_nHoverMenuCmd;		// dropdown command waiting for the hover-open timer
 	UINT m_nLastMenuCmd;		// dropdown whose menu closed last; reopen only after the mouse leaves it
@@ -2464,6 +2465,34 @@ public:
 		return tstring( _T("<untitled>") );	// untitled documents share one slot
 	}
 
+	bool IsDesignDocOn()
+	{
+		tstring sKey = CurrentDocKey();
+		for( size_t i = 0; i < m_vDesignDocs.size(); i++ ){
+			if( m_vDesignDocs[i] == sKey ){
+				return true;
+			}
+		}
+		return false;
+	}
+
+	void SetDesignDocOn( bool bOn )
+	{
+		tstring sKey = CurrentDocKey();
+		for( size_t i = 0; i < m_vDesignDocs.size(); i++ ){
+			if( m_vDesignDocs[i] == sKey ){
+				if( bOn ){
+					return;
+				}
+				m_vDesignDocs.erase( m_vDesignDocs.begin() + i );
+				return;
+			}
+		}
+		if( bOn ){
+			m_vDesignDocs.push_back( sKey );
+		}
+	}
+
 	bool IsPreviewDocOn()
 	{
 		tstring sKey = CurrentDocKey();
@@ -2791,9 +2820,10 @@ public:
 			// any document or configuration change returns the bar to auto detection
 			m_iModeOverride = -1;
 			int iNewMode = DetectMode();
-			// the design view is a VIEW-level flag (like word-wrap): it stays on
-			// across document switches, so the button keeps its state here —
-			// only the PREVIEW follows the document (per-doc memory below)
+			// the design view is PER-DOCUMENT (user-verified against the official
+			// button): restore this document's remembered state — toggles made
+			// from EmEditor's own UI are not visible to us and can desync
+			m_bDesignViewOn = IsDesignDocOn();
 			{
 				bool bWant = IsPreviewDocOn();
 				bool bPane = IsOfficialPaneVisible();
@@ -3705,6 +3735,7 @@ public:
 				// them aligned. 407 is NOT consulted: it never tracks the
 				// design view (returned 0 even while the view was visibly on)
 				m_bDesignViewOn = ( SendMessage( m_hwndToolbar, TB_GETSTATE, wParam, 0 ) & TBSTATE_CHECKED ) != 0;
+				SetDesignDocOn( m_bDesignViewOn );	// per-document memory
 				SaveProfile();
 				ApplyToggleStates();
 				RbLogF( "design click: want=%d -> EEID_MARKDOWN_VIEW", (int)m_bDesignViewOn );
