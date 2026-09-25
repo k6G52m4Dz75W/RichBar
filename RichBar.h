@@ -2633,14 +2633,12 @@ public:
 			RbLogF( "startup restore: preview (mode=%d) -> official 23275", m_iMode );
 			PostMessage( m_hWnd, WM_COMMAND, MAKEWPARAM( EEID_MARKDOWN_PREVIEW, 0 ), 0 );
 		}
-		if( m_bDesignViewOn ){
-			// EmEditor persists no design-view state (registry runtime diff), so
-			// a fresh session always starts with the view OFF: our flag is the
-			// memory and one toggle turns it on
-			RbLogF( "startup restore: design view" );
-			PostMessage( m_hWnd, WM_COMMAND, MAKEWPARAM( EEID_MARKDOWN_VIEW, 0 ), 0 );
-			m_bDesignActual = true;
-		}
+		SyncPreviewToPane();	// EmEditor may have restored the pane itself; align the button
+		// EmEditor ITSELF restores the design view across sessions (user-verified;
+		// the persistence lives outside the registry). Posting 23255 here would
+		// DOUBLE-TOGGLE it off — instead trust the restore and align our model
+		m_bDesignActual = m_bDesignViewOn != FALSE;
+		RbLogF( "startup restore: design model=%d (EmEditor restores the view)", (int)m_bDesignActual );
 	}
 
 
