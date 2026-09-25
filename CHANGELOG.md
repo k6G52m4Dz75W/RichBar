@@ -15,16 +15,6 @@ this code base:
 | `0.9.0` – `0.17.x` | The HTML + Markdown dual-mode toolbar, heading towards `1.0.0`. |
 
 
-## [0.23.7] - 2026-09-25
-
-### Fixed
-
-- 408 confirmed to drive an invisible internal flag (design click had
-  zero effect) — the design view toggles back via 23255, now followed
-  immediately by 23274 (the Markdown bar's own show/hide toggle) so the
-  bar that 23255 auto-shows is put away again (the resurrected official
-  toolbar).
-
 ## [0.23.6] - 2026-09-25
 
 ### Changed
