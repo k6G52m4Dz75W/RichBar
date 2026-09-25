@@ -185,7 +185,6 @@ WCHAR OctToDec( LPWSTR& p )
 #define IDT_PREVIEW_REFRESH		3
 // one-shot deferred design-view reconcile (m_hDlg): a 23255 posted during
 // the document-switch event lands before the switch settles and misapplies
-#define IDT_DESIGN_SYNC			4
 // runtime-drawn glyphs appended to every toolbar image list
 #define MD_ICON_MODE_H			23
 #define MD_ICON_MODE_M			24
@@ -443,9 +442,6 @@ public:
 	EventRegistrationToken m_tWV2ResReq;
 	bool m_bWV2InitFailed;		// loader/runtime missing: Preview falls back to the official command
 	vector<tstring> m_vPreviewDocs;	// documents (by name key) whose preview the user turned ON
-	vector<tstring> m_vDesignDocs;	// documents (by name key) whose design view is on
-	bool m_bDesignActual;		// our model of the view's ACTUAL design-view state
-	bool m_bDesignPendingWant;	// desired state armed by the last doc switch
 	bool m_bWV2InitPending;		// environment creation in flight
 	UINT m_nHoverMenuCmd;		// dropdown command waiting for the hover-open timer
 	UINT m_nLastMenuCmd;		// dropdown whose menu closed last; reopen only after the mouse leaves it
@@ -2471,34 +2467,6 @@ public:
 		return tstring( _T("<untitled>") );	// untitled documents share one slot
 	}
 
-	bool IsDesignDocOn()
-	{
-		tstring sKey = CurrentDocKey();
-		for( size_t i = 0; i < m_vDesignDocs.size(); i++ ){
-			if( m_vDesignDocs[i] == sKey ){
-				return true;
-			}
-		}
-		return false;
-	}
-
-	void SetDesignDocOn( bool bOn )
-	{
-		tstring sKey = CurrentDocKey();
-		for( size_t i = 0; i < m_vDesignDocs.size(); i++ ){
-			if( m_vDesignDocs[i] == sKey ){
-				if( bOn ){
-					return;
-				}
-				m_vDesignDocs.erase( m_vDesignDocs.begin() + i );
-				return;
-			}
-		}
-		if( bOn ){
-			m_vDesignDocs.push_back( sKey );
-		}
-	}
-
 	bool IsPreviewDocOn()
 	{
 		tstring sKey = CurrentDocKey();
@@ -2625,19 +2593,6 @@ public:
 		}
 	}
 
-	// deferred design-view reconcile: the switch has settled by now, so a
-	// toggle here applies to the INCOMING document
-	void OnDesignSyncTimer()
-	{
-		bool bWant = IsDesignDocOn();
-		m_bDesignViewOn = bWant;
-		ApplyToggleStates();
-		if( bWant != m_bDesignActual ){
-			RbLogF( "design sync: want=%d actual=%d -> 23255", (int)bWant, (int)m_bDesignActual );
-			PostMessage( m_hWnd, WM_COMMAND, MAKEWPARAM( EEID_MARKDOWN_VIEW, 0 ), 0 );
-			m_bDesignActual = bWant;
-		}
-	}
 
 	// one-shot startup restore: reopen the panes that were on when the
 	// previous session ended (EmEditor persists neither pane itself —
@@ -2653,11 +2608,14 @@ public:
 			PostMessage( m_hWnd, WM_COMMAND, MAKEWPARAM( EEID_MARKDOWN_PREVIEW, 0 ), 0 );
 		}
 		SyncPreviewToPane();	// EmEditor may have restored the pane itself; align the button
-		// EmEditor ITSELF restores the design view across sessions (user-verified;
-		// the persistence lives outside the registry). Posting 23255 here would
-		// DOUBLE-TOGGLE it off — instead trust the restore and align our model
-		m_bDesignActual = m_bDesignViewOn != FALSE;
-		RbLogF( "startup restore: design model=%d (EmEditor restores the view)", (int)m_bDesignActual );
+		// EmEditor restores the design view itself; query the command status
+		// and align the button
+		{
+			BOOL bChecked = FALSE;
+			Editor_QueryStatus( m_hWnd, EEID_MARKDOWN_VIEW, &bChecked );
+			m_bDesignViewOn = bChecked != FALSE;
+			ApplyToggleStates();
+		}
 	}
 
 
@@ -2839,21 +2797,14 @@ public:
 			// any document or configuration change returns the bar to auto detection
 			m_iModeOverride = -1;
 			int iNewMode = DetectMode();
-			// the design view is PER-DOCUMENT (user-verified against the official
-			// button): restore this document's remembered state — toggles made
-			// from EmEditor's own UI are not visible to us and can desync
+			// follow the document, exactly like the official button: query the
+			// built-in command's REAL per-document checked state (EE_QUERY_STATUS,
+			// the official status query used by EmEditor's own toolbar buttons)
 			{
-				bool bWant = IsDesignDocOn();
-				// the button follows the memory immediately; the ACTUAL reconcile
-				// is deferred — a 23255 posted during the switch event lands
-				// before the switch settles and misapplies (the scrambling)
-				m_bDesignViewOn = bWant;
+				BOOL bChecked = FALSE;
+				Editor_QueryStatus( m_hWnd, EEID_MARKDOWN_VIEW, &bChecked );
+				m_bDesignViewOn = bChecked != FALSE;
 				ApplyToggleStates();
-				SaveProfile();	// the flag must match the last-active doc at exit
-				m_bDesignPendingWant = bWant;
-				if( m_hDlg ){
-					SetTimer( m_hDlg, IDT_DESIGN_SYNC, 200, NULL );
-				}
 			}
 			{
 				bool bWant = IsPreviewDocOn();
@@ -3000,8 +2951,6 @@ public:
 		m_crCustomIcon = RGB( 224, 224, 224 );
 		m_bIconColorDirty = false;
 		m_bDesignViewOn = false;
-		m_bDesignActual = false;	// a fresh session always starts with the view off
-		m_bDesignPendingWant = false;
 		m_bPreviewOn = false;
 		m_bPanesRestored = false;
 		m_nPreviewBarID = 0;
@@ -3293,17 +3242,6 @@ public:
 			m_bAutoDisplay = !!GetProfileInt( _T("AutoDisplay"), FALSE );
 			m_bDesignViewOn = !!GetProfileInt( _T("DesignViewOn"), FALSE );
 			m_bPreviewOn = !!GetProfileInt( _T("PreviewOn"), FALSE );
-			{
-				WCHAR szDocs[4096];
-				GetProfileString( _T("DesignDocs"), szDocs, _countof( szDocs ), _T("") );
-				m_vDesignDocs.clear();
-				for( LPWSTR pszCtx = NULL, pszTok = wcstok_s( szDocs, L"\n", &pszCtx ); pszTok;
-					pszTok = wcstok_s( NULL, L"\n", &pszCtx ) ){
-					if( pszTok[0] ){
-						m_vDesignDocs.push_back( pszTok );
-					}
-				}
-			}
 			m_bCustomIconColor = !!GetProfileInt( _T("IconColorMode"), FALSE );
 			m_crCustomIcon = (COLORREF)GetProfileInt( _T("IconColor"), (int)RGB( 224, 224, 224 ) );
 			m_cx = GetProfileInt( _T("cx"), 0 );
@@ -3324,21 +3262,6 @@ public:
 		WriteProfileInt( _T("AutoDisplay"), !!m_bAutoDisplay );
 		WriteProfileInt( _T("DesignViewOn"), !!m_bDesignViewOn );
 		WriteProfileInt( _T("PreviewOn"), !!m_bPreviewOn );
-		{
-			// per-document design-view memory, cross-session (paths never
-			// contain newlines, so \n is a safe separator)
-			tstring sDocs;
-			for( size_t i = 0; i < m_vDesignDocs.size(); i++ ){
-				if( m_vDesignDocs[i].find( _T("\\") ) == tstring::npos ){
-					continue;	// title-only name (untitled): session-scope only
-				}
-				if( i > 0 && sDocs.size() > 0 ){
-					sDocs += _T("\n");
-				}
-				sDocs += m_vDesignDocs[i];
-			}
-			WriteProfileString( _T("DesignDocs"), sDocs.c_str() );
-		}
 		WriteProfileInt( _T("IconColorMode"), !!m_bCustomIconColor );
 		WriteProfileInt( _T("IconColorMode"), !!m_bCustomIconColor );
 		WriteProfileInt( _T("IconColor"), (int)m_crCustomIcon );
@@ -3790,22 +3713,19 @@ public:
 			}
 			else if( cmd.m_iCmd == CMD_MD_VIEW ){
 				// BTNS_CHECK toggled the control state before this command
-				// arrived: that is the WANTED state. PRIMARY setter is the
-				// value-based EI_SET_MARKDOWN_PREVIEW (official EE_INFO docs;
-				// self-consistent with 407, no toggle). FALLBACK: if the set
-				// did not take, use the 23255 toggle command
-				m_bDesignViewOn = ( SendMessage( m_hwndToolbar, TB_GETSTATE, wParam, 0 ) & TBSTATE_CHECKED ) != 0;
-				SetDesignDocOn( m_bDesignViewOn );	// per-document memory
-				SaveProfile();				// persists the global flag for cross-session restore
+				// arrived: that is the WANTED state. The ACTUAL state of the
+				// built-in command is queryable via EE_QUERY_STATUS (the
+				// official status query EmEditor's own toolbar buttons use);
+				// the 23255 toggle fires only on disagreement
+				BOOL bChecked = FALSE;
+				Editor_QueryStatus( m_hWnd, EEID_MARKDOWN_VIEW, &bChecked );
+				bool bWant = ( SendMessage( m_hwndToolbar, TB_GETSTATE, wParam, 0 ) & TBSTATE_CHECKED ) != 0;
+				m_bDesignViewOn = bWant;
+				SaveProfile();
 				ApplyToggleStates();
-				Editor_Info( m_hWnd, EI_SET_MARKDOWN_PREVIEW, (LPARAM)( m_bDesignViewOn ? 1 : 0 ) );
-				BOOL bLive = Editor_Info( m_hWnd, EI_GET_MARKDOWN_PREVIEW, 0 );
-				RbLogF( "design click: want=%d set408 live=%d", (int)m_bDesignViewOn, (int)bLive );
-				m_bDesignActual = !!bLive;
-				if( !!bLive != m_bDesignViewOn ){
-					RbLogF( "design click: 408 no-op -> 23255 fallback" );
+				RbLogF( "design click: want=%d status=%d", (int)bWant, (int)bChecked );
+				if( ( bChecked != FALSE ) != bWant ){
 					PostMessage( m_hWnd, WM_COMMAND, MAKEWPARAM( EEID_MARKDOWN_VIEW, 0 ), 0 );
-					m_bDesignActual = m_bDesignViewOn;
 				}
 			}
 			else if( cmd.m_iCmd == CMD_PREVIEW ){
@@ -4824,14 +4744,6 @@ INT_PTR CALLBACK NewProc( HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam )
 				CMyFrame* pFrame = static_cast<CMyFrame*>(GetFrame( hwnd ));
 				if( pFrame ){
 					pFrame->OnStartupRestore();
-				}
-				return 0;
-			}
-			else if( wParam == IDT_DESIGN_SYNC ){
-				KillTimer( hwnd, IDT_DESIGN_SYNC );
-				CMyFrame* pFrame = static_cast<CMyFrame*>(GetFrame( hwnd ));
-				if( pFrame ){
-					pFrame->OnDesignSyncTimer();
 				}
 				return 0;
 			}

@@ -15,6 +15,20 @@ this code base:
 | `0.9.0` – `0.17.x` | The HTML + Markdown dual-mode toolbar, heading towards `1.0.0`. |
 
 
+## [0.24.0] - 2026-09-25
+
+### Changed
+
+- **The design view now uses the official STATUS QUERY**
+  (EE_QUERY_STATUS / Editor_QueryStatus — the same mechanism EmEditor's
+  own toolbar buttons use): the real per-document checked state of
+  EEID_MARKDOWN_VIEW is queried on every document switch, at startup,
+  and on every click; the 23255 toggle fires only when the button and the
+  queried state disagree. The entire self-bookkeeping state machine
+  (per-document memory lists, deferred reconcile timers, the runtime
+  actual-state model) is REMOVED — the query is the truth. This also
+  makes toggles from EmEditor's own UI fully visible to us.
+
 ## [0.23.6] - 2026-09-25
 
 ### Changed
