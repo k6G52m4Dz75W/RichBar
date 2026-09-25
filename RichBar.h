@@ -182,6 +182,9 @@ WCHAR OctToDec( LPWSTR& p )
 #define IDT_STARTUP_RESTORE		2
 // preview auto-refresh debounce (m_hDlg): one reload after typing pauses
 #define IDT_PREVIEW_REFRESH		3
+// one-shot delayed per-document state query (m_hDlg): 407 lags right after
+// a document switch, so the reconciliation runs a moment later
+#define IDT_DOC_SYNC			4
 // runtime-drawn glyphs appended to every toolbar image list
 #define MD_ICON_MODE_H			23
 #define MD_ICON_MODE_M			24
@@ -2590,6 +2593,19 @@ public:
 		}
 	}
 
+	// one-shot delayed per-document state query: by now EmEditor has
+	// settled the new document's design view; realign the button (no
+	// commands — only the display follows)
+	void OnDocSyncTimer()
+	{
+		BOOL bLive = Editor_Info( m_hWnd, EI_GET_MARKDOWN_PREVIEW, 0 );
+		if( ( bLive != FALSE ) != m_bDesignViewOn ){
+			RbLogF( "doc sync: live=%d designOn=%d", (int)bLive, (int)m_bDesignViewOn );
+			m_bDesignViewOn = bLive != FALSE;
+			ApplyToggleStates();
+		}
+	}
+
 	// one-shot startup restore: reopen the panes that were on when the
 	// previous session ended (EmEditor persists neither pane itself —
 	// verified by registry runtime diff — so our profile flags are the memory)
@@ -2604,8 +2620,16 @@ public:
 			PostMessage( m_hWnd, WM_COMMAND, MAKEWPARAM( EEID_MARKDOWN_PREVIEW, 0 ), 0 );
 		}
 		if( m_bDesignViewOn ){
-			RbLogF( "startup restore: design view" );
-			PostMessage( m_hWnd, WM_COMMAND, MAKEWPARAM( EEID_MARKDOWN_VIEW, 0 ), 0 );
+			BOOL bLive = Editor_Info( m_hWnd, EI_GET_MARKDOWN_PREVIEW, 0 );
+			if( !bLive ){
+				RbLogF( "startup restore: design view" );
+				PostMessage( m_hWnd, WM_COMMAND, MAKEWPARAM( EEID_MARKDOWN_VIEW, 0 ), 0 );
+			}
+			else {
+				m_bDesignViewOn = false;	// EmEditor already restored it; realign to live
+				ApplyToggleStates();
+				RbLogF( "startup restore: design view already on, realigned" );
+			}
 		}
 	}
 
@@ -2791,7 +2815,9 @@ public:
 			// follow the document, like the official buttons: the design view
 			// state is per-document (one query, not the flapping poll), and the
 			// preview pane is toggled to match the new document's memory
-			m_bDesignViewOn = Editor_Info( m_hWnd, EI_GET_MARKDOWN_PREVIEW, 0 ) != FALSE;
+			if( m_hDlg ){
+				SetTimer( m_hDlg, IDT_DOC_SYNC, 300, NULL );	// 407 lags right after a switch
+			}
 			{
 				bool bWant = IsPreviewDocOn();
 				bool bPane = IsOfficialPaneVisible();
@@ -3698,15 +3724,22 @@ public:
 			}
 			else if( cmd.m_iCmd == CMD_MD_VIEW ){
 				// BTNS_CHECK toggled the control state before this command
-				// arrived: the control is the source of truth, and one click
-				// is exactly one toggle of the built-in command. The 407
-				// query is deliberately NOT consulted here — it lags and
-				// flaps, and reconciling against it used to undo the click
-				m_bDesignViewOn = ( SendMessage( m_hwndToolbar, TB_GETSTATE, wParam, 0 ) & TBSTATE_CHECKED ) != 0;
+				// arrived: that is the WANTED state. 23255 is a TOGGLE, so it
+				// is posted only when the LIVE state disagrees — posting
+				// unconditionally inverted the view whenever the button was
+				// misaligned (the reported reversed pressed state)
+				bool bWant = ( SendMessage( m_hwndToolbar, TB_GETSTATE, wParam, 0 ) & TBSTATE_CHECKED ) != 0;
+				BOOL bLive = Editor_Info( m_hWnd, EI_GET_MARKDOWN_PREVIEW, 0 );
+				m_bDesignViewOn = bWant;
 				SaveProfile();
 				ApplyToggleStates();
-				RbLogF( "design click: want=%d -> EEID_MARKDOWN_VIEW", (int)m_bDesignViewOn );
-				PostMessage( m_hWnd, WM_COMMAND, MAKEWPARAM( EEID_MARKDOWN_VIEW, 0 ), 0 );
+				if( !!bLive != bWant ){
+					RbLogF( "design click: want=%d live=%d -> EEID_MARKDOWN_VIEW", (int)bWant, (int)bLive );
+					PostMessage( m_hWnd, WM_COMMAND, MAKEWPARAM( EEID_MARKDOWN_VIEW, 0 ), 0 );
+				}
+				else {
+					RbLogF( "design click: want=%d live=%d (aligned, no post)", (int)bWant, (int)bLive );
+				}
 			}
 			else if( cmd.m_iCmd == CMD_PREVIEW ){
 				// our own live preview pane: the control state IS the wanted
@@ -4724,6 +4757,14 @@ INT_PTR CALLBACK NewProc( HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam )
 				CMyFrame* pFrame = static_cast<CMyFrame*>(GetFrame( hwnd ));
 				if( pFrame ){
 					pFrame->OnStartupRestore();
+				}
+				return 0;
+			}
+			else if( wParam == IDT_DOC_SYNC ){
+				KillTimer( hwnd, IDT_DOC_SYNC );
+				CMyFrame* pFrame = static_cast<CMyFrame*>(GetFrame( hwnd ));
+				if( pFrame ){
+					pFrame->OnDocSyncTimer();
 				}
 				return 0;
 			}
