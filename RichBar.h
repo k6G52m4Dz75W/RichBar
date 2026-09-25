@@ -182,9 +182,6 @@ WCHAR OctToDec( LPWSTR& p )
 #define IDT_STARTUP_RESTORE		2
 // preview auto-refresh debounce (m_hDlg): one reload after typing pauses
 #define IDT_PREVIEW_REFRESH		3
-// one-shot delayed per-document state query (m_hDlg): 407 lags right after
-// a document switch, so the reconciliation runs a moment later
-#define IDT_DOC_SYNC			4
 // runtime-drawn glyphs appended to every toolbar image list
 #define MD_ICON_MODE_H			23
 #define MD_ICON_MODE_M			24
@@ -442,6 +439,7 @@ public:
 	EventRegistrationToken m_tWV2ResReq;
 	bool m_bWV2InitFailed;		// loader/runtime missing: Preview falls back to the official command
 	vector<tstring> m_vPreviewDocs;	// documents (by name key) whose preview the user turned ON
+	vector<tstring> m_vDesignDocs;	// documents (by name key) whose design view the user turned ON
 	bool m_bWV2InitPending;		// environment creation in flight
 	UINT m_nHoverMenuCmd;		// dropdown command waiting for the hover-open timer
 	UINT m_nLastMenuCmd;		// dropdown whose menu closed last; reopen only after the mouse leaves it
@@ -2467,6 +2465,34 @@ public:
 		return tstring( _T("<untitled>") );	// untitled documents share one slot
 	}
 
+	bool IsDesignDocOn()
+	{
+		tstring sKey = CurrentDocKey();
+		for( size_t i = 0; i < m_vDesignDocs.size(); i++ ){
+			if( m_vDesignDocs[i] == sKey ){
+				return true;
+			}
+		}
+		return false;
+	}
+
+	void SetDesignDocOn( bool bOn )
+	{
+		tstring sKey = CurrentDocKey();
+		for( size_t i = 0; i < m_vDesignDocs.size(); i++ ){
+			if( m_vDesignDocs[i] == sKey ){
+				if( bOn ){
+					return;
+				}
+				m_vDesignDocs.erase( m_vDesignDocs.begin() + i );
+				return;
+			}
+		}
+		if( bOn ){
+			m_vDesignDocs.push_back( sKey );
+		}
+	}
+
 	bool IsPreviewDocOn()
 	{
 		tstring sKey = CurrentDocKey();
@@ -2593,19 +2619,6 @@ public:
 		}
 	}
 
-	// one-shot delayed per-document state query: by now EmEditor has
-	// settled the new document's design view; realign the button (no
-	// commands — only the display follows)
-	void OnDocSyncTimer()
-	{
-		BOOL bLive = Editor_Info( m_hWnd, EI_GET_MARKDOWN_PREVIEW, 0 );
-		if( ( bLive != FALSE ) != m_bDesignViewOn ){
-			RbLogF( "doc sync: live=%d designOn=%d", (int)bLive, (int)m_bDesignViewOn );
-			m_bDesignViewOn = bLive != FALSE;
-			ApplyToggleStates();
-		}
-	}
-
 	// one-shot startup restore: reopen the panes that were on when the
 	// previous session ended (EmEditor persists neither pane itself —
 	// verified by registry runtime diff — so our profile flags are the memory)
@@ -2620,16 +2633,11 @@ public:
 			PostMessage( m_hWnd, WM_COMMAND, MAKEWPARAM( EEID_MARKDOWN_PREVIEW, 0 ), 0 );
 		}
 		if( m_bDesignViewOn ){
-			BOOL bLive = Editor_Info( m_hWnd, EI_GET_MARKDOWN_PREVIEW, 0 );
-			if( !bLive ){
-				RbLogF( "startup restore: design view" );
-				PostMessage( m_hWnd, WM_COMMAND, MAKEWPARAM( EEID_MARKDOWN_VIEW, 0 ), 0 );
-			}
-			else {
-				m_bDesignViewOn = false;	// EmEditor already restored it; realign to live
-				ApplyToggleStates();
-				RbLogF( "startup restore: design view already on, realigned" );
-			}
+			// EmEditor persists no design-view state (registry runtime diff), so
+			// a fresh session always starts with the view OFF: our flag is the
+			// memory and one toggle turns it on
+			RbLogF( "startup restore: design view" );
+			PostMessage( m_hWnd, WM_COMMAND, MAKEWPARAM( EEID_MARKDOWN_VIEW, 0 ), 0 );
 		}
 	}
 
@@ -2813,11 +2821,10 @@ public:
 			m_iModeOverride = -1;
 			int iNewMode = DetectMode();
 			// follow the document, like the official buttons: the design view
-			// state is per-document (one query, not the flapping poll), and the
-			// preview pane is toggled to match the new document's memory
-			if( m_hDlg ){
-				SetTimer( m_hDlg, IDT_DOC_SYNC, 300, NULL );	// 407 lags right after a switch
-			}
+			// state is OUR per-document memory (no SDK query exists — 407 never
+			// tracks it), and the preview pane is toggled to match the new
+			// document's memory
+			m_bDesignViewOn = IsDesignDocOn();
 			{
 				bool bWant = IsPreviewDocOn();
 				bool bPane = IsOfficialPaneVisible();
@@ -3724,22 +3731,16 @@ public:
 			}
 			else if( cmd.m_iCmd == CMD_MD_VIEW ){
 				// BTNS_CHECK toggled the control state before this command
-				// arrived: that is the WANTED state. 23255 is a TOGGLE, so it
-				// is posted only when the LIVE state disagrees — posting
-				// unconditionally inverted the view whenever the button was
-				// misaligned (the reported reversed pressed state)
-				bool bWant = ( SendMessage( m_hwndToolbar, TB_GETSTATE, wParam, 0 ) & TBSTATE_CHECKED ) != 0;
-				BOOL bLive = Editor_Info( m_hWnd, EI_GET_MARKDOWN_PREVIEW, 0 );
-				m_bDesignViewOn = bWant;
+				// arrived; 23255 toggles the view. Button and state flip in the
+				// SAME direction on every click, so an unconditional post keeps
+				// them aligned. 407 is NOT consulted: it never tracks the
+				// design view (returned 0 even while the view was visibly on)
+				m_bDesignViewOn = ( SendMessage( m_hwndToolbar, TB_GETSTATE, wParam, 0 ) & TBSTATE_CHECKED ) != 0;
+				SetDesignDocOn( m_bDesignViewOn );
 				SaveProfile();
 				ApplyToggleStates();
-				if( !!bLive != bWant ){
-					RbLogF( "design click: want=%d live=%d -> EEID_MARKDOWN_VIEW", (int)bWant, (int)bLive );
-					PostMessage( m_hWnd, WM_COMMAND, MAKEWPARAM( EEID_MARKDOWN_VIEW, 0 ), 0 );
-				}
-				else {
-					RbLogF( "design click: want=%d live=%d (aligned, no post)", (int)bWant, (int)bLive );
-				}
+				RbLogF( "design click: want=%d -> EEID_MARKDOWN_VIEW", (int)m_bDesignViewOn );
+				PostMessage( m_hWnd, WM_COMMAND, MAKEWPARAM( EEID_MARKDOWN_VIEW, 0 ), 0 );
 			}
 			else if( cmd.m_iCmd == CMD_PREVIEW ){
 				// our own live preview pane: the control state IS the wanted
@@ -4757,14 +4758,6 @@ INT_PTR CALLBACK NewProc( HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam )
 				CMyFrame* pFrame = static_cast<CMyFrame*>(GetFrame( hwnd ));
 				if( pFrame ){
 					pFrame->OnStartupRestore();
-				}
-				return 0;
-			}
-			else if( wParam == IDT_DOC_SYNC ){
-				KillTimer( hwnd, IDT_DOC_SYNC );
-				CMyFrame* pFrame = static_cast<CMyFrame*>(GetFrame( hwnd ));
-				if( pFrame ){
-					pFrame->OnDocSyncTimer();
 				}
 				return 0;
 			}
