@@ -438,6 +438,7 @@ public:
 	ICoreWebView2* m_pWV2;
 	EventRegistrationToken m_tWV2ResReq;
 	bool m_bWV2InitFailed;		// loader/runtime missing: Preview falls back to the official command
+	vector<tstring> m_vPreviewDocs;	// documents (by name key) whose preview the user turned ON
 	bool m_bWV2InitPending;		// environment creation in flight
 	UINT m_nHoverMenuCmd;		// dropdown command waiting for the hover-open timer
 	UINT m_nLastMenuCmd;		// dropdown whose menu closed last; reopen only after the mouse leaves it
@@ -2452,6 +2453,45 @@ public:
 		return FALSE;
 	}
 
+	// identity of the active document for per-document button state
+	tstring CurrentDocKey()
+	{
+		TCHAR szFile[MAX_PATH] = { 0 };
+		Editor_Info( m_hWnd, EI_GET_FILE_NAMEW, (LPARAM)szFile );
+		if( szFile[0] ){
+			return tstring( szFile );
+		}
+		return tstring( _T("<untitled>") );	// untitled documents share one slot
+	}
+
+	bool IsPreviewDocOn()
+	{
+		tstring sKey = CurrentDocKey();
+		for( size_t i = 0; i < m_vPreviewDocs.size(); i++ ){
+			if( m_vPreviewDocs[i] == sKey ){
+				return true;
+			}
+		}
+		return false;
+	}
+
+	void SetPreviewDocOn( bool bOn )
+	{
+		tstring sKey = CurrentDocKey();
+		for( size_t i = 0; i < m_vPreviewDocs.size(); i++ ){
+			if( m_vPreviewDocs[i] == sKey ){
+				if( bOn ){
+					return;
+				}
+				m_vPreviewDocs.erase( m_vPreviewDocs.begin() + i );
+				return;
+			}
+		}
+		if( bOn ){
+			m_vPreviewDocs.push_back( sKey );
+		}
+	}
+
 	bool IsOfficialPaneVisible()
 	{
 		HWND hwndPane = NULL;
@@ -2748,8 +2788,21 @@ public:
 			// any document or configuration change returns the bar to auto detection
 			m_iModeOverride = -1;
 			int iNewMode = DetectMode();
-			if( IsLivePreviewOpen() ){
-				NavigateLivePreview();	// new document/mode: retarget the pane
+			// follow the document, like the official buttons: the design view
+			// state is per-document (one query, not the flapping poll), and the
+			// preview pane is toggled to match the new document's memory
+			m_bDesignViewOn = Editor_Info( m_hWnd, EI_GET_MARKDOWN_PREVIEW, 0 ) != FALSE;
+			{
+				bool bWant = IsPreviewDocOn();
+				bool bPane = IsOfficialPaneVisible();
+				m_bPreviewOn = bWant;
+				if( bWant != bPane ){
+					RbLogF( "doc switch: preview want=%d pane=%d -> 23275", (int)bWant, (int)bPane );
+					PostMessage( m_hWnd, WM_COMMAND, MAKEWPARAM( EEID_MARKDOWN_PREVIEW, 0 ), 0 );
+				}
+			}
+			if( m_hwndToolbar ){
+				ApplyToggleStates();
 			}
 			if( iNewMode != m_iMode ){
 				m_iMode = iNewMode;
@@ -3660,6 +3713,7 @@ public:
 				// state and the bar follows it directly
 				bool bWant = ( SendMessage( m_hwndToolbar, TB_GETSTATE, wParam, 0 ) & TBSTATE_CHECKED ) != 0;
 				bool bPane = IsOfficialPaneVisible();
+				SetPreviewDocOn( bWant );	// per-document memory (follows the doc)
 				m_bPreviewOn = bWant;
 				SaveProfile();
 				ApplyToggleStates();
