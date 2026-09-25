@@ -2524,9 +2524,9 @@ public:
 			return;
 		}
 		m_bPanesRestored = true;
-		if( m_bPreviewOn && !IsLivePreviewOpen() ){
-			RbLogF( "startup restore: preview (mode=%d)", m_iMode );
-			OpenLivePreview();
+		if( m_bPreviewOn ){
+			RbLogF( "startup restore: preview (mode=%d) -> official 23275", m_iMode );
+			PostMessage( m_hWnd, WM_COMMAND, MAKEWPARAM( EEID_MARKDOWN_PREVIEW, 0 ), 0 );
 		}
 		if( m_bDesignViewOn ){
 			RbLogF( "startup restore: design view" );
@@ -3628,13 +3628,8 @@ public:
 				SaveProfile();
 				ApplyToggleStates();
 				if( bWant != bPane ){
-					RbLogF( "preview click: want=%d pane=%d", (int)bWant, (int)bPane );
-					if( bWant ){
-						OpenLivePreview();
-					}
-					else {
-						CloseLivePreview();
-					}
+					RbLogF( "preview click: want=%d -> official 23275 (WebView2 pane dormant)", (int)bWant );
+					PostMessage( m_hWnd, WM_COMMAND, MAKEWPARAM( EEID_MARKDOWN_PREVIEW, 0 ), 0 );
 				}
 			}
 		}
@@ -4644,10 +4639,8 @@ INT_PTR CALLBACK NewProc( HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam )
 			}
 			else if( wParam == IDT_PREVIEW_REFRESH ){
 				KillTimer( hwnd, IDT_PREVIEW_REFRESH );
-				CMyFrame* pFrame = static_cast<CMyFrame*>(GetFrame( hwnd ));
-				if( pFrame ){
-					pFrame->ReloadLivePreview();	// debounced live sync
-				}
+				// live sync suspended: the in-process WebView2 is unusable
+				// (browser process never spawns — reported upstream material)
 				return 0;
 			}
 		break;
