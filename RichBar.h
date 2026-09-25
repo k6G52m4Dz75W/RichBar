@@ -182,6 +182,9 @@ WCHAR OctToDec( LPWSTR& p )
 #define IDT_STARTUP_RESTORE		2
 // preview auto-refresh debounce (m_hDlg): one reload after typing pauses
 #define IDT_PREVIEW_REFRESH		3
+// one-shot deferred design-view reconcile (m_hDlg): a 23255 posted during
+// the document-switch event lands before the switch settles and misapplies
+#define IDT_DESIGN_SYNC			4
 // runtime-drawn glyphs appended to every toolbar image list
 #define MD_ICON_MODE_H			23
 #define MD_ICON_MODE_M			24
@@ -441,6 +444,7 @@ public:
 	vector<tstring> m_vPreviewDocs;	// documents (by name key) whose preview the user turned ON
 	vector<tstring> m_vDesignDocs;	// documents (by name key) whose design view is on
 	bool m_bDesignActual;		// our model of the view's ACTUAL design-view state
+	bool m_bDesignPendingWant;	// desired state armed by the last doc switch
 	bool m_bWV2InitPending;		// environment creation in flight
 	UINT m_nHoverMenuCmd;		// dropdown command waiting for the hover-open timer
 	UINT m_nLastMenuCmd;		// dropdown whose menu closed last; reopen only after the mouse leaves it
@@ -2620,6 +2624,20 @@ public:
 		}
 	}
 
+	// deferred design-view reconcile: the switch has settled by now, so a
+	// toggle here applies to the INCOMING document
+	void OnDesignSyncTimer()
+	{
+		bool bWant = IsDesignDocOn();
+		m_bDesignViewOn = bWant;
+		ApplyToggleStates();
+		if( bWant != m_bDesignActual ){
+			RbLogF( "design sync: want=%d actual=%d -> 23255", (int)bWant, (int)m_bDesignActual );
+			PostMessage( m_hWnd, WM_COMMAND, MAKEWPARAM( EEID_MARKDOWN_VIEW, 0 ), 0 );
+			m_bDesignActual = bWant;
+		}
+	}
+
 	// one-shot startup restore: reopen the panes that were on when the
 	// previous session ended (EmEditor persists neither pane itself —
 	// verified by registry runtime diff — so our profile flags are the memory)
@@ -2825,15 +2843,16 @@ public:
 			// from EmEditor's own UI are not visible to us and can desync
 			{
 				bool bWant = IsDesignDocOn();
-				// every toggle goes through us, so m_bDesignActual IS the view's
-				// state; drive it to the target document's memory
-				if( bWant != m_bDesignActual ){
-					RbLogF( "doc switch: design want=%d actual=%d -> 23255", (int)bWant, (int)m_bDesignActual );
-					PostMessage( m_hWnd, WM_COMMAND, MAKEWPARAM( EEID_MARKDOWN_VIEW, 0 ), 0 );
-					m_bDesignActual = bWant;
-				}
+				// the button follows the memory immediately; the ACTUAL reconcile
+				// is deferred — a 23255 posted during the switch event lands
+				// before the switch settles and misapplies (the scrambling)
 				m_bDesignViewOn = bWant;
+				ApplyToggleStates();
 				SaveProfile();	// the flag must match the last-active doc at exit
+				m_bDesignPendingWant = bWant;
+				if( m_hDlg ){
+					SetTimer( m_hDlg, IDT_DESIGN_SYNC, 200, NULL );
+				}
 			}
 			{
 				bool bWant = IsPreviewDocOn();
@@ -2981,6 +3000,7 @@ public:
 		m_bIconColorDirty = false;
 		m_bDesignViewOn = false;
 		m_bDesignActual = false;	// a fresh session always starts with the view off
+		m_bDesignPendingWant = false;
 		m_bPreviewOn = false;
 		m_bPanesRestored = false;
 		m_nPreviewBarID = 0;
@@ -3308,7 +3328,10 @@ public:
 			// contain newlines, so \n is a safe separator)
 			tstring sDocs;
 			for( size_t i = 0; i < m_vDesignDocs.size(); i++ ){
-				if( i > 0 ){
+				if( m_vDesignDocs[i].find( _T("\\") ) == tstring::npos ){
+					continue;	// title-only name (untitled): session-scope only
+				}
+				if( i > 0 && sDocs.size() > 0 ){
 					sDocs += _T("\n");
 				}
 				sDocs += m_vDesignDocs[i];
@@ -4793,6 +4816,14 @@ INT_PTR CALLBACK NewProc( HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam )
 				CMyFrame* pFrame = static_cast<CMyFrame*>(GetFrame( hwnd ));
 				if( pFrame ){
 					pFrame->OnStartupRestore();
+				}
+				return 0;
+			}
+			else if( wParam == IDT_DESIGN_SYNC ){
+				KillTimer( hwnd, IDT_DESIGN_SYNC );
+				CMyFrame* pFrame = static_cast<CMyFrame*>(GetFrame( hwnd ));
+				if( pFrame ){
+					pFrame->OnDesignSyncTimer();
 				}
 				return 0;
 			}
