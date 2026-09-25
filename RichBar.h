@@ -23,7 +23,6 @@
 // shows the text as typed
 #define WV2_PREVIEW_HOST_CLASS	_T("RichBarPreviewHost")
 #define WV2_PREVIEW_BAR_TITLE	_T("RichBar Preview")
-#define WV2_PREVIEW_UDATA		_T("\\EmEditor\\RichBar.WebView2")
 
 #define ZERO_INIT_FIRST_MEM(classname, firstmem)  ZeroMemory( &firstmem, sizeof( classname ) - ((char*)&firstmem - (char*)this) );
 
@@ -2343,16 +2342,22 @@ public:
 			return;
 		}
 		CoTaskMemFree( pszVer );
-		// a per-user data folder of our own: never touches EmEditor/WebPreview state
+		// SHARE EmEditor's own browser user-data folder: same process + same
+		// folder is the supported browser-process-sharing scenario. A private
+		// folder never spawned a browser process at all (probed: 0 processes
+		// with the controller "ready") — the objects were half-alive, hence
+		// no rendering, no fetches and 0xC0000005 teardowns.
 		TCHAR szUd[MAX_PATH];
-		DWORD cch = GetEnvironmentVariable( _T("LOCALAPPDATA"), szUd, MAX_PATH );
+		DWORD cch = GetModuleFileName( NULL, szUd, MAX_PATH );
 		if( cch == 0 || cch >= MAX_PATH - 40 ){
 			m_bWV2InitFailed = true;
 			FallbackOfficialPreview();
 			return;
 		}
-		StringCat( szUd, MAX_PATH, WV2_PREVIEW_UDATA );
-		CreateDirectory( szUd, NULL );
+		LPTSTR pszEnd = szUd + cch;
+		while( pszEnd > szUd && pszEnd[-1] != _T('\\') )  pszEnd--;
+		*pszEnd = 0;
+		StringCat( szUd, MAX_PATH, _T("EmEditor.exe.WebView2") );
 		m_bWV2InitPending = true;
 		RbLogF( "wv2 creating env, udata=%S", szUd );
 		HRESULT hrSync = pfnCreate( NULL, szUd, NULL, new CWV2EnvHandler( this ) );
