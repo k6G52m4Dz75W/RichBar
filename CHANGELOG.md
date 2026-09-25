@@ -15,6 +15,17 @@ this code base:
 | `0.9.0` – `0.17.x` | The HTML + Markdown dual-mode toolbar, heading towards `1.0.0`. |
 
 
+## [0.24.1] - 2026-09-26
+
+### Fixed
+
+- **The design-view toggle resurrected the hidden markdown toolbar**
+  (23255 auto-shows it). Correction is now state-checked: after the
+  toggle, a 200 ms timer queries the markdown bar's own checked state
+  via EE_QUERY_STATUS (23274) and hides it ONLY if the toggle brought it
+  up — preserving the user's hidden-toolbar preference in both toggle
+  directions without blind pairing.
+
 ## [0.24.0] - 2026-09-25
 
 ### Changed

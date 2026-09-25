@@ -172,6 +172,8 @@ WCHAR OctToDec( LPWSTR& p )
 #define EEID_MARKDOWN_PREVIEW	23275	// Markdown rendered preview toggle
 #define EI_GET_MARKDOWN_PREVIEW	407		// TRUE if the design view is on
 #define EI_SET_MARKDOWN_PREVIEW	408		// sets the design view to (BOOL)lParam (official EE_INFO docs: value-based, not a toggle)
+#define EEID_SHOW_MARKDOWN_BAR	23274		// toggles the built-in markdown toolbar
+#define EEID_SHOW_MARKDOWN_BAR	23274		// toggles the built-in markdown toolbar
 
 // toolbar mode-switch buttons (command IDs below ID_COMMAND_BASE)
 #define ID_MODE_HTML			90
@@ -183,6 +185,9 @@ WCHAR OctToDec( LPWSTR& p )
 #define IDT_STARTUP_RESTORE		2
 // preview auto-refresh debounce (m_hDlg): one reload after typing pauses
 #define IDT_PREVIEW_REFRESH		3
+// one-shot markdown-bar correction (m_hDlg): the design toggle
+// auto-shows the markdown bar; hide it back if it came up
+#define IDT_DESIGN_SYNC			4
 // one-shot deferred design-view reconcile (m_hDlg): a 23255 posted during
 // the document-switch event lands before the switch settles and misapplies
 // runtime-drawn glyphs appended to every toolbar image list
@@ -2620,6 +2625,20 @@ public:
 
 
 
+	// deferred markdown-bar correction: EmEditor auto-shows the markdown
+	// toolbar when the design view toggles; if the user had it hidden, put
+	// it back. The bar's visibility is queried via EE_QUERY_STATUS on its
+	// own command (23274) — a state-checked correction, not a blind toggle
+	void OnDesignSyncTimer()
+	{
+		BOOL bChecked = FALSE;
+		Editor_QueryStatus( m_hWnd, EEID_SHOW_MARKDOWN_BAR, &bChecked );
+		RbLogF( "design sync: markdown bar shown=%d", (int)bChecked );
+		if( bChecked ){
+			PostMessage( m_hWnd, WM_COMMAND, MAKEWPARAM( EEID_SHOW_MARKDOWN_BAR, 0 ), 0 );
+		}
+	}
+
 	// The dropdown arrow, drawn live in NM_CUSTOMDRAW's item-post-paint
 	// stage: right-anchored inside the button's ACTUAL rect, so the control's
 	// image placement and any width rounding cannot shift or clip it. The
@@ -3713,19 +3732,17 @@ public:
 			}
 			else if( cmd.m_iCmd == CMD_MD_VIEW ){
 				// BTNS_CHECK toggled the control state before this command
-				// arrived: that is the WANTED state. The ACTUAL state of the
-				// built-in command is queryable via EE_QUERY_STATUS (the
-				// official status query EmEditor's own toolbar buttons use);
-				// the 23255 toggle fires only on disagreement
-				BOOL bChecked = FALSE;
-				Editor_QueryStatus( m_hWnd, EEID_MARKDOWN_VIEW, &bChecked );
-				bool bWant = ( SendMessage( m_hwndToolbar, TB_GETSTATE, wParam, 0 ) & TBSTATE_CHECKED ) != 0;
-				m_bDesignViewOn = bWant;
-				SaveProfile();
+				// arrived: that is the WANTED state. The design view is toggled
+				// with 23255 (the only command that drives it); 23255 auto-shows
+				// the built-in markdown bar, so the deferred timer queries the
+				// bar's own EE_QUERY_STATUS and hides it back if it came up
+				m_bDesignViewOn = ( SendMessage( m_hwndToolbar, TB_GETSTATE, wParam, 0 ) & TBSTATE_CHECKED ) != 0;
+								SaveProfile();				// persists the global flag for cross-session restore
 				ApplyToggleStates();
-				RbLogF( "design click: want=%d status=%d", (int)bWant, (int)bChecked );
-				if( ( bChecked != FALSE ) != bWant ){
-					PostMessage( m_hWnd, WM_COMMAND, MAKEWPARAM( EEID_MARKDOWN_VIEW, 0 ), 0 );
+				RbLogF( "design click: want=%d -> 23255", (int)m_bDesignViewOn );
+				PostMessage( m_hWnd, WM_COMMAND, MAKEWPARAM( EEID_MARKDOWN_VIEW, 0 ), 0 );
+				if( m_hDlg ){
+					SetTimer( m_hDlg, IDT_DESIGN_SYNC, 200, NULL );
 				}
 			}
 			else if( cmd.m_iCmd == CMD_PREVIEW ){
@@ -4744,6 +4761,14 @@ INT_PTR CALLBACK NewProc( HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam )
 				CMyFrame* pFrame = static_cast<CMyFrame*>(GetFrame( hwnd ));
 				if( pFrame ){
 					pFrame->OnStartupRestore();
+				}
+				return 0;
+			}
+			else if( wParam == IDT_DESIGN_SYNC ){
+				KillTimer( hwnd, IDT_DESIGN_SYNC );
+				CMyFrame* pFrame = static_cast<CMyFrame*>(GetFrame( hwnd ));
+				if( pFrame ){
+					pFrame->OnDesignSyncTimer();
 				}
 				return 0;
 			}
