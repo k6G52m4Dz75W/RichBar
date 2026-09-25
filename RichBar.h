@@ -185,9 +185,6 @@ WCHAR OctToDec( LPWSTR& p )
 // one-shot deferred design-view reconcile (m_hDlg): a 23255 posted during
 // the document-switch event lands before the switch settles and misapplies
 #define IDT_DESIGN_SYNC			4
-// one-shot bar re-assert (m_hDlg): the design-view toggle makes EmEditor
-// reshuffle toolbars, which can drop our custom bar
-#define IDT_BAR_REASSERT		5
 // runtime-drawn glyphs appended to every toolbar image list
 #define MD_ICON_MODE_H			23
 #define MD_ICON_MODE_M			24
@@ -448,7 +445,6 @@ public:
 	vector<tstring> m_vDesignDocs;	// documents (by name key) whose design view is on
 	bool m_bDesignActual;		// our model of the view's ACTUAL design-view state
 	bool m_bDesignPendingWant;	// desired state armed by the last doc switch
-	bool m_bReassertBar;		// a design toggle may drop our bar; re-open once
 	bool m_bWV2InitPending;		// environment creation in flight
 	UINT m_nHoverMenuCmd;		// dropdown command waiting for the hover-open timer
 	UINT m_nLastMenuCmd;		// dropdown whose menu closed last; reopen only after the mouse leaves it
@@ -2628,16 +2624,6 @@ public:
 		}
 	}
 
-	// if EmEditor's design-view relayout dropped our bar, put it back
-	void ReassertBar()
-	{
-		m_bReassertBar = false;
-		if( !m_hwndToolbar && m_bVisible ){
-			RbLogF( "bar reassert after design relayout" );
-			DisplayBar( true );
-		}
-	}
-
 	// deferred design-view reconcile: the switch has settled by now, so a
 	// toggle here applies to the INCOMING document
 	void OnDesignSyncTimer()
@@ -2819,7 +2805,6 @@ public:
 //			m_bOpenStartup = false;
 			// this message arrives even if plug-in does not own this custom bar, so make sure it is mine.
 			TOOLBAR_INFO* pTI = (TOOLBAR_INFO*)lParam;
-			RbLogF( "toolbar closed event: nID=%u (ours=%u)", pTI->nID, m_nClientID );
 			if( (pTI->nMask & TIM_ID) && pTI->nID == m_nClientID ){
 				_ASSERT( m_hwndToolbar != NULL );
 				CustomBarClosed();
@@ -3016,7 +3001,6 @@ public:
 		m_bDesignViewOn = false;
 		m_bDesignActual = false;	// a fresh session always starts with the view off
 		m_bDesignPendingWant = false;
-		m_bReassertBar = false;
 		m_bPreviewOn = false;
 		m_bPanesRestored = false;
 		m_nPreviewBarID = 0;
@@ -3815,12 +3799,6 @@ public:
 				ApplyToggleStates();
 				m_bDesignActual = m_bDesignViewOn;
 				RbLogF( "design click: want=%d -> EEID_MARKDOWN_VIEW", (int)m_bDesignViewOn );
-				// the design-view toggle makes EmEditor reshuffle toolbars, which
-				// can drop OUR bar; re-assert it once if that happens
-				if( m_hwndToolbar && m_bVisible ){
-					m_bReassertBar = true;
-					SetTimer( m_hDlg, IDT_BAR_REASSERT, 600, NULL );
-				}
 				PostMessage( m_hWnd, WM_COMMAND, MAKEWPARAM( EEID_MARKDOWN_VIEW, 0 ), 0 );
 			}
 			else if( cmd.m_iCmd == CMD_PREVIEW ){
@@ -4847,14 +4825,6 @@ INT_PTR CALLBACK NewProc( HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam )
 				CMyFrame* pFrame = static_cast<CMyFrame*>(GetFrame( hwnd ));
 				if( pFrame ){
 					pFrame->OnDesignSyncTimer();
-				}
-				return 0;
-			}
-			else if( wParam == IDT_BAR_REASSERT ){
-				KillTimer( hwnd, IDT_BAR_REASSERT );
-				CMyFrame* pFrame = static_cast<CMyFrame*>(GetFrame( hwnd ));
-				if( pFrame ){
-					pFrame->ReassertBar();
 				}
 				return 0;
 			}
