@@ -14,6 +14,39 @@ this code base:
 | `0.4.x`       | Compatibility fixes that make the original plug-in build and load correctly on modern EmEditor (v26). |
 | `0.9.0` – `0.17.x` | The HTML + Markdown dual-mode toolbar, heading towards `1.0.0`. |
 
+## [0.22.4] - 2026-09-25
+
+### Fixed
+
+- **The teardown crash, root-caused to window reparenting**: the log trail
+  showed the fault fires at the very first teardown call even with the
+  host window alive — the WebView2 controller state is tainted because
+  EmEditor REPARENTS the client window when it adopts the bar. The
+  controller now binds to a dedicated INNER child window whose parent is
+  never touched by the core (two-level window isolation), and the
+  documented teardown order (Close while the window tree is intact, on
+  the inner window WM_DESTROY) is used. The whole detach path is
+  SEH-guarded: even if WebView2 still faults internally, it is logged and
+  suppressed — EmEditor can no longer be taken down by preview teardown.
+
+- **Fetch diagnostics**: the earlier trail showed the renderer page loaded
+  and navigated successfully but ZERO fetch interceptions — the
+  registration return codes are now logged to pinpoint why the
+  https://document/* filter does not fire (white-pane investigation).
+
+## [0.22.3] - 2026-09-25
+
+### Added
+
+- **Full breadcrumb diagnostics on the preview chain**: navigation return
+  codes, every https://document/* fetch (URI + served length), the fetch
+  filter/handler registration results, the custom-bar close return value
+  and step-by-step teardown logs into rb_debug.log.
+
+- **SEH guard around the CUSTOM_BAR_CLOSED handler**: a fault during the
+  WebView2/bar teardown racing the core is logged and suppressed instead
+  of crashing EmEditor.
+
 ## [0.22.2] - 2026-09-25
 
 ### Fixed

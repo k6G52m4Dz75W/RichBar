@@ -432,7 +432,8 @@ public:
 	HWND m_hwndView;				// the EmEditor VIEW window (plug-in OnCommand contract)
 	bool m_bPanesRestored;		// startup pane restore done (first state-sync tick)
 	UINT m_nPreviewBarID;		// custom-bar id of the live preview pane
-	HWND m_hwndPreviewHost;		// client window the WebView2 controller binds to
+	HWND m_hwndPreviewHost;		// client window adopted by the core bar
+	HWND m_hwndWebViewHost;		// inner child the controller binds to (never reparented)
 	ICoreWebView2Environment* m_pWV2Env;	// shared WebView2 environment (session-lifetime)
 	ICoreWebView2Controller* m_pWV2Controller;
 	ICoreWebView2* m_pWV2;
@@ -2105,10 +2106,17 @@ public:
 		if( uMsg == WM_DESTROY ){
 			// destroyed by a parent teardown (e.g. the helper dialog dies on a
 			// mode switch): drop the stale pointer only — PreviewBarGone is
-			// NOT safe to run from inside WM_DESTROY
+			// NOT safe to run from inside WM_DESTROY. The INNER window is the
+			// controller parent: detach while its window tree still exists
 			CMyFrame* pFrame = static_cast< CMyFrame* >( GetFrame( hwnd ) );
-			if( pFrame && pFrame->m_hwndPreviewHost == hwnd ){
-				pFrame->m_hwndPreviewHost = NULL;
+			if( pFrame ){
+				if( pFrame->m_hwndWebViewHost == hwnd ){
+					pFrame->DetachWebView();
+					pFrame->m_hwndWebViewHost = NULL;
+				}
+				if( pFrame->m_hwndPreviewHost == hwnd ){
+					pFrame->m_hwndPreviewHost = NULL;
+				}
 			}
 		}
 		if( uMsg == WM_SIZE && wParam != SIZE_MINIMIZED ){
@@ -2281,7 +2289,7 @@ public:
 			return;
 		}
 		m_pWV2Env = pEnv;	// kept for the whole session: reopen is fast
-		pEnv->CreateCoreWebView2Controller( m_hwndPreviewHost, new CWV2CtrlHandler( this ) );
+		pEnv->CreateCoreWebView2Controller( m_hwndWebViewHost ? m_hwndWebViewHost : m_hwndPreviewHost, new CWV2CtrlHandler( this ) );
 	}
 
 	void OnWV2ControllerCreated( HRESULT hr, ICoreWebView2Controller* pCtrl )
@@ -2292,8 +2300,7 @@ public:
 			FallbackOfficialPreview();
 			return;
 		}
-		if( !m_hwndPreviewHost ){
-			pCtrl->Close();
+		if( !m_hwndPreviewHost || !m_hwndWebViewHost || !IsWindow( m_hwndWebViewHost ) ){
 			pCtrl->Release();
 			return;
 		}
@@ -2305,8 +2312,9 @@ public:
 		pCtrl->put_IsVisible( TRUE );
 		OnPreviewHostSize();
 		CWV2ResReqHandler* pHandler = new CWV2ResReqHandler( this );
-		m_pWV2->AddWebResourceRequestedFilter( L"https://document/*", COREWEBVIEW2_WEB_RESOURCE_CONTEXT_ALL );
-		m_pWV2->add_WebResourceRequested( pHandler, &m_tWV2ResReq );
+		HRESULT hrF1 = m_pWV2->AddWebResourceRequestedFilter( L"https://document/*", COREWEBVIEW2_WEB_RESOURCE_CONTEXT_ALL );
+		HRESULT hrF2 = m_pWV2->add_WebResourceRequested( pHandler, &m_tWV2ResReq );
+		RbLogF( "fetch filter hr=0x%08X handler hr=0x%08X", (unsigned)hrF1, (unsigned)hrF2 );
 		pHandler->Release();	// the webview holds its own reference
 		NavigateLivePreview();
 	}
@@ -2381,6 +2389,13 @@ public:
 				return;
 			}
 			SetWindowLongPtr( m_hwndPreviewHost, GWLP_USERDATA, (LONG_PTR)this );
+			// the WebView2 controller binds to an INNER child: EmEditor reparents
+			// the host when it adopts the bar, and a reparented controller
+			// parent taints the controller teardown (the recurring crash) — the
+			// inner window keeps the controller parent stable
+			m_hwndWebViewHost = CreateWindowEx( 0, WV2_PREVIEW_HOST_CLASS, NULL,
+				WS_CHILD | WS_VISIBLE | WS_CLIPCHILDREN, 0, 0, cxPane, cyPane, m_hwndPreviewHost, NULL, EEGetInstanceHandle(), NULL );
+			SetWindowLongPtr( m_hwndWebViewHost, GWLP_USERDATA, (LONG_PTR)this );
 			CUSTOM_BAR_INFO cbi;
 			ZeroMemory( &cbi, sizeof( cbi ) );
 			cbi.cbSize = sizeof( cbi );
@@ -2408,14 +2423,7 @@ public:
 	{
 		// detach WebView2 FIRST: the core bar teardown then never has to
 		// destroy live WebView2 child windows (the 0x400000 crash)
-		if( m_pWV2Controller ){
-			m_pWV2Controller->Release();
-			m_pWV2Controller = NULL;
-		}
-		if( m_pWV2 ){
-			m_pWV2->Release();
-			m_pWV2 = NULL;
-		}
+		DetachWebView();
 		if( m_nPreviewBarID ){
 			BOOL bClosed = Editor_CustomBarClose( m_hWnd, m_nPreviewBarID );
 			RbLogF( "custom bar close ret=%d", (int)bClosed );
@@ -2425,30 +2433,48 @@ public:
 		PreviewBarGone();
 	}
 
+	// release the WebView2 objects. SEH-guarded: a fault inside the WebView2
+	// teardown (its controller state can be tainted when EmEditor reparents
+	// the host window) must never take EmEditor down
+	void DetachWebView()
+	{
+		__try {
+			if( m_pWV2Controller ){
+				if( m_hwndWebViewHost && IsWindow( m_hwndWebViewHost ) ){
+					m_pWV2Controller->Close();	// documented order: before the parent window dies
+				}
+				m_pWV2Controller->Release();
+				m_pWV2Controller = NULL;
+				RbLogF( "wv2 detached (controller)" );
+			}
+			if( m_pWV2 ){
+				m_pWV2->Release();
+				m_pWV2 = NULL;
+				RbLogF( "wv2 detached (webview)" );
+			}
+		}
+		__except( EXCEPTION_EXECUTE_HANDLER ) {
+			RbLogF( "wv2 detach FAULTED 0x%08X (suppressed)", (unsigned)GetExceptionCode() );
+			m_pWV2Controller = NULL;
+			m_pWV2 = NULL;
+		}
+	}
+
 	void PreviewBarGone()
 	{
 		m_nPreviewBarID = 0;
-		// Release() alone tears the WebView2 down; an explicit Close() on a
-		// controller whose target window the CORE already destroyed (it owns
-		// the pane container our host was adopted into) crashes — the
-		// reported 0x400000 error. Never call Close() here.
-		RbLogF( "bar gone: begin" );
-		if( m_pWV2Controller ){
-			m_pWV2Controller->Release();
-			m_pWV2Controller = NULL;
-			RbLogF( "bar gone: controller released" );
-		}
-		if( m_pWV2 ){
-			m_pWV2->Release();
-			m_pWV2 = NULL;
-			RbLogF( "bar gone: webview released" );
-		}
+		DetachWebView();
 		if( m_hwndPreviewHost ){
 			if( IsWindow( m_hwndPreviewHost ) ){
 				DestroyWindow( m_hwndPreviewHost );
 			}
 			m_hwndPreviewHost = NULL;
-			RbLogF( "bar gone: host destroyed" );
+		}
+		if( m_hwndWebViewHost ){
+			if( IsWindow( m_hwndWebViewHost ) ){
+				DestroyWindow( m_hwndWebViewHost );
+			}
+			m_hwndWebViewHost = NULL;
 		}
 		if( m_bPreviewOn ){
 			m_bPreviewOn = false;
