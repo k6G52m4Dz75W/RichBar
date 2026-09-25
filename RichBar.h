@@ -1960,6 +1960,14 @@ public:
 	{
 		ICoreWebView2WebResourceResponse* pResp = NULL;
 		tstring sText;
+		LPWSTR pszUri = NULL;
+		ICoreWebView2WebResourceRequest* pReq = NULL;
+		if( SUCCEEDED( pArgs->get_Request( &pReq ) ) && pReq ){
+			pReq->get_Uri( &pszUri );
+			pReq->Release();
+		}
+		RbLogF( "fetch: %S", pszUri ? pszUri : L"(null)" );
+		CoTaskMemFree( pszUri );
 		if( m_pWV2Env && GetDocTextAll( sText ) ){
 			int cb = WideCharToMultiByte( CP_UTF8, 0, sText.c_str(), (int)sText.size(), NULL, 0, NULL, NULL );
 			HGLOBAL hG = GlobalAlloc( GMEM_MOVEABLE, ( cb > 0 ) ? (SIZE_T)cb : 1 );
@@ -1983,8 +1991,12 @@ public:
 			}
 		}
 		if( pResp ){
+			RbLogF( "serve: %u chars", (unsigned)sText.size() );
 			pArgs->put_Response( pResp );
 			pResp->Release();
+		}
+		else {
+			RbLogF( "serve FAILED (text=%u)", (unsigned)sText.size() );
 		}
 	}
 
@@ -2250,8 +2262,8 @@ public:
 		tstring sUrl;
 		BuildPreviewUrl( sUrl );
 		if( !sUrl.empty() ){
-			RbLogF( "preview navigate: %S", sUrl.c_str() );
-			m_pWV2->Navigate( sUrl.c_str() );
+			HRESULT hrNav = m_pWV2->Navigate( sUrl.c_str() );
+			RbLogF( "preview navigate: %S hr=0x%08X", sUrl.c_str(), (unsigned)hrNav );
 		}
 	}
 
@@ -2287,6 +2299,7 @@ public:
 		}
 		m_pWV2Controller = pCtrl;
 		pCtrl->get_CoreWebView2( &m_pWV2 );
+		RbLogF( "wv2 controller ready" );
 		// the controller is created INVISIBLE by default — without this the
 		// pane shows the unbrushed host window (solid black)
 		pCtrl->put_IsVisible( TRUE );
@@ -2393,8 +2406,19 @@ public:
 
 	void CloseLivePreview()
 	{
+		// detach WebView2 FIRST: the core bar teardown then never has to
+		// destroy live WebView2 child windows (the 0x400000 crash)
+		if( m_pWV2Controller ){
+			m_pWV2Controller->Release();
+			m_pWV2Controller = NULL;
+		}
+		if( m_pWV2 ){
+			m_pWV2->Release();
+			m_pWV2 = NULL;
+		}
 		if( m_nPreviewBarID ){
-			Editor_CustomBarClose( m_hWnd, m_nPreviewBarID );
+			BOOL bClosed = Editor_CustomBarClose( m_hWnd, m_nPreviewBarID );
+			RbLogF( "custom bar close ret=%d", (int)bClosed );
 		}
 		// the core does not notify plugin-initiated closes — release directly
 		// (idempotent; a later CLOSED event with our id is a no-op)
@@ -2408,19 +2432,23 @@ public:
 		// controller whose target window the CORE already destroyed (it owns
 		// the pane container our host was adopted into) crashes — the
 		// reported 0x400000 error. Never call Close() here.
+		RbLogF( "bar gone: begin" );
 		if( m_pWV2Controller ){
 			m_pWV2Controller->Release();
 			m_pWV2Controller = NULL;
+			RbLogF( "bar gone: controller released" );
 		}
 		if( m_pWV2 ){
 			m_pWV2->Release();
 			m_pWV2 = NULL;
+			RbLogF( "bar gone: webview released" );
 		}
 		if( m_hwndPreviewHost ){
 			if( IsWindow( m_hwndPreviewHost ) ){
 				DestroyWindow( m_hwndPreviewHost );
 			}
 			m_hwndPreviewHost = NULL;
+			RbLogF( "bar gone: host destroyed" );
 		}
 		if( m_bPreviewOn ){
 			m_bPreviewOn = false;
@@ -2433,6 +2461,26 @@ public:
 	{
 		if( m_pWV2 && IsLivePreviewOpen() ){
 			m_pWV2->Reload();
+		}
+	}
+
+	// EVENT_CUSTOM_BAR_CLOSED handler, guarded: a fault here (WebView2
+	// teardown racing the core bar destruction) must NOT take EmEditor down
+	static void HandleBarClosedGuarded( CMyFrame* pFrame, CUSTOM_BAR_CLOSE_INFO* pCI )
+	{
+		__try {
+			pFrame->RbLogF( "bar closed event: nID=%u iPos=%d flags=0x%X (ours=%u)", pCI->nID, pCI->iPos, pCI->dwFlags, pFrame->m_nPreviewBarID );
+			if( pCI->nID == pFrame->m_nPreviewBarID ){
+				pFrame->PreviewBarGone();
+			}
+		}
+		__except( EXCEPTION_EXECUTE_HANDLER ) {
+			pFrame->RbLogF( "bar closed handler FAULTED 0x%08X (suppressed)", (unsigned)GetExceptionCode() );
+			pFrame->m_nPreviewBarID = 0;
+			pFrame->m_pWV2Controller = NULL;
+			pFrame->m_pWV2 = NULL;
+			pFrame->m_hwndPreviewHost = NULL;
+			pFrame->m_bPreviewOn = false;
 		}
 	}
 
@@ -2689,11 +2737,7 @@ public:
 			}
 		}
 		if( nEvent & EVENT_CUSTOM_BAR_CLOSED ){
-			CUSTOM_BAR_CLOSE_INFO* pCI = (CUSTOM_BAR_CLOSE_INFO*)lParam;
-			if( pCI->nID == m_nPreviewBarID ){
-				// the user closed OUR preview bar from its own UI
-				PreviewBarGone();
-			}
+			HandleBarClosedGuarded( this, (CUSTOM_BAR_CLOSE_INFO*)lParam );
 		}
 		if( nEvent & EVENT_CHANGE ){
 			// every buffer modification re-arms the debounce; one WebView2
