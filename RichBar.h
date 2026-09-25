@@ -2090,6 +2090,15 @@ public:
 
 	static LRESULT CALLBACK PreviewHostProc( HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam )
 	{
+		if( uMsg == WM_DESTROY ){
+			// destroyed by a parent teardown (e.g. the helper dialog dies on a
+			// mode switch): drop the stale pointer only — PreviewBarGone is
+			// NOT safe to run from inside WM_DESTROY
+			CMyFrame* pFrame = static_cast< CMyFrame* >( GetFrame( hwnd ) );
+			if( pFrame && pFrame->m_hwndPreviewHost == hwnd ){
+				pFrame->m_hwndPreviewHost = NULL;
+			}
+		}
 		if( uMsg == WM_SIZE && wParam != SIZE_MINIMIZED ){
 			CMyFrame* pFrame = static_cast< CMyFrame* >( GetFrame( hwnd ) );
 			if( pFrame ){
@@ -2170,14 +2179,27 @@ public:
 		TCHAR szName[MAX_PATH], szFolder[MAX_PATH];
 		if( szFile[0] ){
 			StringCopy( szFolder, _countof( szFolder ), szFile );
-			LPTSTR pszSlash = szFolder;
+			LPTSTR pszSlash = NULL;
 			for( LPTSTR p = szFolder; *p; p++ ){
 				if( *p == _T('\\') || *p == _T('/') ){
 					pszSlash = p;
 				}
 			}
-			StringCopy( szName, _countof( szName ), pszSlash + ( *pszSlash ? 1 : 0 ) );
-			*pszSlash = 0;
+			if( pszSlash ){
+				// a real path: split into folder + name
+				StringCopy( szName, _countof( szName ), pszSlash + 1 );
+				*pszSlash = 0;
+			}
+			else {
+				// a title-only name (untitled documents): no folder on disk —
+				// resolve images against %TEMP% instead of garbage
+				StringCopy( szName, _countof( szName ), szFile );
+				GetTempPath( MAX_PATH, szFolder );
+				int nLen = lstrlen( szFolder );
+				if( nLen > 0 && szFolder[nLen - 1] == _T('\\') ){
+					szFolder[nLen - 1] = 0;
+				}
+			}
 		}
 		else {
 			// untitled: a virtual name under %TEMP% (the renderer only uses the
@@ -2309,7 +2331,14 @@ public:
 		CreateDirectory( szUd, NULL );
 		m_bWV2InitPending = true;
 		RbLogF( "wv2 creating env, udata=%S", szUd );
-		pfnCreate( NULL, szUd, NULL, new CWV2EnvHandler( this ) );
+		HRESULT hrSync = pfnCreate( NULL, szUd, NULL, new CWV2EnvHandler( this ) );
+		if( FAILED( hrSync ) ){
+			// synchronous failure: the completion handler never fires
+			m_bWV2InitPending = false;
+			m_bWV2InitFailed = true;
+			RbLogF( "wv2 env create SYNC FAILED 0x%08X", (unsigned)hrSync );
+			FallbackOfficialPreview();
+		}
 	}
 
 	bool IsLivePreviewOpen()
@@ -2325,26 +2354,25 @@ public:
 				return;
 			}
 			int nDPI = (int)Editor_DocInfo( m_hWnd, 0, EI_GET_DPI, 0 );
+			// the bar takes its WIDTH from the client window for a right-docked
+			// pane; size the host before opening
+			int cxPane = MulDiv( 460, nDPI, DEFAULT_DPI );
+			int cyPane = MulDiv( 640, nDPI, DEFAULT_DPI );
 			m_hwndPreviewHost = CreateWindowEx( 0, WV2_PREVIEW_HOST_CLASS, NULL,
-				WS_CHILD | WS_VISIBLE | WS_CLIPCHILDREN, 0, 0, 10, 10, m_hDlg, NULL, EEGetInstanceHandle(), NULL );
+				WS_CHILD | WS_VISIBLE | WS_CLIPCHILDREN, 0, 0, cxPane, cyPane, m_hDlg, NULL, EEGetInstanceHandle(), NULL );
 			if( !m_hwndPreviewHost ){
 				FallbackOfficialPreview();
 				return;
 			}
 			SetWindowLongPtr( m_hwndPreviewHost, GWLP_USERDATA, (LONG_PTR)this );
-			TOOLBAR_INFO cri;
-			ZeroMemory( &cri, sizeof( cri ) );
-			cri.cbSize = sizeof( cri );
-			cri.nMask = TIM_CLIENT | TIM_TITLE | TIM_FLAGS | TIM_STYLE | TIM_MINCHILD | TIM_CX | TIM_PLUG_IN_CMD_ID;
-			cri.wPlugInCmdID = EEGetCmdID();
-			cri.pszTitle = WV2_PREVIEW_BAR_TITLE;
-			cri.hwndClient = m_hwndPreviewHost;
-			cri.nFlags = CUSTOM_BAR_RIGHT;
-			cri.cxMinChild = 0;
-			cri.cyMinChild = 0;
-			cri.cx = MulDiv( 460, nDPI, DEFAULT_DPI );
-			m_nPreviewBarID = Editor_ToolbarOpen( m_hWnd, &cri );
-			RbLogF( "preview bar open: id=%u host=%p", m_nPreviewBarID, m_hwndPreviewHost );
+			CUSTOM_BAR_INFO cbi;
+			ZeroMemory( &cbi, sizeof( cbi ) );
+			cbi.cbSize = sizeof( cbi );
+			cbi.hwndClient = m_hwndPreviewHost;
+			cbi.pszTitle = WV2_PREVIEW_BAR_TITLE;
+			cbi.iPos = CUSTOM_BAR_RIGHT;
+			m_nPreviewBarID = Editor_CustomBarOpen( m_hWnd, &cbi );
+			RbLogF( "preview bar open: id=%u bar=%p host=%p", m_nPreviewBarID, cbi.hwndCustomBar, m_hwndPreviewHost );
 			if( !m_nPreviewBarID ){
 				DestroyWindow( m_hwndPreviewHost );
 				m_hwndPreviewHost = NULL;
@@ -2363,22 +2391,19 @@ public:
 	void CloseLivePreview()
 	{
 		if( m_nPreviewBarID ){
-			Editor_ToolbarClose( m_hWnd, m_nPreviewBarID );	// the closed event releases the COM side
+			Editor_CustomBarClose( m_hWnd, m_nPreviewBarID );
 		}
-		else if( m_hwndPreviewHost ){
-			PreviewBarGone();
-		}
+		// the core does not notify plugin-initiated closes — release directly
+		// (idempotent; a later CLOSED event with our id is a no-op)
+		PreviewBarGone();
 	}
 
 	void PreviewBarGone()
 	{
 		m_nPreviewBarID = 0;
-		if( m_hwndPreviewHost ){
-			if( IsWindow( m_hwndPreviewHost ) ){
-				DestroyWindow( m_hwndPreviewHost );
-			}
-			m_hwndPreviewHost = NULL;
-		}
+		// release the COM side BEFORE destroying the host window: Close() on
+		// a controller whose target window is already gone crashes (the
+		// 0x20000 teardown error)
 		if( m_pWV2Controller ){
 			m_pWV2Controller->Close();
 			m_pWV2Controller->Release();
@@ -2387,6 +2412,12 @@ public:
 		if( m_pWV2 ){
 			m_pWV2->Release();
 			m_pWV2 = NULL;
+		}
+		if( m_hwndPreviewHost ){
+			if( IsWindow( m_hwndPreviewHost ) ){
+				DestroyWindow( m_hwndPreviewHost );
+			}
+			m_hwndPreviewHost = NULL;
 		}
 		if( m_bPreviewOn ){
 			m_bPreviewOn = false;
@@ -2508,6 +2539,23 @@ public:
 			DestroyWindow( m_hDlg );
 			m_hDlg = NULL;
 		}
+		if( m_hwndPreviewHost && !IsWindow( m_hwndPreviewHost ) ){
+			// the preview host died with its parent dialog (it was never
+			// adopted by the core bar window): release the COM side here —
+			// NOT from inside WM_DESTROY
+			m_hwndPreviewHost = NULL;
+			if( m_pWV2Controller ){
+				m_pWV2Controller->Close();
+				m_pWV2Controller->Release();
+				m_pWV2Controller = NULL;
+			}
+			if( m_pWV2 ){
+				m_pWV2->Release();
+				m_pWV2 = NULL;
+			}
+			m_nPreviewBarID = 0;
+			m_bPreviewOn = false;
+		}
 	}
 
 	BOOL QueryStatus( HWND /*hwndView*/, LPBOOL pbChecked )
@@ -2531,6 +2579,16 @@ public:
 //			DisplayBar( m_bAutoDisplay && ConfigExist( szConfigName ) );
 		}
 		if( nEvent & EVENT_CLOSE_FRAME ){
+			// the frame is tearing down: release our preview COM side locally
+			// WITHOUT sending EE_CUSTOM_BAR_CLOSE / EE_TOOLBAR_CLOSE for the
+			// preview bar back into the core (re-entering the core here
+			// produced the reported nEvent=0x20000 crash); EmEditor destroys
+			// the bars itself
+			PreviewBarGone();
+			if( m_pWV2Env ){
+				m_pWV2Env->Release();
+				m_pWV2Env = NULL;
+			}
 			if( m_hwndToolbar ){
 				_ASSERTE( m_nClientID );
 				Editor_ToolbarClose( m_hWnd, m_nClientID );

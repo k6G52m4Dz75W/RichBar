@@ -14,6 +14,35 @@ this code base:
 | `0.4.x`       | Compatibility fixes that make the original plug-in build and load correctly on modern EmEditor (v26). |
 | `0.9.0` – `0.17.x` | The HTML + Markdown dual-mode toolbar, heading towards `1.0.0`. |
 
+## [0.22.1] - 2026-09-25
+
+### Fixed
+
+- **The nEvent=0x20000 (EVENT_CLOSE_FRAME) crash**: `PreviewBarGone`
+  destroyed the host window while the WebView2 controller was still
+  attached, then called `Close()` on the orphaned controller — during
+  frame teardown this took EmEditor down. The COM side is now released
+  FIRST (controller Close/Release, then webview), the host window is
+  destroyed last, and `EVENT_CLOSE_FRAME` no longer sends any bar-close
+  command back into the core (EmEditor tears the bars down itself; we
+  only release our own state).
+- **The preview pane is a proper custom bar now**: 0.22.0 opened it
+  through the legacy `EE_TOOLBAR_OPEN` rebar API with a misused position
+  field — the band existed (log id=1025) but nothing visible ever
+  rendered. It now uses `Editor_CustomBarOpen` (the pane-style API the
+  official WebPreview pane itself uses, with `iPos = CUSTOM_BAR_RIGHT`
+  and the host sized to 460 DPI-scaled DIPs before opening); the core
+  returns the bar frame window, which the log now records. Closing uses
+  `Editor_CustomBarClose`, and because the core does not notify
+  plugin-initiated closes, `PreviewBarGone` runs immediately after.
+- **Robustness sweep**: the WebView2 environment creation checks its
+  synchronous return value (a failure there never reached the completion
+  handler before); a title-only document name (untitled documents) no
+  longer produces a garbage folder in the renderer URL (falls back to
+  %TEMP%); a preview host killed with its parent dialog (toolbar bar
+  closed during mode switch) releases the WebView2 side instead of
+  leaking it.
+
 ## [0.22.0] - 2026-09-24
 
 ### Added

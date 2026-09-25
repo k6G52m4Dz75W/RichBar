@@ -10,6 +10,28 @@
 | `0.4.x`  | 兼容性修复，使原插件能够在现代 EmEditor（v26）上正确编译和加载。 |
 | `0.9.0` – `0.17.x` | HTML + Markdown 双模式工具栏，向 `1.0.0` 迈进。 |
 
+## [0.22.1] - 2026-09-25
+
+### 修复
+
+- **nEvent=0x20000（EVENT_CLOSE_FRAME）崩溃**：`PreviewBarGone` 在
+  WebView2 控制器仍附着时就销毁了宿主窗口，再对已孤儿化的控制器调
+  `Close()`——框架拆除期间这会带崩 EmEditor。现在先释放 COM 侧（先
+  Close/Release 控制器、再 webview），宿主窗口最后销毁；
+  `EVENT_CLOSE_FRAME` 中也不再向核心回发任何关条命令（EmEditor 自己
+  拆除条，我们只释放自己的状态）。
+- **预览面板改用真正的自定义条 API**：0.22.0 用的是老式
+  `EE_TOOLBAR_OPEN` rebar 接口且位置字段用错——条登记成功（日志
+  id=1025）但什么都看不见。现改用 `Editor_CustomBarOpen`（官方
+  WebPreview 面板同款窗格式 API，`iPos = CUSTOM_BAR_RIGHT`，打开前把
+  宿主按 460 DPI 缩放尺寸建好）；核心会返回条框架窗口并记入日志。
+  关闭用 `Editor_CustomBarClose`；由于核心对插件发起的关闭不发通知，
+  调用后立即执行 `PreviewBarGone`。
+- **健壮性清扫**：WebView2 环境创建检查同步返回值（此前同步失败永远
+  到不了完成回调）；无标题文档的纯标题名不再在渲染页 URL 里产生垃圾
+  目录（回退 %TEMP%）；宿主随父对话框一起死掉时（模式切换关工具条）
+  会同步释放 WebView2 侧，不再泄漏。
+
 ## [0.22.0] - 2026-09-24
 
 ### 新增
