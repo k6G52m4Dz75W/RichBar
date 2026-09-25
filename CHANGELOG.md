@@ -14,6 +14,99 @@ this code base:
 | `0.4.x`       | Compatibility fixes that make the original plug-in build and load correctly on modern EmEditor (v26). |
 | `0.9.0` – `0.17.x` | The HTML + Markdown dual-mode toolbar, heading towards `1.0.0`. |
 
+
+## [0.23.6] - 2026-09-25
+
+### Changed
+
+- REVERTED 0.23.5's bar re-assert hack (fighting the platform with a re-open timer was absurd).
+- The design view is now driven by the VALUE-BASED official setter EI_SET_MARKDOWN_PREVIEW (408; sets the Markdown Design View to the (BOOL)lParam value) instead of the 23255 toggle, with automatic fallback to 23255 when the set does not take (verified via 407 right after).
+
+## [0.23.5] - 2026-09-25
+
+### Fixed
+
+- REVERTED in 0.23.6: re-asserting our bar after the design-view toolbar reshuffle was the wrong approach.
+
+## [0.23.4] - 2026-09-25
+
+### Fixed
+
+- Clicking [M] could resurrect the hidden OFFICIAL toolbar and drop ours: the mode switch wrote the document configuration, and EmEditor re-evaluates per-config toolbar visibility on a config switch. The mode switch no longer touches the configuration (unsaved docs previewed after a manual mode switch render as plain HTML — the official snapshot pipeline's extension-based choice).
+
+## [0.23.3] - 2026-09-25
+
+### Fixed
+
+- Two unsaved documents switching scrambled the design view: the 23255 reconcile was posted DURING the document-switch event, landing before the switch settled. It is now DEFERRED to a 200 ms one-shot timer; the button follows the memory immediately.
+- Persisted memory no longer records untitled documents (their names are reused by fresh sessions and could pre-check a brand-new file); saved files persist by full path, matching the official per-file persistence.
+
+## [0.23.2] - 2026-09-25
+
+### Fixed
+
+- The per-document design-view memory now persists across sessions (DesignDocs profile value); the global flag is saved on every document-switch reconcile, closing the restart initial-state mismatch.
+
+## [0.23.1] - 2026-09-25
+
+### Fixed
+
+- The startup restore double-toggled the design view: EmEditor ITSELF restores it across sessions (persistence outside the registry). The startup path now posts nothing and aligns the runtime model; the Preview button re-syncs against the pane at startup.
+
+## [0.23.0] - 2026-09-25
+
+### Changed
+
+- Complete design-view state machine (user design): every click toggles unconditionally and records the state in both the per-document memory and the persistent global flag; every document switch actively drives the view to the target document's remembered state (one 23255 only on disagreement).
+
+## [0.22.12] - 2026-09-25
+
+### Changed
+
+- The design view is per-document (user-verified against the official button): per-document session memory restored on every switch. Toggles made from EmEditor's own UI can desync our memory (documented limitation).
+
+## [0.22.11] - 2026-09-25
+
+### Changed
+
+- (Superseded by 0.22.12: view-level theory was wrong.)
+
+## [0.22.10] - 2026-09-25
+
+### Fixed
+
+- 407 (EI_GET_MARKDOWN_PREVIEW) RETIRED: it never tracks the design view (returned 0 even while visibly on) — all reconciliation against it was noise. The design view became self-bookkept.
+
+## [0.22.9] - 2026-09-25
+
+### Fixed
+
+- Delayed the per-document state query after document switches (407 lags); clicks reconciled against the live state (superseded by 0.22.10).
+
+## [0.22.8] - 2026-09-25
+
+### Added
+
+- Both toggle buttons FOLLOW THE DOCUMENT: the Design View button reflects the new document's state on switch; the Preview button keeps a per-document ON set (keyed by file path) and opens/closes the official pane accordingly (session scope).
+
+## [0.22.7] - 2026-09-25
+
+### Fixed
+
+- The Preview button reconciles against the OFFICIAL pane's real visibility (EmEditorWebPreview2 walk) — a pane auto-opened at startup no longer makes the first press close it.
+
+## [0.22.6] - 2026-09-25
+
+### Changed
+
+- 0.23.5's re-assert ancestor: design view driven via EI_SET_MARKDOWN_PREVIEW with 23255 fallback (see 0.23.6).
+
+## [0.22.5] - 2026-09-25
+
+### Changed
+
+- The preview pane shares EmEditor's own browser user-data folder (a private folder never spawned a browser process at all — probed).
+
 ## [0.22.4] - 2026-09-25
 
 ### Fixed
