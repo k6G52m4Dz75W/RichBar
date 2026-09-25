@@ -2106,7 +2106,7 @@ public:
 			}
 		}
 		if( uMsg == WM_ERASEBKGND ){
-			return 1;	// the web content covers the client; avoid flicker
+			return DefWindowProc( hwnd, uMsg, wParam, lParam );	// brush fills; web covers when live
 		}
 		return DefWindowProc( hwnd, uMsg, wParam, lParam );
 	}
@@ -2122,7 +2122,7 @@ public:
 		wc.lpfnWndProc = PreviewHostProc;
 		wc.hInstance = EEGetInstanceHandle();
 		wc.hCursor = LoadCursor( NULL, IDC_ARROW );
-		wc.hbrBackground = NULL;
+		wc.hbrBackground = (HBRUSH)( COLOR_WINDOW + 1 );	// never uninitialized black
 		wc.lpszClassName = WV2_PREVIEW_HOST_CLASS;
 		bRegistered = RegisterClass( &wc ) != 0;
 		return bRegistered;
@@ -2287,6 +2287,9 @@ public:
 		}
 		m_pWV2Controller = pCtrl;
 		pCtrl->get_CoreWebView2( &m_pWV2 );
+		// the controller is created INVISIBLE by default — without this the
+		// pane shows the unbrushed host window (solid black)
+		pCtrl->put_IsVisible( TRUE );
 		OnPreviewHostSize();
 		CWV2ResReqHandler* pHandler = new CWV2ResReqHandler( this );
 		m_pWV2->AddWebResourceRequestedFilter( L"https://document/*", COREWEBVIEW2_WEB_RESOURCE_CONTEXT_ALL );
@@ -2401,11 +2404,11 @@ public:
 	void PreviewBarGone()
 	{
 		m_nPreviewBarID = 0;
-		// release the COM side BEFORE destroying the host window: Close() on
-		// a controller whose target window is already gone crashes (the
-		// 0x20000 teardown error)
+		// Release() alone tears the WebView2 down; an explicit Close() on a
+		// controller whose target window the CORE already destroyed (it owns
+		// the pane container our host was adopted into) crashes — the
+		// reported 0x400000 error. Never call Close() here.
 		if( m_pWV2Controller ){
-			m_pWV2Controller->Close();
 			m_pWV2Controller->Release();
 			m_pWV2Controller = NULL;
 		}
@@ -2545,7 +2548,6 @@ public:
 			// NOT from inside WM_DESTROY
 			m_hwndPreviewHost = NULL;
 			if( m_pWV2Controller ){
-				m_pWV2Controller->Close();
 				m_pWV2Controller->Release();
 				m_pWV2Controller = NULL;
 			}

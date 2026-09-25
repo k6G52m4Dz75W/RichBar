@@ -14,6 +14,23 @@ this code base:
 | `0.4.x`       | Compatibility fixes that make the original plug-in build and load correctly on modern EmEditor (v26). |
 | `0.9.0` – `0.17.x` | The HTML + Markdown dual-mode toolbar, heading towards `1.0.0`. |
 
+## [0.22.2] - 2026-09-25
+
+### Fixed
+
+- **The pane rendered solid black**: a WebView2 controller is created
+  INVISIBLE by default — `put_IsVisible(TRUE)` was never sent, so the
+  pane showed the unbrushed host window. The controller is now made
+  visible right after creation, and the host class got a real background
+  brush so no pre-paint state can ever show uninitialized black.
+- **The 0x400000 (EVENT_CUSTOM_BAR_CLOSED) crash**: `PreviewBarGone`
+  called `Close()` on the WebView2 controller after the core had already
+  destroyed the pane container our host window was adopted into — an
+  explicit `Close()` on a controller whose target window is gone faults.
+  `PreviewBarGone` now only `Release()`s the COM objects (Release alone
+  tears the WebView2 down cleanly) and tolerates an already-destroyed
+  host; the same fix is applied to the orphaned-host cleanup path.
+
 ## [0.22.1] - 2026-09-25
 
 ### Fixed
