@@ -3756,6 +3756,17 @@ public:
 				ApplyToggleStates();
 				if( bWant != bPane ){
 					RbLogF( "preview click: want=%d pane=%d -> official 23275", (int)bWant, (int)bPane );
+					// unsaved documents: the official snapshot pipeline keys the
+					// markdown-vs-html choice off the temp file extension, which
+					// follows the document CONFIG - align it with our mode so
+					// unsaved Markdown previews convert (saved files already
+					// carry the right config and extension)
+					TCHAR szFile[ MAX_PATH ] = { 0 };
+					Editor_Info( m_hWnd, EI_GET_FILE_NAMEW, (LPARAM)szFile );
+					if( szFile[0] == 0 || _tcschr( szFile, _T('\\') ) == NULL ){
+						Editor_SetConfigW( m_hWnd, ( m_iMode == MODE_MD ) ? L"Markdown" : L"HTML" );
+						RbLogF( "preview: unsaved -> config=%s", ( m_iMode == MODE_MD ) ? "Markdown" : "HTML" );
+					}
 					PostMessage( m_hWnd, WM_COMMAND, MAKEWPARAM( EEID_MARKDOWN_PREVIEW, 0 ), 0 );
 				}
 			}

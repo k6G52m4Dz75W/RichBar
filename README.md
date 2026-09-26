@@ -190,6 +190,14 @@ Run the build commands from the repository root.
 
 ## Usage tips (tested)
 
+- **Recommended official setting — turn OFF "Automatically show the
+  Markdown toolbar"** (Customize > Markdown). EmEditor force-shows that
+  toolbar whenever the Markdown design view toggles, which can displace
+  this toolbar; RichBar 0.24.1+ re-hides it as a fallback, but turning
+  the official option off is the clean fix.
+
+## Usage tips (tested)
+
 - **Hide the on-screen "RichBar" title text**: EmEditor's customization has a
   toolbar-title display option — turn it off there. Do **not** empty the band
   title passed by the plug-in (0.11.1 tried): the View > Toolbars menu uses

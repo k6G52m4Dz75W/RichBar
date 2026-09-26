@@ -15,6 +15,20 @@ this code base:
 | `0.9.0` – `0.17.x` | The HTML + Markdown dual-mode toolbar, heading towards `1.0.0`. |
 
 
+## [0.24.2] - 2026-09-26
+
+### Added
+
+- **Unsaved documents now preview by OUR mode**: the official snapshot
+  pipeline keys the markdown-vs-html choice off the temp file extension,
+  which follows the document CONFIG — so the Preview button aligns the
+  config with the current [H]/[M] mode for unsaved documents before
+  posting 23275 (unsaved Markdown now converts; saved files already carry
+  the right config). Only runs for title-only (unsaved) documents.
+  Requires the 0.24.1 toolbar correction as the side-effect guard for
+  users who have not disabled the official auto-show option (README
+  updated with the recommended setting).
+
 ## [0.24.1] - 2026-09-26
 
 ### Fixed
