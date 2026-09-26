@@ -1748,7 +1748,7 @@ public:
 				TOOLBAR_INFO cri;
 				ZeroMemory( &cri, sizeof( cri ) );
 				cri.cbSize = sizeof( cri );
-				cri.nMask = TIM_CLIENT | TIM_TITLE | TIM_FLAGS | TIM_STYLE | TIM_MINCHILD | TIM_CXIDEAL | TIM_BAND | TIM_PLUG_IN_CMD_ID;
+				cri.nMask = TIM_CLIENT | TIM_TITLE | TIM_FLAGS | TIM_STYLE | TIM_MINCHILD | TIM_CXIDEAL | TIM_PLUG_IN_CMD_ID;
 				cri.wPlugInCmdID = EEGetCmdID();
 				cri.pszTitle = szTitle;
 				cri.hwndClient = hwndToolbar;
@@ -1763,8 +1763,7 @@ public:
 					m_fStyle |= RBBS_HIDDEN;
 				}
 				cri.fStyle = m_fStyle;
-				cri.nBand = m_nBand;
-
+	
 				m_nClientID = Editor_ToolbarOpen( m_hWnd, &cri );
 
 			if( !m_nClientID ){
@@ -2865,6 +2864,7 @@ public:
 //			m_bOpenStartup = false;
 			// this message arrives even if plug-in does not own this custom bar, so make sure it is mine.
 			TOOLBAR_INFO* pTI = (TOOLBAR_INFO*)lParam;
+			RbLogF( "toolbar closed: nID=%u ours=%u", pTI->nID, m_nClientID );
 			if( (pTI->nMask & TIM_ID) && pTI->nID == m_nClientID ){
 				_ASSERT( m_hwndToolbar != NULL );
 				CustomBarClosed();
@@ -2948,6 +2948,7 @@ public:
 		}
 		if( nEvent & EVENT_UI_CHANGED ){
 			if( lParam & (UI_CHANGED_TOOLBARS | UI_CHANGED_DPI) ){
+				RbLogF( "ui changed: toolbars (flags=%X)", (unsigned)lParam );
 				bool bVisible = IsVisible();
 				bool bOld = m_bLargeToolbar;
 				CheckToolbarSize();
@@ -3347,7 +3348,6 @@ public:
 			m_crCustomIcon = (COLORREF)GetProfileInt( _T("IconColor"), (int)RGB( 224, 224, 224 ) );
 			m_cx = GetProfileInt( _T("cx"), 0 );
 			m_fStyle = GetProfileInt( _T("Style"), 0 );
-			m_nBand = GetProfileInt( _T("Band"), -1 );
 			m_wRows = (WORD)GetProfileInt( _T("Rows"), 3 );
 			m_wColumns = (WORD)GetProfileInt( _T("Columns"), 2 );
 
@@ -3368,7 +3368,6 @@ public:
 		WriteProfileInt( _T("IconColor"), (int)m_crCustomIcon );
 		WriteProfileInt( _T("cx"), m_cx );
 		WriteProfileInt( _T("Style"), m_fStyle );
-		WriteProfileInt( _T("Band"), m_nBand );
 
 		SaveConfigArray( _T("Configs"), _T("Configs-Size"), m_AutoConfigArray );
 		SaveConfigArray( _T("MdConfigs"), _T("MdConfigs-Size"), m_MdConfigArray );
