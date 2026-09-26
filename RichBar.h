@@ -189,7 +189,6 @@ WCHAR OctToDec( LPWSTR& p )
 // one-shot markdown-bar correction (m_hDlg): the design toggle
 // auto-shows the markdown bar; hide it back if it came up
 #define IDT_DESIGN_SYNC			4
-#define IDT_PREVIEW_REOPEN		5
 // one-shot deferred design-view reconcile (m_hDlg): a 23255 posted during
 // the document-switch event lands before the switch settles and misapplies
 // runtime-drawn glyphs appended to every toolbar image list
@@ -2644,11 +2643,84 @@ public:
 		}
 	}
 
-		// reopen the official preview pane (the second half of Refresh Preview)
-	void ReopenPreviewPane()
+			// find the pane's top Chromium window (the reload target)
+	static BOOL CALLBACK FindChromeChildProc( HWND hwnd, LPARAM lParam )
 	{
-		RbLogF( "refresh preview: reopen" );
-		PostMessage( m_hWnd, WM_COMMAND, MAKEWPARAM( EEID_MARKDOWN_PREVIEW, 0 ), 0 );
+		WCHAR szCls[32];
+		if( GetClassNameW( hwnd, szCls, _countof( szCls ) ) != 0 &&
+			lstrcmpW( szCls, L"Chrome_WidgetWin_1" ) == 0 ){
+			*(HWND*)lParam = hwnd;
+			return FALSE;
+		}
+		return TRUE;
+	}
+
+	// rewrite the NEWEST %TEMP% EEWxxxx.htm snapshot (the one the pane is
+	// showing) with the current buffer text
+	void FeedPreviewSnapshot()
+	{
+		TCHAR szTemp[ MAX_PATH ] = { 0 };
+		GetTempPath( MAX_PATH, szTemp );
+		TCHAR szMask[ MAX_PATH ];
+		wsprintf( szMask, _T("%sEEW*.htm"), szTemp );
+		WIN32_FIND_DATA wfd;
+		HANDLE hFind = FindFirstFile( szMask, &wfd );
+		if( hFind == INVALID_HANDLE_VALUE ){
+			RbLogF( "feed: no EEW snapshot found" );
+			return;
+		}
+		FILETIME ftNewest = { 0 };
+		TCHAR szNewest[ MAX_PATH ] = { 0 };
+		do {
+			if( ( wfd.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY ) == 0 ){
+				if( CompareFileTime( &wfd.ftLastWriteTime, &ftNewest ) > 0 ){
+					ftNewest = wfd.ftLastWriteTime;
+					wsprintf( szNewest, _T("%s%s"), szTemp, wfd.cFileName );
+				}
+			}
+		} while( FindNextFile( hFind, &wfd ) );
+		FindClose( hFind );
+		if( szNewest[0] == 0 ){
+			return;
+		}
+		tstring sText;
+		if( !GetDocTextAll( sText ) ){
+			RbLogF( "feed: buffer read FAILED" );
+			return;
+		}
+		int cb = WideCharToMultiByte( CP_UTF8, 0, sText.c_str(), (int)sText.size(), NULL, 0, NULL, NULL );
+		HANDLE hFile = CreateFile( szNewest, GENERIC_WRITE, 0, NULL, CREATE_ALWAYS, 0, NULL );
+		if( hFile == INVALID_HANDLE_VALUE ){
+			RbLogF( "feed: write FAILED (%s)", szNewest );
+			return;
+		}
+		const BYTE bom[3] = { 0xEF, 0xBB, 0xBF };
+		DWORD cbW = 0;
+		WriteFile( hFile, bom, 3, &cbW, NULL );
+		if( cb > 0 ){
+			CHAR* pszUtf8 = (CHAR*)malloc( cb );
+			WideCharToMultiByte( CP_UTF8, 0, sText.c_str(), (int)sText.size(), pszUtf8, cb, NULL, NULL );
+			WriteFile( hFile, pszUtf8, cb, &cbW, NULL );
+			free( pszUtf8 );
+		}
+		CloseHandle( hFile );
+		RbLogF( "feed: %S <- %u chars", szNewest, (unsigned)sText.size() );
+	}
+
+	// reload the pane browser IN PLACE (no close, no flicker)
+	void ReloadPreviewBrowser( HWND hwndPane )
+	{
+		HWND hwndChrome = NULL;
+		EnumChildWindows( hwndPane, FindChromeChildProc, (LPARAM)&hwndChrome );
+		if( !hwndChrome ){
+			RbLogF( "reload: chrome window NOT FOUND" );
+			return;
+		}
+		// two channels: the browser app-command and a plain F5 — either lands
+		PostMessage( hwndChrome, WM_APPCOMMAND, 0, MAKELPARAM( 0, APPCOMMAND_BROWSER_REFRESH ) );
+		PostMessage( hwndChrome, WM_KEYDOWN, VK_F5, 0 );
+		PostMessage( hwndChrome, WM_KEYUP, VK_F5, 0 );
+		RbLogF( "reload: F5+APPCOMMAND sent" );
 	}// The dropdown arrow, drawn live in NM_CUSTOMDRAW's item-post-paint
 	// stage: right-anchored inside the button's ACTUAL rect, so the control's
 	// image placement and any width rounding cannot shift or clip it. The
@@ -3780,17 +3852,26 @@ public:
 					PostMessage( m_hWnd, WM_COMMAND, MAKEWPARAM( EEID_MARKDOWN_PREVIEW, 0 ), 0 );
 				}
 			}
-			else if( cmd.m_iCmd == CMD_REFRESH_PREVIEW ){
-				// the official pane re-snapshots on open: close + reopen delivers
-				// the CURRENT buffer to the preview (the only in-framework way
-				// to refresh, since the pane does not live-update)
-				if( IsOfficialPaneVisible() ){
-					RbLogF( "refresh preview: toggle close" );
-					PostMessage( m_hWnd, WM_COMMAND, MAKEWPARAM( EEID_MARKDOWN_PREVIEW, 0 ), 0 );
-					if( m_hDlg ){
-						SetTimer( m_hDlg, IDT_PREVIEW_REOPEN, 200, NULL );
-					}
+						else if( cmd.m_iCmd == CMD_REFRESH_PREVIEW ){
+				// deliver the CURRENT buffer to the preview WITHOUT closing it.
+				// Unsaved documents: the pane renders a %TEMP% EEWxxxx.htm
+				// snapshot written by the plug-in — rewrite the newest one with
+				// the live buffer and reload the pane browser in place. Saved
+				// documents render their disk file, so the reload re-reads it
+				// (save to see edits there).
+				HWND hwndPane = NULL;
+				EnumChildWindows( m_hWnd, FindOfficialPaneProc, (LPARAM)&hwndPane );
+				if( !hwndPane ){
+					return;	// nothing to refresh
 				}
+				TCHAR szFile[ MAX_PATH ] = { 0 };
+				Editor_Info( m_hWnd, EI_GET_FILE_NAMEW, (LPARAM)szFile );
+				const bool bUnsaved = ( szFile[0] == 0 ) || ( _tcschr( szFile, _T('\\') ) == NULL );
+				RbLogF( "refresh preview: unsaved=%d", (int)bUnsaved );
+				if( bUnsaved ){
+					FeedPreviewSnapshot();
+				}
+				ReloadPreviewBrowser( hwndPane );
 			}
 		}
 
@@ -4805,14 +4886,7 @@ INT_PTR CALLBACK NewProc( HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam )
 				}
 				return 0;
 			}
-						else if( wParam == IDT_PREVIEW_REOPEN ){
-				KillTimer( hwnd, IDT_PREVIEW_REOPEN );
-				CMyFrame* pFrame = static_cast<CMyFrame*>(GetFrame( hwnd ));
-				if( pFrame ){
-					pFrame->ReopenPreviewPane();
-				}
-				return 0;
-			}else if( wParam == IDT_PREVIEW_REFRESH ){
+			else if( wParam == IDT_PREVIEW_REFRESH ){
 				KillTimer( hwnd, IDT_PREVIEW_REFRESH );
 				// live sync suspended: the in-process WebView2 is unusable
 				// (browser process never spawns — reported upstream material)

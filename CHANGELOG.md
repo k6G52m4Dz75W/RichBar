@@ -15,6 +15,19 @@ this code base:
 | `0.9.0` – `0.17.x` | The HTML + Markdown dual-mode toolbar, heading towards `1.0.0`. |
 
 
+## [0.25.0] - 2026-09-26
+
+### Changed
+
+- **Refresh Preview no longer closes the pane** (0.24.3's
+  close-and-reopen flickered). For UNSAVED documents the button now
+  rewrites the pane's own %TEMP% EEWxxxx.htm snapshot with the live
+  buffer and reloads the pane browser IN PLACE (WM_APPCOMMAND browser
+  refresh + F5 to the pane's Chromium window — two channels, the state
+  is checked by the pane staying open). Saved documents reload from
+  their disk file (save first to see edits there — the official feed
+  design).
+
 ## [0.24.3] - 2026-09-26
 
 ### Added
