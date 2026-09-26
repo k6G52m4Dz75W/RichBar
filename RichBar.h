@@ -3756,6 +3756,7 @@ public:
 		}
 		if( wParam >= ID_COMMAND_BASE && wParam < ID_COMMAND_BASE + Cmds().size() ) {
 			CCmd& cmd = Cmds()[wParam - ID_COMMAND_BASE];
+			RbLogF( "cmd: id=%d -> cmd=%d", (int)wParam, (int)cmd.m_iCmd );
 			if( cmd.m_iCmd == CMD_TAGS ){
 				BOOL bResult;
 				wstring sTagBegin = UnescapeString( cmd.m_sTagBegin.c_str(), &bResult );
