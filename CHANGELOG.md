@@ -15,6 +15,19 @@ this code base:
 | `0.9.0` – `0.17.x` | The HTML + Markdown dual-mode toolbar, heading towards `1.0.0`. |
 
 
+## [0.24.3] - 2026-09-26
+
+### Added
+
+- **A Refresh Preview button next to the Preview button** (both modes,
+  refresh-line glyph). Clicking it closes and immediately reopens the
+  official preview pane — the pane re-snapshots the CURRENT buffer on
+  open, delivering the latest content without touching the document.
+  The pane closes only if it is open (the button never opens a pane out
+  of nowhere); the Preview button's pressed state is unaffected. Note:
+  this release lands past 0.24.2, so the version is 0.24.3 (the request
+  said 0.24.0, which was already taken).
+
 ## [0.24.2] - 2026-09-26
 
 ### Added

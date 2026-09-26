@@ -163,8 +163,9 @@ WCHAR OctToDec( LPWSTR& p )
 #define CMD_LINE_PREFIX			8
 #define CMD_ICON_COLOR			9
 #define CMD_MD_VIEW				10
-#define CMD_PREVIEW				11
-#define MAX_CMD					12
+#define CMD_PREVIEW				12
+#define CMD_REFRESH_PREVIEW			12
+#define MAX_CMD					13
 
 // built-in EmEditor command IDs and pane flags from the v23/v24.4 plug-in
 // SDK (Emurasoft/emeditor-plugin-library plugin.h)
@@ -188,11 +189,12 @@ WCHAR OctToDec( LPWSTR& p )
 // one-shot markdown-bar correction (m_hDlg): the design toggle
 // auto-shows the markdown bar; hide it back if it came up
 #define IDT_DESIGN_SYNC			4
+#define IDT_PREVIEW_REOPEN		5
 // one-shot deferred design-view reconcile (m_hDlg): a 23255 posted during
 // the document-switch event lands before the switch settles and misapplies
 // runtime-drawn glyphs appended to every toolbar image list
-#define MD_ICON_MODE_H			23
-#define MD_ICON_MODE_M			24
+#define MD_ICON_MODE_H			24
+#define MD_ICON_MODE_M			25
 // logical width of the dropdown marker strip (DPI-scaled); sized so the
 // live-drawn arrow keeps clear of the glyph while the button stays compact
 #define MD_MARKER_STRIP			8
@@ -287,6 +289,7 @@ static struct CDefCmd DefCmd[] =
 	{ -1, CMD_SEPARATOR, 0, L"", L"" },
 	{ 48, CMD_ICON_COLOR, ID_ICON_COLOR, L"", L"" },
 	{ 49, CMD_PREVIEW, ID_PREVIEW, L"", L"" },
+	{ 50, CMD_REFRESH_PREVIEW, ID_REFRESH_PREVIEW, L"", L"" },
 	{ 24, CMD_CUSTOMIZE, ID_CUSTOMIZE, L"", L"" },
 	{ 25, CMD_TAGS, ID_FORM_FORM, L"<form method=\"post\" action=\"\">\n\t", L"\n<input type=\"submit\"><input type=\"reset\"></form>\n" },
 	{ 26, CMD_TAGS, ID_TEXTBOX, L"<input type=\"text\" id=\"\" />", L"" },
@@ -353,6 +356,7 @@ static struct CDefCmdMd {
 	{ 20, CMD_ICON_COLOR, L"Icon Color", L"", L"", 0, 0 },
 	{ 21, CMD_MD_VIEW, L"Design View", L"", L"", 0, 0 },
 	{ 22, CMD_PREVIEW, L"Preview", L"", L"", 0, 0 },
+	{ 23, CMD_REFRESH_PREVIEW, L"Refresh Preview", L"", L"", 0, 0 },
 	{ 19, CMD_CUSTOMIZE, L"Customize", L"", L"", 0, 0 },
 };
 
@@ -1501,6 +1505,7 @@ public:
 			{ 20, 0xF42E },		// color-filter-line (icon color)
 			{ 21, 0xF1D3 },		// t-box-line (design view)
 			{ 22, 0xECB5 },		// eye-line (preview)
+			{ 23, 0xF064 },		// refresh-line (refresh preview)
 		};
 		BOOL bGlyphDrawn = FALSE;
 		for( int g = 0; g < (int)_countof( c_aIconGlyphs ); g++ ){
@@ -1605,7 +1610,7 @@ public:
 	// button's actual rect (see DrawDropdownArrow).
 	HIMAGELIST BuildToolbarImageList( int cx, COLORREF crFg, int mode, int nCopies = 1 )
 	{
-		int count = mode == MODE_MD ? 23 : 50;
+		int count = mode == MODE_MD ? 24 : 51;
 		HIMAGELIST himl = ImageList_Create( cx, cx, ILC_COLOR32, ( count + 2 ) * nCopies, 2 );
 		if( !himl ){
 			return NULL;
@@ -2639,7 +2644,12 @@ public:
 		}
 	}
 
-	// The dropdown arrow, drawn live in NM_CUSTOMDRAW's item-post-paint
+		// reopen the official preview pane (the second half of Refresh Preview)
+	void ReopenPreviewPane()
+	{
+		RbLogF( "refresh preview: reopen" );
+		PostMessage( m_hWnd, WM_COMMAND, MAKEWPARAM( EEID_MARKDOWN_PREVIEW, 0 ), 0 );
+	}// The dropdown arrow, drawn live in NM_CUSTOMDRAW's item-post-paint
 	// stage: right-anchored inside the button's ACTUAL rect, so the control's
 	// image placement and any width rounding cannot shift or clip it. The
 	// glyph is the bundled Remix arrow-down-s-fill; on hover/pressed the
@@ -3770,6 +3780,18 @@ public:
 					PostMessage( m_hWnd, WM_COMMAND, MAKEWPARAM( EEID_MARKDOWN_PREVIEW, 0 ), 0 );
 				}
 			}
+			else if( cmd.m_iCmd == CMD_REFRESH_PREVIEW ){
+				// the official pane re-snapshots on open: close + reopen delivers
+				// the CURRENT buffer to the preview (the only in-framework way
+				// to refresh, since the pane does not live-update)
+				if( IsOfficialPaneVisible() ){
+					RbLogF( "refresh preview: toggle close" );
+					PostMessage( m_hWnd, WM_COMMAND, MAKEWPARAM( EEID_MARKDOWN_PREVIEW, 0 ), 0 );
+					if( m_hDlg ){
+						SetTimer( m_hDlg, IDT_PREVIEW_REOPEN, 200, NULL );
+					}
+				}
+			}
 		}
 
 
@@ -4783,7 +4805,14 @@ INT_PTR CALLBACK NewProc( HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam )
 				}
 				return 0;
 			}
-			else if( wParam == IDT_PREVIEW_REFRESH ){
+						else if( wParam == IDT_PREVIEW_REOPEN ){
+				KillTimer( hwnd, IDT_PREVIEW_REOPEN );
+				CMyFrame* pFrame = static_cast<CMyFrame*>(GetFrame( hwnd ));
+				if( pFrame ){
+					pFrame->ReopenPreviewPane();
+				}
+				return 0;
+			}else if( wParam == IDT_PREVIEW_REFRESH ){
 				KillTimer( hwnd, IDT_PREVIEW_REFRESH );
 				// live sync suspended: the in-process WebView2 is unusable
 				// (browser process never spawns — reported upstream material)

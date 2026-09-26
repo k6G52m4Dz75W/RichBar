@@ -3,7 +3,7 @@
   "version": "4.9.1",
   "modes": ["html5-fill", "markdown-fill"],
   "iconcolor": ["color-filter-line"],
-  "views": ["t-box-line", "eye-line"],
+  "views": ["t-box-line", "eye-line", "refresh-line"],
   "marker": ["arrow-down-s-fill"],
   "markdown": ["h-1", "h-2", "h-3", "h-4", "h-5", "h-6", "bold", "italic", "strikethrough", "code-s-slash-line", "code-box-line", "double-quotes-l", "list-unordered", "list-ordered", "list-check-2", "subtract-line", "links-line", "image-line", "table-line", "settings-line"],
   "html": ["heading", "paragraph", "text-wrap", "bold", "italic", "underline", "font-size-2", "palette-line", "image-line", "links-line", "table-line", "subtract-line", "brackets-line", "align-left", "align-center", "align-right", "align-justify", "list-ordered", "list-unordered", "indent-decrease", "indent-increase", "mark-pen-line", "paint-fill", "file-list-3-line", "settings-line", "file-list-2-line", "input-cursor-move", "lock-password-line", "file-edit-line", "checkbox-line", "radio-button-line", "artboard-2-line", "expand-up-down-line", "list-radio", "cursor-line", "braces-line", "eye-off-line", "box-3-line", "camera-line", "disc-line", "scan-2-line", "printer-line", "function-line", "close-circle-line", "alert-line", "information-line", "flag-line", "music-2-line"]
