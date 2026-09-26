@@ -1933,7 +1933,7 @@ public:
 	// the whole document text, line by line (the SDK has no whole-text API)
 	bool GetDocTextAll( tstring& sText )
 	{
-		UINT_PTR nLines = Editor_GetLines( m_hWnd, FALSE );
+		UINT_PTR nLines = Editor_GetLines( m_hWnd, TRUE );	// LOGICAL lines: never break at window-wrap positions
 		if( nLines == 0 || nLines > 2000000 ){
 			return false;
 		}

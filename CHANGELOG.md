@@ -15,6 +15,16 @@ this code base:
 | `0.9.0` – `0.17.x` | The HTML + Markdown dual-mode toolbar, heading towards `1.0.0`. |
 
 
+## [0.25.1] - 2026-09-26
+
+### Fixed
+
+- **The fed snapshot broke lines at WINDOW-WRAP positions**: the buffer
+  reader used EE_GET_LINES with nLogical=FALSE (DISPLAY rows — wrapped
+  visual rows), so every screen-wrap became a real newline in the
+  snapshot and wrapped headings lost their level. It now reads LOGICAL
+  lines (TRUE), matching the newline structure of the document.
+
 ## [0.25.0] - 2026-09-26
 
 ### Changed
