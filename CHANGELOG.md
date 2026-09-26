@@ -29,6 +29,7 @@ this code base:
   users who have not disabled the official auto-show option (README
   updated with the recommended setting).
 
+
 ## [0.24.1] - 2026-09-26
 
 ### Fixed
@@ -39,6 +40,7 @@ this code base:
   via EE_QUERY_STATUS (23274) and hides it ONLY if the toggle brought it
   up — preserving the user's hidden-toolbar preference in both toggle
   directions without blind pairing.
+
 
 ## [0.24.0] - 2026-09-25
 
@@ -54,6 +56,16 @@ this code base:
   actual-state model) is REMOVED — the query is the truth. This also
   makes toggles from EmEditor's own UI fully visible to us.
 
+## [0.23.7] - 2026-09-25
+
+### Changed
+
+- The design view toggle was followed by an immediate 23274 (markdown
+  bar show/hide) to put the auto-shown toolbar away. REVERTED in
+  0.24.0-era work: the toggle pairing showed the bar again on the second
+  click (the bar only auto-shows on design-ON), superseded by the
+  state-checked correction in 0.24.1.
+
 ## [0.23.6] - 2026-09-25
 
 ### Changed
@@ -63,15 +75,22 @@ this code base:
 
 ## [0.23.5] - 2026-09-25
 
-### Fixed
+### Changed
 
-- REVERTED in 0.23.6: re-asserting our bar after the design-view toolbar reshuffle was the wrong approach.
+- REVERTED in 0.23.6 (user rejected the approach): re-asserting our bar
+  600 ms after the design-view toggle when EmEditor's relayout dropped
+  it, plus EVENT_TOOLBAR_CLOSED logging.
 
 ## [0.23.4] - 2026-09-25
 
 ### Fixed
 
-- Clicking [M] could resurrect the hidden OFFICIAL toolbar and drop ours: the mode switch wrote the document configuration, and EmEditor re-evaluates per-config toolbar visibility on a config switch. The mode switch no longer touches the configuration (unsaved docs previewed after a manual mode switch render as plain HTML — the official snapshot pipeline's extension-based choice).
+- Clicking [M] could resurrect the hidden OFFICIAL toolbar and drop
+  ours: the mode switch wrote the document configuration, and EmEditor
+  re-evaluates per-config TOOLBAR VISIBILITY on a config switch. The
+  mode switch no longer touches the configuration (unsaved documents
+  previewed after a manual mode switch render as plain HTML — the
+  official snapshot pipeline's extension-based choice).
 
 ## [0.23.3] - 2026-09-25
 
@@ -84,67 +103,112 @@ this code base:
 
 ### Fixed
 
-- The per-document design-view memory now persists across sessions (DesignDocs profile value); the global flag is saved on every document-switch reconcile, closing the restart initial-state mismatch.
+- The per-document design-view memory now persists across sessions
+  (DesignDocs profile value, newline-separated paths); the persisted
+  global flag is updated on every document-switch reconcile — closing
+  the restart initial-state mismatch.
 
 ## [0.23.1] - 2026-09-25
 
 ### Fixed
 
-- The startup restore double-toggled the design view: EmEditor ITSELF restores it across sessions (persistence outside the registry). The startup path now posts nothing and aligns the runtime model; the Preview button re-syncs against the pane at startup.
+- The startup restore double-toggled the design view: EmEditor ITSELF
+  restores it across sessions (persistence outside the registry — the
+  earlier registry-only diff missed it). The startup path now posts
+  nothing and aligns the runtime model; the Preview button re-syncs
+  against the pane at startup.
 
 ## [0.23.0] - 2026-09-25
 
 ### Changed
 
-- Complete design-view state machine (user design): every click toggles unconditionally and records the state in both the per-document memory and the persistent global flag; every document switch actively drives the view to the target document's remembered state (one 23255 only on disagreement).
+- Complete design-view state machine (user design): every click toggles
+  unconditionally and records the state in BOTH the per-document memory
+  and the persistent global flag; every document switch actively drives
+  the view to the target document's remembered state (one 23255 only on
+  disagreement).
 
 ## [0.22.12] - 2026-09-25
 
 ### Changed
 
-- The design view is per-document (user-verified against the official button): per-document session memory restored on every switch. Toggles made from EmEditor's own UI can desync our memory (documented limitation).
+- The design view is PER-DOCUMENT (user-verified against the official
+  button): per-document session memory restored on every switch.
+  0.22.11's view-level theory was wrong — the inversion the user saw
+  came from toggling via EmEditor's OWN toolbar, which our memory could
+  not see (documented limitation until 0.24.0).
 
 ## [0.22.11] - 2026-09-25
 
 ### Changed
 
-- (Superseded by 0.22.12: view-level theory was wrong.)
+- (SUPERSEDED by 0.22.12: the view-level theory was wrong.)
 
 ## [0.22.10] - 2026-09-25
 
 ### Fixed
 
-- 407 (EI_GET_MARKDOWN_PREVIEW) RETIRED: it never tracks the design view (returned 0 even while visibly on) — all reconciliation against it was noise. The design view became self-bookkept.
+- 407 (EI_GET_MARKDOWN_PREVIEW) RETIRED: it never tracks the design
+  view — it returned 0 on EVERY query, even while the view was visibly
+  on after 23255. All reconciliation against it was noise (the flap era
+  AND the double-press era). The design view became fully self-bookkept
+  (superseded by the EE_QUERY_STATUS design in 0.24.0).
 
 ## [0.22.9] - 2026-09-25
 
 ### Fixed
 
-- Delayed the per-document state query after document switches (407 lags); clicks reconciled against the live state (superseded by 0.22.10).
+- The inverted design-view state: the per-document sync queried 407
+  immediately on a document switch (stale value), and the click posted
+  the 23255 toggle unconditionally (inverting misaligned states). Both
+  fixed tentatively; superseded by 0.22.10's 407 retirement.
 
 ## [0.22.8] - 2026-09-25
 
 ### Added
 
-- Both toggle buttons FOLLOW THE DOCUMENT: the Design View button reflects the new document's state on switch; the Preview button keeps a per-document ON set (keyed by file path) and opens/closes the official pane accordingly (session scope).
+- Both toggle buttons FOLLOW THE DOCUMENT, like the official buttons:
+  the Design View button reflects the new document's state on every
+  switch (one EI_GET_MARKDOWN_PREVIEW query per switch — not the
+  flapping poll); the Preview button keeps a per-document ON set (keyed
+  by file path, untitled documents share a slot) and opens/closes the
+  official pane accordingly (session scope).
 
 ## [0.22.7] - 2026-09-25
 
 ### Fixed
 
-- The Preview button reconciles against the OFFICIAL pane's real visibility (EmEditorWebPreview2 walk) — a pane auto-opened at startup no longer makes the first press close it.
+- The Preview button reconciles against the OFFICIAL pane's real
+  visibility (the EmEditorWebPreview2 window walk): a pane auto-opened
+  at startup no longer makes the first button press close it.
+
+### Known (official behavior, upstream material)
+
+- Unsaved documents preview as RAW HTML in the official WebPreview:
+  F12 console evidence shows the renderer fetches a %TEMP% EEWxxxx.HTM
+  snapshot and the pipeline is chosen by file EXTENSION. A Markdown
+  document must be saved for the converted preview.
 
 ## [0.22.6] - 2026-09-25
 
 ### Changed
 
-- 0.23.5's re-assert ancestor: design view driven via EI_SET_MARKDOWN_PREVIEW with 23255 fallback (see 0.23.6).
+- The Preview button returns to the official 23275 (stable): WebView2
+  hosting inside EmEditor.exe is unusable — a second environment never
+  gets a browser process (probed: controller "ready" with zero
+  msedgewebview2 processes; upstream report material). Pane detection is
+  existence-based; the EI_OPEN_WEB re-navigation (which opened the
+  external browser) is removed.
 
 ## [0.22.5] - 2026-09-25
 
 ### Changed
 
-- The preview pane shares EmEditor's own browser user-data folder (a private folder never spawned a browser process at all — probed).
+- The preview pane SHARES EmEditor's own browser user-data folder: a
+  private folder never spawned a browser process at all (probed: zero
+  msedgewebview2 processes with the controller "ready"), leaving
+  half-alive objects — no rendering (blank pane), no fetches, and
+  0xC0000005 teardowns.
 
 ## [0.22.4] - 2026-09-25
 
