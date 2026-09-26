@@ -163,7 +163,7 @@ WCHAR OctToDec( LPWSTR& p )
 #define CMD_LINE_PREFIX			8
 #define CMD_ICON_COLOR			9
 #define CMD_MD_VIEW				10
-#define CMD_PREVIEW				12
+#define CMD_PREVIEW				11
 #define CMD_REFRESH_PREVIEW			12
 #define MAX_CMD					13
 
