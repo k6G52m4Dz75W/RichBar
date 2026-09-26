@@ -3852,7 +3852,7 @@ public:
 					PostMessage( m_hWnd, WM_COMMAND, MAKEWPARAM( EEID_MARKDOWN_PREVIEW, 0 ), 0 );
 				}
 			}
-						else if( cmd.m_iCmd == CMD_REFRESH_PREVIEW ){
+			else if( cmd.m_iCmd == CMD_REFRESH_PREVIEW ){
 				// deliver the CURRENT buffer to the preview WITHOUT closing it.
 				// Unsaved documents: the pane renders a %TEMP% EEWxxxx.htm
 				// snapshot written by the plug-in — rewrite the newest one with
@@ -3873,7 +3873,7 @@ public:
 				}
 				ReloadPreviewBrowser( hwndPane );
 			}
-		}
+			}
 
 
 		//switch( wParam ){
@@ -5057,6 +5057,7 @@ INT_PTR CALLBACK CustPropDlg( HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam 
 			CMyFrame* pFrame = static_cast<CMyFrame*>(GetFrame( hwnd ));
 			_ASSERTE( pFrame );
 			nResult = pFrame->OnCustPropNotify( hwnd, (int)wParam, (LPNMHDR)lParam );
+
 		}
 		break;
 	}
