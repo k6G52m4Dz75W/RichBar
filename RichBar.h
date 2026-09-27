@@ -2583,23 +2583,7 @@ public:
 
 	// EVENT_CUSTOM_BAR_CLOSED handler, guarded: a fault here (WebView2
 	// teardown racing the core bar destruction) must NOT take EmEditor down
-	static void HandleBarClosedGuarded( CMyFrame* pFrame, CUSTOM_BAR_CLOSE_INFO* pCI )
-	{
-		__try {
-			pFrame->RbLogF( "bar closed event: nID=%u iPos=%d flags=0x%X (ours=%u)", pCI->nID, pCI->iPos, pCI->dwFlags, pFrame->m_nPreviewBarID );
-			if( pCI->nID == pFrame->m_nPreviewBarID ){
-				pFrame->PreviewBarGone();
-			}
-		}
-		__except( EXCEPTION_EXECUTE_HANDLER ) {
-			pFrame->RbLogF( "bar closed handler FAULTED 0x%08X (suppressed)", (unsigned)GetExceptionCode() );
-			pFrame->m_nPreviewBarID = 0;
-			pFrame->m_pWV2Controller = NULL;
-			pFrame->m_pWV2 = NULL;
-			pFrame->m_hwndPreviewHost = NULL;
-			pFrame->m_bPreviewOn = false;
-		}
-	}
+
 
 
 	// one-shot startup restore: reopen the panes that were on when the
@@ -2972,7 +2956,6 @@ public:
 			}
 		}
 		if( nEvent & EVENT_CUSTOM_BAR_CLOSED ){
-			HandleBarClosedGuarded( this, (CUSTOM_BAR_CLOSE_INFO*)lParam );
 			SyncPreviewToPane();	// the official pane may have been closed from its own UI
 		}
 		if( nEvent & EVENT_CHANGE ){
