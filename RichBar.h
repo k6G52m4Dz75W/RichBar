@@ -3530,18 +3530,25 @@ public:
 	{
 		int nSelType = Editor_GetSelTypeEx( m_hWnd, TRUE );
 		POINT_PTR ptStart, ptEnd;
+		POINT_PTR ptSaveA, ptSaveB;
+		bool bSaveSel = false;
 		if( nSelType & SEL_TYPE_SELECTED ){
 			Editor_GetSelStart( m_hWnd, POS_LOGICAL_W, &ptStart );
 			Editor_GetSelEnd( m_hWnd, POS_LOGICAL_W, &ptEnd );
+			bSaveSel = true;
 			if( ptStart.y > ptEnd.y || ( ptStart.y == ptEnd.y && ptStart.x > ptEnd.x ) ){
 				POINT_PTR pt = ptStart;
 				ptStart = ptEnd;
 				ptEnd = pt;
 			}
+			ptSaveA = ptStart;
+			ptSaveB = ptEnd;
 		}
 		else {
 			Editor_GetCaretPos( m_hWnd, POS_LOGICAL_W, &ptStart );
 			ptEnd = ptStart;
+			ptSaveA = ptStart;
+			ptSaveB = ptEnd;
 		}
 
 		int nLines = (int)( ptEnd.y - ptStart.y ) + 1;
@@ -3573,8 +3580,6 @@ public:
 				bRemove = false;
 				break;
 			}
-		}		if( bRemove ){
-			return;	// every line already carries the prefix: official behavior is a no-op
 		}
 
 		WCHAR szNum[16];
@@ -3608,6 +3613,14 @@ public:
 				nNum++;
 			}
 			delete [] apszLines[i];
+		}
+		// restore the user's caret/selection (the reads moved it)
+		if( bSaveSel ){
+			Editor_SetCaretPosEx( m_hWnd, POS_LOGICAL_W, &ptSaveA, FALSE );
+			Editor_SetCaretPosEx( m_hWnd, POS_LOGICAL_W, &ptSaveB, TRUE );
+		}
+		else {
+			Editor_SetCaretPosEx( m_hWnd, POS_LOGICAL_W, &ptSaveA, FALSE );
 		}
 		delete [] apszLines;
 		delete [] abHas;
