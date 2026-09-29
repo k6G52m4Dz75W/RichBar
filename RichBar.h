@@ -2641,6 +2641,26 @@ public:
 		return TRUE;
 	}
 
+	static BOOL CALLBACK FindRendererProc( HWND hwnd, LPARAM lParam )
+	{
+		WCHAR szCls[32];
+		if( GetClassNameW( hwnd, szCls, _countof( szCls ) ) != 0 &&
+			lstrcmpW( szCls, L"Chrome_RenderWidgetHostHWND" ) == 0 ){
+			*(HWND*)lParam = hwnd;
+			return FALSE;
+		}
+		return TRUE;
+	}
+	{
+		WCHAR szCls[32];
+		if( GetClassNameW( hwnd, szCls, _countof( szCls ) ) != 0 &&
+			lstrcmpW( szCls, L"Chrome_WidgetWin_1" ) == 0 ){
+			*(HWND*)lParam = hwnd;
+			return FALSE;
+		}
+		return TRUE;
+	}
+
 	// rewrite the NEWEST %TEMP% EEWxxxx.htm snapshot (the one the pane is
 	// showing) with the current buffer text
 	void FeedPreviewSnapshot()
@@ -2702,10 +2722,19 @@ public:
 			RbLogF( "reload: chrome window NOT FOUND" );
 			return;
 		}
-		// two channels: the browser app-command and a plain F5 — either lands
+		// channels: the browser app-command + F5 to the chrome window + F5 to
+		// the RENDERER input window (Chrome_RenderWidgetHostHWND is the input
+		// target in Chromium embeddings — the most likely to accept posted keys)
 		PostMessage( hwndChrome, WM_APPCOMMAND, 0, MAKELPARAM( 0, APPCOMMAND_BROWSER_REFRESH ) );
 		PostMessage( hwndChrome, WM_KEYDOWN, VK_F5, 0 );
 		PostMessage( hwndChrome, WM_KEYUP, VK_F5, 0 );
+		HWND hwndRWH = NULL;
+		EnumChildWindows( hwndPane, FindRendererProc, (LPARAM)&hwndRWH );
+		if( hwndRWH ){
+			PostMessage( hwndRWH, WM_KEYDOWN, VK_F5, 0 );
+			PostMessage( hwndRWH, WM_KEYUP, VK_F5, 0 );
+			RbLogF( "reload: F5 sent to renderer window" );
+		}
 		RbLogF( "reload: F5+APPCOMMAND sent" );
 	}// The dropdown arrow, drawn live in NM_CUSTOMDRAW's item-post-paint
 	// stage: right-anchored inside the button's ACTUAL rect, so the control's
