@@ -3512,7 +3512,9 @@ public:
 			return 2;
 		}
 		if( pszLine[0] == L'>' && pszLine[1] == L' ' ){
-			return 2;
+			int i = 2;
+			while( pszLine[i] == L'>' && pszLine[i+1] == L' ' )  i += 2;
+			return i;	// normalize repeated prefixes ("> > text")
 		}
 		{
 			int i = 0;
