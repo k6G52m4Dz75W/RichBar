@@ -189,6 +189,7 @@ WCHAR OctToDec( LPWSTR& p )
 // one-shot markdown-bar correction (m_hDlg): the design toggle
 // auto-shows the markdown bar; hide it back if it came up
 #define IDT_DESIGN_SYNC			4
+#define IDT_PREVIEW_REOPEN		5
 // one-shot deferred design-view reconcile (m_hDlg): a 23255 posted during
 // the document-switch event lands before the switch settles and misapplies
 // runtime-drawn glyphs appended to every toolbar image list
@@ -2612,7 +2613,20 @@ public:
 
 
 
-	// deferred markdown-bar correction: EmEditor auto-shows the markdown
+		// reopen the preview pane (second half of the unsaved-doc refresh)
+
+	void ReopenPreviewPane()
+
+	{
+
+		RbLogF( "refresh: reopen pane" );
+
+		PostMessage( m_hWnd, WM_COMMAND, MAKEWPARAM( EEID_MARKDOWN_PREVIEW, 0 ), 0 );
+
+	}
+
+
+// deferred markdown-bar correction: EmEditor auto-shows the markdown
 	// toolbar when the design view toggles; if the user had it hidden, put
 	// it back. The bar's visibility is queried via EE_QUERY_STATUS on its
 	// own command (23274) — a state-checked correction, not a blind toggle
@@ -3877,9 +3891,17 @@ public:
 				const bool bUnsaved = ( szFile[0] == 0 ) || ( _tcschr( szFile, _T('\\') ) == NULL );
 				RbLogF( "refresh preview: unsaved=%d", (int)bUnsaved );
 				if( bUnsaved ){
-					FeedPreviewSnapshot();
+					// the pane re-snapshots the BUFFER on open: close + reopen
+					// delivers the current content GUARANTEED (in-place reload
+					// channels do not reach WebView2)
+					PostMessage( m_hWnd, WM_COMMAND, MAKEWPARAM( EEID_MARKDOWN_PREVIEW, 0 ), 0 );
+					if( m_hDlg ){
+						SetTimer( m_hDlg, IDT_PREVIEW_REOPEN, 200, NULL );
+					}
 				}
-				ReloadPreviewBrowser( hwndPane );
+				else {
+					ReloadPreviewBrowser( hwndPane );	// saved: reload from disk
+				}
 			}
 			}
 
@@ -4894,7 +4916,22 @@ INT_PTR CALLBACK NewProc( HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam )
 				}
 				return 0;
 			}
-			else if( wParam == IDT_PREVIEW_REFRESH ){
+						else if( wParam == IDT_PREVIEW_REOPEN ){
+
+				KillTimer( hwnd, IDT_PREVIEW_REOPEN );
+
+				CMyFrame* pFrame = static_cast<CMyFrame*>(GetFrame( hwnd ));
+
+				if( pFrame ){
+
+					pFrame->ReopenPreviewPane();
+
+				}
+
+				return 0;
+
+			}
+else if( wParam == IDT_PREVIEW_REFRESH ){
 				KillTimer( hwnd, IDT_PREVIEW_REFRESH );
 				// live sync suspended: the in-process WebView2 is unusable
 				// (browser process never spawns — reported upstream material)
