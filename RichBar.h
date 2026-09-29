@@ -2717,13 +2717,13 @@ public:
 		// the RENDERER input window (Chrome_RenderWidgetHostHWND is the input
 		// target in Chromium embeddings — the most likely to accept posted keys)
 		PostMessage( hwndChrome, WM_APPCOMMAND, 0, MAKELPARAM( 0, APPCOMMAND_BROWSER_REFRESH ) );
-		PostMessage( hwndChrome, WM_KEYDOWN, VK_F5, (LPARAM)0x003B0001 );
-		PostMessage( hwndChrome, WM_KEYUP, VK_F5, (LPARAM)0xC03B0001 );
+		PostMessage( hwndChrome, WM_KEYDOWN, VK_F5, 0 );
+		PostMessage( hwndChrome, WM_KEYUP, VK_F5, 0 );
 		HWND hwndRWH = NULL;
 		EnumChildWindows( hwndPane, FindRendererProc, (LPARAM)&hwndRWH );
 		if( hwndRWH ){
-			PostMessage( hwndRWH, WM_KEYDOWN, VK_F5, (LPARAM)0x003B0001 );
-			PostMessage( hwndRWH, WM_KEYUP, VK_F5, (LPARAM)0xC03B0001 );
+			PostMessage( hwndRWH, WM_KEYDOWN, VK_F5, 0 );
+			PostMessage( hwndRWH, WM_KEYUP, VK_F5, 0 );
 			RbLogF( "reload: F5 sent to renderer window" );
 		}
 		RbLogF( "reload: F5+APPCOMMAND sent" );
