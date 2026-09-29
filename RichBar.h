@@ -2651,17 +2651,8 @@ public:
 		}
 		return TRUE;
 	}
-	{
-		WCHAR szCls[32];
-		if( GetClassNameW( hwnd, szCls, _countof( szCls ) ) != 0 &&
-			lstrcmpW( szCls, L"Chrome_WidgetWin_1" ) == 0 ){
-			*(HWND*)lParam = hwnd;
-			return FALSE;
-		}
-		return TRUE;
-	}
 
-	// rewrite the NEWEST %TEMP% EEWxxxx.htm snapshot (the one the pane is
+		// rewrite the NEWEST %TEMP% EEWxxxx.htm snapshot (the one the pane is
 	// showing) with the current buffer text
 	void FeedPreviewSnapshot()
 	{
