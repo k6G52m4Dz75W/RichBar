@@ -3548,14 +3548,22 @@ public:
 		LPWSTR* apszLines = new LPWSTR[ nLines ];
 		bool* abHas = new bool[ nLines ];
 		for( int i = 0; i < nLines; i++ ){
-			GET_LINE_INFO gli;
-			gli.cch = 0;
-			gli.flags = 0;
-			gli.yLine = (UINT)( ptStart.y + i );
-			UINT_PTR cch = Editor_GetLineW( m_hWnd, &gli, NULL );
+			// read the line via a SELECTION in the same logical coordinates as
+			// the caret: EE_GET_LINE's yLine proved display-indexed in wrapped
+			// documents, reading the WRONG row and breaking the prefix check
+			POINT_PTR ptCur;
+			ptCur.x = 0;
+			ptCur.y = ptStart.y + i;
+			Editor_SetCaretPosEx( m_hWnd, POS_LOGICAL_W, &ptCur, FALSE );
+			POINT_PTR ptRowEnd;
+			ptRowEnd.x = 0x7FFFFFFF;
+			ptRowEnd.y = ptCur.y;
+			Editor_SetCaretPosEx( m_hWnd, POS_LOGICAL_W, &ptRowEnd, TRUE );
+			UINT_PTR cch = Editor_GetSelTextW( m_hWnd, 0, NULL );
 			apszLines[i] = new WCHAR[ cch + 1 ];
-			gli.cch = cch + 1;
-			Editor_GetLineW( m_hWnd, &gli, apszLines[i] );
+			Editor_GetSelTextW( m_hWnd, cch + 1, apszLines[i] );
+			int nL = (int)cch;
+			while( nL > 0 && ( apszLines[i][nL-1] == L'\r' || apszLines[i][nL-1] == L'\n' ) )  apszLines[i][--nL] = L'\0';
 			abHas[i] = MdPrefixMatch( apszLines[i], pszPrefix ) != 0 || apszLines[i][0] == L'\0';
 		}
 
