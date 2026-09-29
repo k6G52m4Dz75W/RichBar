@@ -3890,14 +3890,7 @@ public:
 				// the Markdown pipeline. No pane close+reopen needed
 				tstring sText;
 				if( !GetDocTextAll( sText ) )  return;
-				UINT nID = 0;
-				__try {
-					nID = (UINT)Editor_EditTemp( m_hWnd, sText.c_str(), L"Preview Snapshot", NULL, L"Markdown", 65001, NULL, 0 );
-				}
-				__except( EXCEPTION_EXECUTE_HANDLER ) {
-					RbLogF( "EditTemp FAULTED 0x%08X (suppressed)", (unsigned)GetExceptionCode() );
-					nID = 0;
-				}
+				UINT nID = Editor_EditTemp( m_hWnd, sText.c_str(), L"Preview Snapshot", NULL, L"Markdown", 65001, NULL, 0 );
 				RbLogF( "refresh: temp id=%u", nID );
 				if( nID ){
 					Editor_ActivateTemp( m_hWnd, nID, NULL );
