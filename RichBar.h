@@ -3883,30 +3883,14 @@ public:
 					PostMessage( m_hWnd, WM_COMMAND, MAKEWPARAM( EEID_MARKDOWN_PREVIEW, 0 ), 0 );
 				}
 			}
-			else if( cmd.m_iCmd == CMD_REFRESH_PREVIEW ){
-				// deliver the CURRENT buffer to the preview WITHOUT closing it.
-				// Unsaved documents: the pane renders a %TEMP% EEWxxxx.htm
-				// snapshot written by the plug-in — rewrite the newest one with
-				// the live buffer and reload the pane browser in place. Saved
-				// documents render their disk file, so the reload re-reads it
-				// (save to see edits there).
-				HWND hwndPane = NULL;
-				EnumChildWindows( m_hWnd, FindOfficialPaneProc, (LPARAM)&hwndPane );
-				if( !hwndPane ){
-					return;	// nothing to refresh
-				}
-				TCHAR szFile[ MAX_PATH ] = { 0 };
-				Editor_Info( m_hWnd, EI_GET_FILE_NAMEW, (LPARAM)szFile );
-				const bool bUnsaved = ( szFile[0] == 0 ) || ( _tcschr( szFile, _T('\\') ) == NULL );
-				RbLogF( "refresh preview: feed+reload (all docs)" );
-				if( false ){
-					FeedPreviewSnapshot();
-					// (the pane re-snapshots the BUFFER on open: close + reopen
-					// delivers the current content GUARANTEED (in-place reload
-					// channels do not reach WebView2)
-					PostMessage( m_hWnd, WM_COMMAND, MAKEWPARAM( EEID_MARKDOWN_PREVIEW, 0 ), 0 );
-				}
-				ReloadPreviewBrowser( hwndPane );
+						else if( cmd.m_iCmd == CMD_REFRESH_PREVIEW ){
+				// the pane re-renders the ACTIVE document on every activation,
+				// from the LIVE buffer (user-verified "follows the document").
+				// A round-trip to the next window and back therefore forces the
+				// pane to re-render THIS document with its CURRENT content —
+				// no close, no flicker, all in-framework
+				PostMessage( m_hWnd, WM_COMMAND, MAKEWPARAM( EEID_NEXT_WINDOW, 0 ), 0 );
+				PostMessage( m_hWnd, WM_COMMAND, MAKEWPARAM( EEID_NEXT_WINDOW, 0 ), 0 );
 			}
 			}
 
