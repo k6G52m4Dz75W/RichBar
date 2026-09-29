@@ -3883,14 +3883,18 @@ public:
 					PostMessage( m_hWnd, WM_COMMAND, MAKEWPARAM( EEID_MARKDOWN_PREVIEW, 0 ), 0 );
 				}
 			}
-						else if( cmd.m_iCmd == CMD_REFRESH_PREVIEW ){
-				// the pane re-renders the ACTIVE document on every activation,
-				// from the LIVE buffer (user-verified "follows the document").
-				// A round-trip to the next window and back therefore forces the
-				// pane to re-render THIS document with its CURRENT content —
-				// no close, no flicker, all in-framework
-				PostMessage( m_hWnd, WM_COMMAND, MAKEWPARAM( EEID_NEXT_WINDOW, 0 ), 0 );
-				PostMessage( m_hWnd, WM_COMMAND, MAKEWPARAM( EEID_NEXT_WINDOW, 0 ), 0 );
+									else if( cmd.m_iCmd == CMD_REFRESH_PREVIEW ){
+				// feed the CURRENT buffer to the pane via a TEMP DOCUMENT:
+				// EditTemp(buffer, config=Markdown) + ActivateTemp — the preview
+				// follows the activation and renders the fresh content through
+				// the Markdown pipeline. No pane close+reopen needed
+				tstring sText;
+				if( !GetDocTextAll( sText ) )  return;
+				UINT nID = Editor_EditTemp( m_hWnd, sText.c_str(), L"Preview Snapshot", NULL, L"Markdown", 65536, NULL, 0 );
+				RbLogF( "refresh: temp id=%u", nID );
+				if( nID ){
+					Editor_ActivateTemp( m_hWnd, nID, NULL );
+				}
 			}
 			}
 
