@@ -3563,6 +3563,8 @@ public:
 				bRemove = false;
 				break;
 			}
+		}		if( bRemove ){
+			return;	// every line already carries the prefix: official behavior is a no-op
 		}
 
 		WCHAR szNum[16];
