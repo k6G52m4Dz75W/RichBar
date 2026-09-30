@@ -173,6 +173,7 @@ WCHAR OctToDec( LPWSTR& p )
 #define EEID_EDIT_SELECT_ALL	4136	// select the whole document
 #define EEID_EDIT_COPY			4127	// copy the selection to the clipboard
 #define EEID_REFRESH_TOOLBARS	4422	// View > Toolbars > Refresh Toolbars
+#define EI_OPEN_WEB			406		// opens a URL in the built-in Web Browser pane
 #define EEID_MARKDOWN_VIEW		23255	// Markdown design view toggle
 #define EEID_MARKDOWN_PREVIEW	23275	// Markdown rendered preview toggle
 #define EI_GET_MARKDOWN_PREVIEW	407		// TRUE if the design view is on
@@ -4098,8 +4099,19 @@ void OnDlgCommand( WPARAM wParam )
 				}
 			}
 						else if( cmd.m_iCmd == CMD_REFRESH_PREVIEW ){
-				// regenerate the preview content into OUR web view
-				NavigateLivePreview();	// rebuilds the HTML from the buffer
+				// write the fresh snapshot HTML and load it in the built-in
+				// Web Browser pane (EI_OPEN_WEB navigates it)
+				WritePreviewHtml();
+				TCHAR szUrl[ MAX_PATH + 16 ];
+				GetTempPath( MAX_PATH - 24, szUrl );
+				StringCat( szUrl, MAX_PATH, _T("RichBarPreview.html") );
+				for( LPTSTR p = szUrl; *p; p++ ){
+					if( *p == _T('/') )  *p = _T('\\');
+				}
+				TCHAR szFinal[ MAX_PATH + 16 ];
+				wsprintf( szFinal, _T("file:///%s"), szUrl );
+				RbLogF( "refresh: EI_OPEN_WEB %s", szFinal );
+				Editor_Info( m_hWnd, EI_OPEN_WEB, (LPARAM)szFinal );
 			}
 			}
 
