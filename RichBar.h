@@ -165,6 +165,7 @@ WCHAR OctToDec( LPWSTR& p )
 #define CMD_MD_VIEW				10
 #define CMD_PREVIEW				11
 #define CMD_REFRESH_PREVIEW			12
+#define EEID_MARKDOWN_TO_HTML		23280	// convert the Markdown selection to HTML in place
 #define MAX_CMD					13
 
 // built-in EmEditor command IDs and pane flags from the v23/v24.4 plug-in
@@ -2662,6 +2663,139 @@ public:
 
 		// rewrite the NEWEST %TEMP% EEWxxxx.htm snapshot (the one the pane is
 	// showing) with the current buffer text
+	// minimal Markdown-to-HTML for the snapshot feed: headings, bold,
+	// italic, inline code, blockquote, lists, hr — enough for writing flow;
+	// the official renderer stays the source of truth for final output
+	void MdToHtmlLine( const tstring& sLine, tstring& sOut )
+	{
+		tstring t = sLine;
+		// escape HTML
+		{
+			tstring r;
+			for( size_t p = 0; p < t.size(); p++ ){
+				WCHAR c = t[p];
+				if( c == L'&' )  r += L"&amp;";
+				else if( c == L'<' )  r += L"&lt;";
+				else if( c == L'>' )  r += L"&gt;";
+				else  r += c;
+			}
+			t = r;
+		}
+		// headings
+		for( int h = 6; h >= 1; h-- ){
+			tstring hash;
+			for( int q = 0; q < h; q++ )  hash += L"#";
+			if( t.compare( 0, hash.size() + 1, hash + L" " ) == 0 ){
+				sOut += L"<h" ; sOut += (WCHAR)( L'0' + h ); sOut += L">";
+				sOut += t.substr( hash.size() + 1 );
+				sOut += L"</h"; sOut += (WCHAR)( L'0' + h ); sOut += L">";
+				return;
+			}
+		}
+		// blockquote
+		if( t.compare( 0, 2, L"> " ) == 0 ){
+			sOut += L"<blockquote>"; sOut += t.substr( 2 ); sOut += L"</blockquote>";
+			return;
+		}
+		// unordered list item
+		if( t.compare( 0, 2, L"- " ) == 0 ){
+			sOut += L"<li>"; sOut += t.substr( 2 ); sOut += L"</li>";
+			return;
+		}
+		// hr
+		if( t == L"---" || t == L"***" ){
+			sOut += L"<hr>";
+			return;
+		}
+		// bold / italic / inline code (non-nested, single pass each)
+		size_t p;
+		while( ( p = t.find( L"**" ) ) != tstring::npos ){
+			size_t q = t.find( L"**", p + 2 );
+			if( q == tstring::npos )  break;
+			t = t.substr( 0, p ) + L"<strong>" + t.substr( p + 2, q - p - 2 ) + L"</strong>" + t.substr( q + 2 );
+		}
+		while( ( p = t.find( L"`" ) ) != tstring::npos ){
+			size_t q = t.find( L"`", p + 1 );
+			if( q == tstring::npos )  break;
+			t = t.substr( 0, p ) + L"<code>" + t.substr( p + 1, q - p - 1 ) + L"</code>" + t.substr( q + 1 );
+		}
+		while( ( p = t.find( L"*" ) ) != tstring::npos ){
+			size_t q = t.find( L"*", p + 1 );
+			if( q == tstring::npos )  break;
+			t = t.substr( 0, p ) + L"<em>" + t.substr( p + 1, q - p - 1 ) + L"</em>" + t.substr( q + 1 );
+		}
+		sOut += L"<p>" + t + L"</p>";
+	}
+
+	// build the standalone preview document and write it over the pane's
+	// EEW snapshot (the newest EEW*.htm in %TEMP%)
+	void WritePreviewHtml()
+	{
+		tstring sText;
+		if( !GetDocTextAll( sText ) )  return;
+		// split into lines and convert
+		tstring sHtml = L"<!DOCTYPE html><html><head><meta charset=\"utf-8\"><style>";
+		sHtml += L"body{font-family:Segoe UI,Arial,sans-serif;margin:24px;line-height:1.6;color:#222;background:#fff;}";
+		sHtml += L"h1{font-size:2em;} h2{font-size:1.5em;} h3,h4,h5,h6{font-size:1.2em;}";
+		sHtml += L"pre,code{font-family:Consolas,monospace;} pre{background:#f6f6f6;padding:12px;border-radius:5px;white-space:pre-wrap;}";
+		sHtml += L"blockquote{border-left:4px solid #ddd;margin:8px 0;padding:4px 16px;color:#555;}";
+		sHtml += L"li{margin:2px 0;} hr{border:0;border-top:1px solid #ccc;}";
+		sHtml += L"</style></head><body>";
+		// per-line conversion with list grouping
+		size_t pos = 0;
+		bool bInList = false;
+		while( pos <= sText.size() ){
+			size_t nl = sText.find( L"\n", pos );
+			tstring sLine = sText.substr( pos, ( nl == tstring::npos ? sText.size() : nl ) - pos );
+			if( !sLine.empty() && sLine[sLine.size()-1] == L'\r' )  sLine.erase( sLine.size()-1 );
+			tstring sOut;
+			MdToHtmlLine( sLine, sOut );
+			bool bIsLi = sOut.compare( 0, 4, L"<li>" ) == 0;
+			if( bIsLi && !bInList ){ sHtml += L"<ul>"; bInList = true; }
+			if( !bIsLi && bInList ){ sHtml += L"</ul>"; bInList = false; }
+			sHtml += sOut;
+			if( nl == tstring::npos )  break;
+			pos = nl + 1;
+		}
+		if( bInList ){ sHtml += L"</ul>"; }
+		sHtml += L"</body></html>";
+		// write over the NEWEST EEW*.htm (the pane is showing it)
+		TCHAR szTemp[ MAX_PATH ] = { 0 };
+		GetTempPath( MAX_PATH, szTemp );
+		TCHAR szMask[ MAX_PATH ];
+		wsprintf( szMask, _T("%sEEW*.htm"), szTemp );
+		WIN32_FIND_DATA wfd;
+		HANDLE hFind = FindFirstFile( szMask, &wfd );
+		if( hFind == INVALID_HANDLE_VALUE ){
+			RbLogF( "feed: no EEW snapshot" );
+			return;
+		}
+		FILETIME ftNewest = { 0 };
+		TCHAR szNewest[ MAX_PATH ] = { 0 };
+		do {
+			if( ( wfd.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY ) == 0 ){
+				if( CompareFileTime( &wfd.ftLastWriteTime, &ftNewest ) > 0 ){
+					ftNewest = wfd.ftLastWriteTime;
+					wsprintf( szNewest, _T("%s%s"), szTemp, wfd.cFileName );
+				}
+			}
+		} while( FindNextFile( hFind, &wfd ) );
+		FindClose( hFind );
+		if( szNewest[0] == 0 )  return;
+		int cb = WideCharToMultiByte( CP_UTF8, 0, sHtml.c_str(), (int)sHtml.size(), NULL, 0, NULL, NULL );
+		HANDLE hFile = CreateFile( szNewest, GENERIC_WRITE, 0, NULL, CREATE_ALWAYS, 0, NULL );
+		if( hFile == INVALID_HANDLE_VALUE )  return;
+		DWORD cbW = 0;
+		WriteFile( hFile, "ï»¿", 3, &cbW, NULL );
+		CHAR* psz = (CHAR*)malloc( cb + 1 );
+		if( psz ){
+			WideCharToMultiByte( CP_UTF8, 0, sHtml.c_str(), (int)sHtml.size(), psz, cb, NULL, NULL );
+			WriteFile( hFile, psz, cb, &cbW, NULL );
+			free( psz );
+		}
+		CloseHandle( hFile );
+		RbLogF( "feed: wrote %u bytes html", cbW );
+	}
 	void FeedPreviewSnapshot()
 	{
 		TCHAR szTemp[ MAX_PATH ] = { 0 };
@@ -2735,7 +2869,7 @@ public:
 			RbLogF( "reload: F5 sent to renderer window" );
 		}
 		RbLogF( "reload: F5+APPCOMMAND sent" );
-	}// The dropdown arrow, drawn live in NM_CUSTOMDRAW's item-post-paint
+	}// The dropdown arrow, drawn live in NM_CUSTOMDRAW's item-post-paint
 	// the deferred EditTemp: creates a temp doc from the staged buffer text
 	// (config=Markdown) and activates it — the preview follows and renders
 	// the fresh content through the Markdown pipeline
@@ -3930,17 +4064,16 @@ void OnDlgCommand( WPARAM wParam )
 				}
 			}
 						else if( cmd.m_iCmd == CMD_REFRESH_PREVIEW ){
-				// THE OFFICIAL REFRESH: the pane context-menu Refresh is
-				// EEID_REFRESH_TOOLBARS (4422, View > Toolbars > Refresh
-				// Toolbars) — user-verified it refreshes the WebPreview pane.
-				// Post it only while the pane is open
+				// build a COMPLETE self-contained HTML file from the buffer
+				// (the EEW snapshot the pane renders is rewritten with our
+				// rendered HTML) and reload the pane browser IN PLACE
 				HWND hwndPane = NULL;
 				EnumChildWindows( m_hWnd, FindOfficialPaneProc, (LPARAM)&hwndPane );
 				if( !hwndPane ){
-					return;
+					return;	// nothing to refresh
 				}
-				RbLogF( "refresh preview: EEID_REFRESH_TOOLBARS" );
-				PostMessage( m_hWnd, WM_COMMAND, MAKEWPARAM( EEID_REFRESH_TOOLBARS, 0 ), 0 );
+				FeedPreviewSnapshot();
+				ReloadPreviewBrowser( hwndPane );
 			}
 			}
 
