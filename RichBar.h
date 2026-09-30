@@ -4110,26 +4110,24 @@ void OnDlgCommand( WPARAM wParam )
 					PostMessage( m_hWnd, WM_COMMAND, MAKEWPARAM( EEID_MARKDOWN_PREVIEW, 0 ), 0 );
 				}
 			}
-						else if( cmd.m_iCmd == CMD_REFRESH_PREVIEW ){
-				// write the fresh snapshot HTML and load it in the built-in
-				// Web Browser pane (EI_OPEN_WEB navigates it)
+				else if( cmd.m_iCmd == CMD_REFRESH_PREVIEW ){
+				// build the standalone HTML and load it in the built-in Web
+				// Browser pane; navigation is deferred to a timer context
 				WritePreviewHtml();
-				m_sPreviewUrl = szFinal;
 				TCHAR szUrl[ MAX_PATH + 16 ];
-				GetTempPath( MAX_PATH - 24, szUrl );
+				GetTempPath( MAX_PATH - 30, szUrl );
 				StringCat( szUrl, MAX_PATH, _T("RichBarPreview.html") );
 				for( LPTSTR p = szUrl; *p; p++ ){
 					if( *p == _T('/') )  *p = _T('\\');
 				}
 				TCHAR szFinal[ MAX_PATH + 16 ];
 				wsprintf( szFinal, _T("file:///%s"), szUrl );
-				RbLogF( "refresh: opening Web Browser pane" );
+				m_sPreviewUrl = szFinal;
 				PostMessage( m_hWnd, WM_COMMAND, MAKEWPARAM( EEID_VIEW_WEB, 0 ), 0 );
 				if( m_hDlg ){
 					SetTimer( m_hDlg, IDT_WEB_NAVIGATE, 300, NULL );
 				}
-			}
-			}
+			}			}
 
 
 		//switch( wParam ){
