@@ -440,7 +440,8 @@ public:
 	bool m_bIconColorDirty;		// a color setting was touched in the open Prop dialog
 	bool m_bDesignViewOn;		// design view toggle state (synced with 407 when it works)
 	bool m_bPreviewOn;
-	tstring m_sPreviewText;		// staged buffer text for the deferred EditTemp			// preview pane on (synced to the pane window's visibility)
+	tstring m_sPreviewText;
+	TCHAR m_szPreviewConfig[ MAX_CONFIG_NAME ];		// staged buffer text for the deferred EditTemp			// preview pane on (synced to the pane window's visibility)
 	HWND m_hwndView;				// the EmEditor VIEW window (plug-in OnCommand contract)
 	bool m_bPanesRestored;		// startup pane restore done (first state-sync tick)
 	UINT m_nPreviewBarID;		// custom-bar id of the live preview pane
@@ -3915,6 +3916,7 @@ void OnDlgCommand( WPARAM wParam )
 				// stage the text and DEFER EditTemp to a timer context: calling
 				// it inside the click SendMessage cascade crashes EmEditor core
 				if( GetDocTextAll( m_sPreviewText ) ){
+					Editor_GetConfigW( m_hWnd, m_szPreviewConfig );
 					SetTimer( m_hDlg, IDT_EDIT_TEMP, 100, NULL );
 				}
 			}
