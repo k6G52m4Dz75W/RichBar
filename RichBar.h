@@ -2378,7 +2378,13 @@ public:
 		LPTSTR pszEnd = szUd + cch;
 		while( pszEnd > szUd && pszEnd[-1] != _T('\\') )  pszEnd--;
 		*pszEnd = 0;
-		StringCat( szUd, MAX_PATH, _T("EmEditor.exe.WebView2") );
+		// a PRIVATE folder under %TEMP%: sharing EmEditor's own folder made the
+		// two WebView2 instances fight over the browser singleton (blank pane);
+		// a unique per-process folder guarantees our own browser process
+		TCHAR szPid[16];
+		wsprintf( szPid, _T("_%u"), GetCurrentProcessId() );
+		StringCat( szUd, MAX_PATH, _T("RichBarWebView2") );
+		StringCat( szUd, MAX_PATH, szPid );
 		m_bWV2InitPending = true;
 		RbLogF( "wv2 creating env, udata=%S", szUd );
 		HRESULT hrSync = pfnCreate( NULL, szUd, NULL, new CWV2EnvHandler( this ) );
