@@ -2879,7 +2879,8 @@ public:
 			RbLogF( "reload: F5 sent to renderer window" );
 		}
 		RbLogF( "reload: F5+APPCOMMAND sent" );
-		// the deferred Web Browser navigation: the pane is open by now; navigate it
+	}
+	// the deferred Web Browser navigation: the pane is open by now; navigate it
 	// to the staged preview file
 	void OnWebNavigateTimer()
 	{
@@ -2888,11 +2889,10 @@ public:
 		Editor_Info( m_hWnd, EI_OPEN_WEB, (LPARAM)m_sPreviewUrl.c_str() );
 		m_sPreviewUrl.clear();
 	}
-	// The dropdown arrow, drawn live in NM_CUSTOMDRAW's item-post-paint
 	// the deferred EditTemp: creates a temp doc from the staged buffer text
 	// (config=Markdown) and activates it — the preview follows and renders
 	// the fresh content through the Markdown pipeline
-		void OnEditTempTimer()
+	void OnEditTempTimer()
 	{
 		if( m_sPreviewText.empty() )  return;
 		// close the previous snapshot doc (without saving), then OPEN a fresh
