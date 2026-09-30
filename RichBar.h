@@ -171,6 +171,7 @@ WCHAR OctToDec( LPWSTR& p )
 // SDK (Emurasoft/emeditor-plugin-library plugin.h)
 #define EEID_EDIT_SELECT_ALL	4136	// select the whole document
 #define EEID_EDIT_COPY			4127	// copy the selection to the clipboard
+#define EEID_REFRESH_TOOLBARS	4422	// View > Toolbars > Refresh Toolbars
 #define EEID_MARKDOWN_VIEW		23255	// Markdown design view toggle
 #define EEID_MARKDOWN_PREVIEW	23275	// Markdown rendered preview toggle
 #define EI_GET_MARKDOWN_PREVIEW	407		// TRUE if the design view is on
@@ -3929,15 +3930,17 @@ void OnDlgCommand( WPARAM wParam )
 				}
 			}
 						else if( cmd.m_iCmd == CMD_REFRESH_PREVIEW ){
-				// the pane re-renders the ACTIVE document on every activation,
-				// from the LIVE buffer (user-verified "follows the document").
-				// stage the text and DEFER EditTemp to a timer context: calling
-				// it inside the click SendMessage cascade crashes EmEditor core
-				if( GetDocTextAll( m_sPreviewText ) ){
-					RbLogF( "stage: %u chars, head=[%S]", (unsigned)m_sPreviewText.size(), m_sPreviewText.c_str() );
-					Editor_GetConfigW( m_hWnd, m_szPreviewConfig );
-					SetTimer( m_hDlg, IDT_EDIT_TEMP, 100, NULL );
+				// THE OFFICIAL REFRESH: the pane context-menu Refresh is
+				// EEID_REFRESH_TOOLBARS (4422, View > Toolbars > Refresh
+				// Toolbars) — user-verified it refreshes the WebPreview pane.
+				// Post it only while the pane is open
+				HWND hwndPane = NULL;
+				EnumChildWindows( m_hWnd, FindOfficialPaneProc, (LPARAM)&hwndPane );
+				if( !hwndPane ){
+					return;
 				}
+				RbLogF( "refresh preview: EEID_REFRESH_TOOLBARS" );
+				PostMessage( m_hWnd, WM_COMMAND, MAKEWPARAM( EEID_REFRESH_TOOLBARS, 0 ), 0 );
 			}
 			}
 
