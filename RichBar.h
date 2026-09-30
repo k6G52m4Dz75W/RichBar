@@ -2950,11 +2950,9 @@ public:
 			{
 				bool bWant = IsPreviewDocOn();
 				bool bPane = IsOfficialPaneVisible();
-				m_bPreviewOn = bPane;	// the pane state is the truth (EmEditor auto-display etc.)
-				ApplyToggleStates();
-				if( bWant && !bPane ){
-					// only OPEN on switch; NEVER close — closing is the user's click
-					RbLogF( "doc switch: reopen preview for doc" );
+				m_bPreviewOn = bWant;
+				if( bWant != bPane ){
+					RbLogF( "doc switch: preview want=%d pane=%d -> 23275", (int)bWant, (int)bPane );
 					PostMessage( m_hWnd, WM_COMMAND, MAKEWPARAM( EEID_MARKDOWN_PREVIEW, 0 ), 0 );
 				}
 			}
