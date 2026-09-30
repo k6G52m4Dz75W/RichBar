@@ -2736,7 +2736,7 @@ public:
 	void OnEditTempTimer()
 	{
 		if( m_sPreviewText.empty() )  return;
-		UINT nID = Editor_EditTemp( m_hWnd, m_sPreviewText.c_str(), L"Preview Snapshot", NULL, L"Markdown", 65001, NULL, 0 );
+		UINT nID = Editor_EditTemp( m_hWnd, m_sPreviewText.c_str(), L"Preview Snapshot", NULL, NULL, 65001, NULL, 0 );
 		RbLogF( "edittemp: id=%u", nID );
 		if( nID )  Editor_ActivateTemp( m_hWnd, nID, NULL );
 		m_sPreviewText.clear();
