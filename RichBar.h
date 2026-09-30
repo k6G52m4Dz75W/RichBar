@@ -196,6 +196,7 @@ WCHAR OctToDec( LPWSTR& p )
 // auto-shows the markdown bar; hide it back if it came up
 #define IDT_DESIGN_SYNC			4
 #define IDT_EDIT_TEMP			6
+#define IDT_WEB_NAVIGATE		7
 // one-shot deferred design-view reconcile (m_hDlg): a 23255 posted during
 // the document-switch event lands before the switch settles and misapplies
 // runtime-drawn glyphs appended to every toolbar image list
@@ -446,9 +447,10 @@ public:
 	bool m_bIconColorDirty;		// a color setting was touched in the open Prop dialog
 	bool m_bDesignViewOn;		// design view toggle state (synced with 407 when it works)
 	bool m_bPreviewOn;
-	tstring m_sPreviewText;
 	UINT m_nTempDocID;		// the Preview Snapshot temp doc (reused, not re-created)
-	TCHAR m_szPreviewConfig[ MAX_CONFIG_NAME ];		// staged buffer text for the deferred EditTemp			// preview pane on (synced to the pane window's visibility)
+	tstring m_sPreviewText;
+	TCHAR m_szPreviewConfig[ MAX_CONFIG_NAME ];
+	tstring m_sPreviewUrl;		// staged preview URL
 	HWND m_hwndView;				// the EmEditor VIEW window (plug-in OnCommand contract)
 	bool m_bPanesRestored;		// startup pane restore done (first state-sync tick)
 	UINT m_nPreviewBarID;		// custom-bar id of the live preview pane
@@ -2877,7 +2879,16 @@ public:
 			RbLogF( "reload: F5 sent to renderer window" );
 		}
 		RbLogF( "reload: F5+APPCOMMAND sent" );
-	}// The dropdown arrow, drawn live in NM_CUSTOMDRAW's item-post-paint
+		// the deferred Web Browser navigation: the pane is open by now; navigate it
+	// to the staged preview file
+	void OnWebNavigateTimer()
+	{
+		if( m_sPreviewUrl.empty() )  return;
+		RbLogF( "web navigate: %s", m_sPreviewUrl.c_str() );
+		Editor_Info( m_hWnd, EI_OPEN_WEB, (LPARAM)m_sPreviewUrl.c_str() );
+		m_sPreviewUrl.clear();
+	}
+	// The dropdown arrow, drawn live in NM_CUSTOMDRAW's item-post-paint
 	// the deferred EditTemp: creates a temp doc from the staged buffer text
 	// (config=Markdown) and activates it — the preview follows and renders
 	// the fresh content through the Markdown pipeline
@@ -4103,6 +4114,7 @@ void OnDlgCommand( WPARAM wParam )
 				// write the fresh snapshot HTML and load it in the built-in
 				// Web Browser pane (EI_OPEN_WEB navigates it)
 				WritePreviewHtml();
+				m_sPreviewUrl = szFinal;
 				TCHAR szUrl[ MAX_PATH + 16 ];
 				GetTempPath( MAX_PATH - 24, szUrl );
 				StringCat( szUrl, MAX_PATH, _T("RichBarPreview.html") );
@@ -4111,9 +4123,11 @@ void OnDlgCommand( WPARAM wParam )
 				}
 				TCHAR szFinal[ MAX_PATH + 16 ];
 				wsprintf( szFinal, _T("file:///%s"), szUrl );
-				RbLogF( "refresh: open pane + EI_OPEN_WEB %s", szFinal );
+				RbLogF( "refresh: opening Web Browser pane" );
 				PostMessage( m_hWnd, WM_COMMAND, MAKEWPARAM( EEID_VIEW_WEB, 0 ), 0 );
-				Editor_Info( m_hWnd, EI_OPEN_WEB, (LPARAM)szFinal );
+				if( m_hDlg ){
+					SetTimer( m_hDlg, IDT_WEB_NAVIGATE, 300, NULL );
+				}
 			}
 			}
 
@@ -5136,10 +5150,29 @@ INT_PTR CALLBACK NewProc( HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam )
 					pFrame->OnEditTempTimer();
 				}
 				return 0;
-			}else if( wParam == IDT_PREVIEW_REFRESH ){
-				KillTimer( hwnd, IDT_PREVIEW_REFRESH );
-				// live sync suspended: the in-process WebView2 is unusable
-				// (browser process never spawns — reported upstream material)
+			}
+			else if( wParam == IDT_WEB_NAVIGATE ){
+				KillTimer( hwnd, IDT_WEB_NAVIGATE );
+				CMyFrame* pFrame = static_cast<CMyFrame*>(GetFrame( hwnd ));
+				if( pFrame ){
+					pFrame->OnWebNavigateTimer();
+				}
+				return 0;
+			}
+			else if( wParam == IDT_EDIT_TEMP ){
+				KillTimer( hwnd, IDT_EDIT_TEMP );
+				CMyFrame* pFrame = static_cast<CMyFrame*>(GetFrame( hwnd ));
+				if( pFrame ){
+					pFrame->OnEditTempTimer();
+				}
+				return 0;
+			}
+			else if( wParam == IDT_WEB_NAVIGATE ){
+				KillTimer( hwnd, IDT_WEB_NAVIGATE );
+				CMyFrame* pFrame = static_cast<CMyFrame*>(GetFrame( hwnd ));
+				if( pFrame ){
+					pFrame->OnWebNavigateTimer();
+				}
 				return 0;
 			}
 		break;
