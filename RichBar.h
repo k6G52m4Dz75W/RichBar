@@ -189,6 +189,7 @@ WCHAR OctToDec( LPWSTR& p )
 // one-shot markdown-bar correction (m_hDlg): the design toggle
 // auto-shows the markdown bar; hide it back if it came up
 #define IDT_DESIGN_SYNC			4
+#define IDT_EDIT_TEMP			6
 // one-shot deferred design-view reconcile (m_hDlg): a 23255 posted during
 // the document-switch event lands before the switch settles and misapplies
 // runtime-drawn glyphs appended to every toolbar image list
@@ -438,7 +439,8 @@ public:
 	COLORREF m_crCustomIcon;	// user-picked icon color for the normal state
 	bool m_bIconColorDirty;		// a color setting was touched in the open Prop dialog
 	bool m_bDesignViewOn;		// design view toggle state (synced with 407 when it works)
-	bool m_bPreviewOn;			// preview pane on (synced to the pane window's visibility)
+	bool m_bPreviewOn;
+	tstring m_sPreviewText;		// staged buffer text for the deferred EditTemp			// preview pane on (synced to the pane window's visibility)
 	HWND m_hwndView;				// the EmEditor VIEW window (plug-in OnCommand contract)
 	bool m_bPanesRestored;		// startup pane restore done (first state-sync tick)
 	UINT m_nPreviewBarID;		// custom-bar id of the live preview pane
@@ -2727,7 +2729,18 @@ public:
 			RbLogF( "reload: F5 sent to renderer window" );
 		}
 		RbLogF( "reload: F5+APPCOMMAND sent" );
-	}// The dropdown arrow, drawn live in NM_CUSTOMDRAW's item-post-paint
+	}// The dropdown arrow, drawn live in NM_CUSTOMDRAW's item-post-paint
+	// the deferred EditTemp: creates a temp doc from the staged buffer text
+	// (config=Markdown) and activates it — the preview follows and renders
+	// the fresh content through the Markdown pipeline
+	void OnEditTempTimer()
+	{
+		if( m_sPreviewText.empty() )  return;
+		UINT nID = Editor_EditTemp( m_hWnd, m_sPreviewText.c_str(), L"Preview Snapshot", NULL, L"Markdown", 65001, NULL, 0 );
+		RbLogF( "edittemp: id=%u", nID );
+		if( nID )  Editor_ActivateTemp( m_hWnd, nID, NULL );
+		m_sPreviewText.clear();
+	}
 	// stage: right-anchored inside the button's ACTUAL rect, so the control's
 	// image placement and any width rounding cannot shift or clip it. The
 	// glyph is the bundled Remix arrow-down-s-fill; on hover/pressed the
@@ -3886,11 +3899,11 @@ public:
 						else if( cmd.m_iCmd == CMD_REFRESH_PREVIEW ){
 				// the pane re-renders the ACTIVE document on every activation,
 				// from the LIVE buffer (user-verified "follows the document").
-				// A round-trip to the next window and back therefore forces the
-				// pane to re-render THIS document with its CURRENT content —
-				// no close, no flicker, all in-framework
-				PostMessage( m_hWnd, WM_COMMAND, MAKEWPARAM( EEID_NEXT_WINDOW, 0 ), 0 );
-				PostMessage( m_hWnd, WM_COMMAND, MAKEWPARAM( EEID_NEXT_WINDOW, 0 ), 0 );
+				// stage the text and DEFER EditTemp to a timer context: calling
+				// it inside the click SendMessage cascade crashes EmEditor core
+				if( GetDocTextAll( m_sPreviewText ) ){
+					SetTimer( m_hDlg, IDT_EDIT_TEMP, 100, NULL );
+				}
 			}
 			}
 
@@ -4906,7 +4919,14 @@ INT_PTR CALLBACK NewProc( HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam )
 				return 0;
 			}
 						
-else if( wParam == IDT_PREVIEW_REFRESH ){
+			else if( wParam == IDT_EDIT_TEMP ){
+				KillTimer( hwnd, IDT_EDIT_TEMP );
+				CMyFrame* pFrame = static_cast<CMyFrame*>(GetFrame( hwnd ));
+				if( pFrame ){
+					pFrame->OnEditTempTimer();
+				}
+				return 0;
+			}else if( wParam == IDT_PREVIEW_REFRESH ){
 				KillTimer( hwnd, IDT_PREVIEW_REFRESH );
 				// live sync suspended: the in-process WebView2 is unusable
 				// (browser process never spawns — reported upstream material)
