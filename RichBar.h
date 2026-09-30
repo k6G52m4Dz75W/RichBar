@@ -2736,7 +2736,7 @@ public:
 	void OnEditTempTimer()
 	{
 		if( m_sPreviewText.empty() )  return;
-		UINT nID = Editor_EditTemp( m_hWnd, m_sPreviewText.c_str(), L"Preview Snapshot", NULL, NULL, 65001, NULL, 0 );
+		UINT nID = EditTempGuarded( m_hWnd, m_sPreviewText.c_str() );
 		RbLogF( "edittemp: id=%u", nID );
 		if( nID )  Editor_ActivateTemp( m_hWnd, nID, NULL );
 		m_sPreviewText.clear();
@@ -3791,7 +3791,20 @@ public:
 		}
 	}
 
-	void OnDlgCommand( WPARAM wParam )
+		// EE_EDIT_TEMP from plugin context trips a non-fatal AV inside EmEditor
+	// 26.2.8's handler (read at NULL) — catch it here: the operation still
+	// completes and the refresh works (user-verified via the ignore button)
+	UINT EditTempGuarded( HWND hwnd, LPCWSTR pszText )
+	{
+		__try {
+			return (UINT)Editor_EditTemp( hwnd, pszText, L"Preview Snapshot", NULL, NULL, 65001, NULL, 0 );
+		}
+		__except( EXCEPTION_EXECUTE_HANDLER ) {
+			RbLogF( "EditTemp FAULTED 0x%08X (suppressed)", (unsigned)GetExceptionCode() );
+			return 0;
+		}
+	}
+void OnDlgCommand( WPARAM wParam )
 	{
 		if( wParam == ID_MODE_HTML || wParam == ID_MODE_MD ){
 			OnModeSwitch( ( wParam == ID_MODE_MD ) ? MODE_MD : MODE_HTML );
