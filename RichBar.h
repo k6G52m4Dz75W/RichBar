@@ -1939,7 +1939,20 @@ public:
 	bool GetDocTextAll( tstring& sText )
 	{
 		// whole-document read via SelectAll + Copy (single-shot; the per-line
-		// EE_GET_LINE loop proved display-indexed in wrapped documents)
+		// EE_GET_LINE loop proved display-indexed in wrapped documents).
+		// The user's selection/caret is saved first and restored at the end
+		POINT_PTR ptSaveA = { -1, -1 }, ptSaveB = { -1, -1 };
+		POINT_PTR ptA, ptB;
+		Editor_GetSelStart( m_hWnd, POS_LOGICAL_W, &ptA );
+		Editor_GetSelEnd( m_hWnd, POS_LOGICAL_W, &ptB );
+		if( Editor_GetSelTypeEx( m_hWnd, TRUE ) & SEL_TYPE_SELECTED ){
+			ptSaveA = ptA;
+			ptSaveB = ptB;
+		}
+		else {
+			Editor_GetCaretPos( m_hWnd, POS_LOGICAL_W, &ptSaveA );
+			ptSaveB = ptSaveA;
+		}
 		SendMessage( m_hWnd, WM_COMMAND, MAKEWPARAM( EEID_EDIT_SELECT_ALL, 0 ), 0 );
 		SendMessage( m_hWnd, WM_COMMAND, MAKEWPARAM( EEID_EDIT_COPY, 0 ), 0 );
 		if( !OpenClipboard( m_hWnd ) ){
@@ -1956,7 +1969,9 @@ public:
 			}
 		}
 		CloseClipboard();
-		// restore the selection state (select-all leaves everything selected)
+		// restore the user's selection/caret (select-all left it expanded)
+		Editor_SetCaretPosEx( m_hWnd, POS_LOGICAL_W, &ptSaveA, FALSE );
+		Editor_SetCaretPosEx( m_hWnd, POS_LOGICAL_W, &ptSaveB, ( ptSaveB.x != ptSaveA.x || ptSaveB.y != ptSaveA.y ) ? TRUE : FALSE );
 		return bOK;
 	}
 
