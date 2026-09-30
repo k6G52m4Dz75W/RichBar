@@ -2733,6 +2733,10 @@ public:
 		if( nID ){
 			m_nTempDocID = nID;
 			Editor_ActivateTemp( m_hWnd, nID, NULL );
+			// hop back to the previous document so the user keeps editing:
+			// the pane has already re-rendered (it follows each activation),
+			// and the original doc re-activates with its content intact
+			PostMessage( m_hWnd, WM_COMMAND, MAKEWPARAM( EEID_NEXT_WINDOW, 0 ), 0 );
 		}
 		m_sPreviewText.clear();
 	}
