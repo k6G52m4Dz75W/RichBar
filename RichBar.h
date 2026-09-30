@@ -2741,16 +2741,21 @@ public:
 		void OnEditTempTimer()
 	{
 		if( m_sPreviewText.empty() )  return;
-		// create once, then UPDATE the same temp doc in place: EditTemp with
-		// an existing nID replaces its text (no new tab per refresh)
-		UINT nID = Editor_EditTemp( m_hWnd, m_sPreviewText.c_str(), L"Preview Snapshot", L"", m_szPreviewConfig, 65001, NULL, m_nTempDocID );
-		RbLogF( "edittemp: id=%u (cached=%u)", nID, m_nTempDocID );
-		if( nID ){
-			m_nTempDocID = nID;
-			Editor_ActivateTemp( m_hWnd, nID, NULL );
-			// hop back to the previous document so the user keeps editing:
-			// the pane has already re-rendered (it follows each activation),
-			// and the original doc re-activates with its content intact
+		// close the previous snapshot doc (without saving), then OPEN a fresh
+		// one with nID=0 and the CURRENT buffer: OPEN with a nonzero nID only
+		// activates the existing text (documented), it never updates it —
+		// close-then-open is the documented way to feed new content
+		TEMP_INFO ti = { 0 };
+		ti.cbSize = sizeof( ti );
+		ti.nID = m_nTempDocID;
+		ti.nFlags = 1;	// TEMP_INFO_CLOSE (no save)
+		if( m_nTempDocID != 0 ){
+			SNDMSG( m_hWnd, EE_EDIT_TEMP, 0, (LPARAM)&ti );
+		}
+		m_nTempDocID = Editor_EditTemp( m_hWnd, m_sPreviewText.c_str(), L"Preview Snapshot", L"", m_szPreviewConfig, 65001, NULL, 0 );
+		RbLogF( "edittemp: fresh id=%u", m_nTempDocID );
+		if( m_nTempDocID ){
+			Editor_ActivateTemp( m_hWnd, m_nTempDocID, NULL );
 			PostMessage( m_hWnd, WM_COMMAND, MAKEWPARAM( EEID_NEXT_WINDOW, 0 ), 0 );
 		}
 		m_sPreviewText.clear();
