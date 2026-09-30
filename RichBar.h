@@ -169,6 +169,8 @@ WCHAR OctToDec( LPWSTR& p )
 
 // built-in EmEditor command IDs and pane flags from the v23/v24.4 plug-in
 // SDK (Emurasoft/emeditor-plugin-library plugin.h)
+#define EEID_EDIT_SELECT_ALL	4136	// select the whole document
+#define EEID_EDIT_COPY			4127	// copy the selection to the clipboard
 #define EEID_MARKDOWN_VIEW		23255	// Markdown design view toggle
 #define EEID_MARKDOWN_PREVIEW	23275	// Markdown rendered preview toggle
 #define EI_GET_MARKDOWN_PREVIEW	407		// TRUE if the design view is on
@@ -441,6 +443,7 @@ public:
 	bool m_bDesignViewOn;		// design view toggle state (synced with 407 when it works)
 	bool m_bPreviewOn;
 	tstring m_sPreviewText;
+	UINT m_nTempDocID;		// the Preview Snapshot temp doc (reused, not re-created)
 	TCHAR m_szPreviewConfig[ MAX_CONFIG_NAME ];		// staged buffer text for the deferred EditTemp			// preview pane on (synced to the pane window's visibility)
 	HWND m_hwndView;				// the EmEditor VIEW window (plug-in OnCommand contract)
 	bool m_bPanesRestored;		// startup pane restore done (first state-sync tick)
@@ -1935,39 +1938,25 @@ public:
 	// the whole document text, line by line (the SDK has no whole-text API)
 	bool GetDocTextAll( tstring& sText )
 	{
-		UINT_PTR nLines = Editor_GetLines( m_hWnd, TRUE );	// LOGICAL lines: never break at window-wrap positions
-		if( nLines == 0 || nLines > 2000000 ){
+		// whole-document read via SelectAll + Copy (single-shot; the per-line
+		// EE_GET_LINE loop proved display-indexed in wrapped documents)
+		PostMessage( m_hWnd, WM_COMMAND, MAKEWPARAM( EEID_EDIT_SELECT_ALL, 0 ), 0 );
+		PostMessage( m_hWnd, WM_COMMAND, MAKEWPARAM( EEID_EDIT_COPY, 0 ), 0 );
+		if( !OpenClipboard( m_hWnd ) ){
 			return false;
 		}
-		UINT_PTR cchBuf = 4096;
-		LPWSTR pszBuf = (LPWSTR)malloc( cchBuf * sizeof( WCHAR ) );
-		if( !pszBuf ){
-			return false;
-		}
-		bool bOK = true;
-		for( UINT_PTR y = 0; y < nLines; y++ ){
-			GET_LINE_INFO gli;
-			ZeroMemory( &gli, sizeof( gli ) );
-			gli.yLine = y;
-			gli.cch = 0;
-			UINT_PTR cchNeed = Editor_GetLineW( m_hWnd, &gli, NULL );
-			if( cchNeed == (UINT_PTR)-1 ){ bOK = false; break; }
-			if( cchNeed + 1 > cchBuf ){
-				cchBuf = cchNeed + 256;
-				LPWSTR pszNew = (LPWSTR)realloc( pszBuf, cchBuf * sizeof( WCHAR ) );
-				if( !pszNew ){ bOK = false; break; }
-				pszBuf = pszNew;
-			}
-			gli.cch = cchBuf;
-			UINT_PTR cch = Editor_GetLineW( m_hWnd, &gli, pszBuf );
-			if( cch == (UINT_PTR)-1 ){ bOK = false; break; }
-			if( cch > cchNeed )  cch = cchNeed;
-			sText.append( pszBuf, cch );
-			if( y + 1 < nLines ){
-				sText += _T("\r\n");
+		bool bOK = false;
+		HANDLE h = GetClipboardData( CF_UNICODETEXT );
+		if( h ){
+			LPCWSTR psz = (LPCWSTR)GlobalLock( h );
+			if( psz ){
+				sText = psz;
+				bOK = true;
+				GlobalUnlock( h );
 			}
 		}
-		free( pszBuf );
+		CloseClipboard();
+		// restore the selection state (select-all leaves everything selected)
 		return bOK;
 	}
 
@@ -2734,12 +2723,17 @@ public:
 	// the deferred EditTemp: creates a temp doc from the staged buffer text
 	// (config=Markdown) and activates it — the preview follows and renders
 	// the fresh content through the Markdown pipeline
-	void OnEditTempTimer()
+		void OnEditTempTimer()
 	{
 		if( m_sPreviewText.empty() )  return;
-		UINT nID = EditTempGuarded( m_hWnd, m_sPreviewText.c_str() );
-		RbLogF( "edittemp: id=%u", nID );
-		if( nID )  Editor_ActivateTemp( m_hWnd, nID, NULL );
+		// create once, then UPDATE the same temp doc in place: EditTemp with
+		// an existing nID replaces its text (no new tab per refresh)
+		UINT nID = Editor_EditTemp( m_hWnd, m_sPreviewText.c_str(), L"Preview Snapshot", L"", m_szPreviewConfig, 65001, NULL, m_nTempDocID );
+		RbLogF( "edittemp: id=%u (cached=%u)", nID, m_nTempDocID );
+		if( nID ){
+			m_nTempDocID = nID;
+			Editor_ActivateTemp( m_hWnd, nID, NULL );
+		}
 		m_sPreviewText.clear();
 	}
 	// stage: right-anchored inside the button's ACTUAL rect, so the control's
@@ -3916,6 +3910,7 @@ void OnDlgCommand( WPARAM wParam )
 				// stage the text and DEFER EditTemp to a timer context: calling
 				// it inside the click SendMessage cascade crashes EmEditor core
 				if( GetDocTextAll( m_sPreviewText ) ){
+					RbLogF( "stage: %u chars, head=[%S]", (unsigned)m_sPreviewText.size(), m_sPreviewText.c_str() );
 					Editor_GetConfigW( m_hWnd, m_szPreviewConfig );
 					SetTimer( m_hDlg, IDT_EDIT_TEMP, 100, NULL );
 				}
