@@ -4110,7 +4110,8 @@ void OnDlgCommand( WPARAM wParam )
 				}
 				TCHAR szFinal[ MAX_PATH + 16 ];
 				wsprintf( szFinal, _T("file:///%s"), szUrl );
-				RbLogF( "refresh: EI_OPEN_WEB %s", szFinal );
+				RbLogF( "refresh: open pane + EI_OPEN_WEB %s", szFinal );
+				PostMessage( m_hWnd, WM_COMMAND, MAKEWPARAM( EEID_VIEW_WEB, 0 ), 0 );
 				Editor_Info( m_hWnd, EI_OPEN_WEB, (LPARAM)szFinal );
 			}
 			}
