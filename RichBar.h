@@ -4039,6 +4039,42 @@ void OnDlgCommand( WPARAM wParam )
 				}
 			}
 			else if( cmd.m_iCmd == CMD_PREVIEW ){
+				// OUR web view preview: open/close our own bar (the WebView2
+				// pane hosting the rendered buffer), not the official plugin
+				bool bWant = ( SendMessage( m_hwndToolbar, TB_GETSTATE, wParam, 0 ) & TBSTATE_CHECKED ) != 0;
+				bool bPane = IsLivePreviewOpen();
+				m_bPreviewOn = bWant;
+				SaveProfile();
+				ApplyToggleStates();
+				if( bWant != bPane ){
+					RbLogF( "preview click: want=%d -> our webview", (int)bWant );
+					if( bWant ){
+						OpenLivePreview();
+					}
+					else {
+						CloseLivePreview();
+					}
+				}
+			}
+			else if( cmd.m_iCmd == CMD_PREVIEW ){
+				// OUR web view preview: open/close our own bar (the WebView2
+				// pane hosting the rendered buffer), not the official plugin
+				bool bWant = ( SendMessage( m_hwndToolbar, TB_GETSTATE, wParam, 0 ) & TBSTATE_CHECKED ) != 0;
+				bool bPane = IsLivePreviewOpen();
+				m_bPreviewOn = bWant;
+				SaveProfile();
+				ApplyToggleStates();
+				if( bWant != bPane ){
+					RbLogF( "preview click: want=%d -> our webview", (int)bWant );
+					if( bWant ){
+						OpenLivePreview();
+					}
+					else {
+						CloseLivePreview();
+					}
+				}
+			}
+			else if( cmd.m_iCmd == CMD_PREVIEW ){
 				// our own live preview pane: the control state IS the wanted
 				// state and the bar follows it directly
 				bool bWant = ( SendMessage( m_hwndToolbar, TB_GETSTATE, wParam, 0 ) & TBSTATE_CHECKED ) != 0;
@@ -4064,16 +4100,8 @@ void OnDlgCommand( WPARAM wParam )
 				}
 			}
 						else if( cmd.m_iCmd == CMD_REFRESH_PREVIEW ){
-				// build a COMPLETE self-contained HTML file from the buffer
-				// (the EEW snapshot the pane renders is rewritten with our
-				// rendered HTML) and reload the pane browser IN PLACE
-				HWND hwndPane = NULL;
-				EnumChildWindows( m_hWnd, FindOfficialPaneProc, (LPARAM)&hwndPane );
-				if( !hwndPane ){
-					return;	// nothing to refresh
-				}
-				FeedPreviewSnapshot();
-				ReloadPreviewBrowser( hwndPane );
+				// regenerate the preview content into OUR web view
+				NavigateLivePreview();	// rebuilds the HTML from the buffer
 			}
 			}
 
