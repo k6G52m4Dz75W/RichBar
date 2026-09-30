@@ -3018,21 +3018,13 @@ public:
 //			DisplayBar( m_bAutoDisplay && ConfigExist( szConfigName ) );
 		}
 		if( nEvent & EVENT_CLOSE_FRAME ){
-			// the frame is tearing down: release our preview COM side locally
-			// WITHOUT sending EE_CUSTOM_BAR_CLOSE / EE_TOOLBAR_CLOSE for the
-			// preview bar back into the core (re-entering the core here
-			// produced the reported nEvent=0x20000 crash); EmEditor destroys
-			// the bars itself
+			// the frame is tearing down: NO core re-entry is safe here —
+			// Editor_ToolbarClose during the teardown re-entered the core and
+			// crashed (nEvent=0x20000, twice). Release local state only;
+			// EmEditor destroys every bar itself
 			PreviewBarGone();
-			if( m_pWV2Env ){
-				m_pWV2Env->Release();
-				m_pWV2Env = NULL;
-			}
-			if( m_hwndToolbar ){
-				_ASSERTE( m_nClientID );
-				Editor_ToolbarClose( m_hWnd, m_nClientID );
-				CustomBarClosed();
-			}
+			m_pWV2Env = NULL;	// session-lifetime; the process is going away
+			CustomBarClosed();
 		}
 		if( nEvent & EVENT_TOOLBAR_CLOSED ){
 //			m_bOpenStartup = false;
