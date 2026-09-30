@@ -3798,7 +3798,7 @@ public:
 	UINT EditTempGuarded( HWND hwnd, LPCWSTR pszText )
 	{
 		__try {
-			return (UINT)Editor_EditTemp( hwnd, pszText, L"Preview Snapshot", NULL, NULL, 65001, NULL, 0 );
+			return (UINT)Editor_EditTemp( hwnd, pszText, L"Preview Snapshot", L"", NULL, 65001, NULL, 0 );
 		}
 		__except( EXCEPTION_EXECUTE_HANDLER ) {
 			RbLogF( "EditTemp FAULTED 0x%08X (suppressed)", (unsigned)GetExceptionCode() );
