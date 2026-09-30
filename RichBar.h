@@ -1940,8 +1940,8 @@ public:
 	{
 		// whole-document read via SelectAll + Copy (single-shot; the per-line
 		// EE_GET_LINE loop proved display-indexed in wrapped documents)
-		PostMessage( m_hWnd, WM_COMMAND, MAKEWPARAM( EEID_EDIT_SELECT_ALL, 0 ), 0 );
-		PostMessage( m_hWnd, WM_COMMAND, MAKEWPARAM( EEID_EDIT_COPY, 0 ), 0 );
+		SendMessage( m_hWnd, WM_COMMAND, MAKEWPARAM( EEID_EDIT_SELECT_ALL, 0 ), 0 );
+		SendMessage( m_hWnd, WM_COMMAND, MAKEWPARAM( EEID_EDIT_COPY, 0 ), 0 );
 		if( !OpenClipboard( m_hWnd ) ){
 			return false;
 		}
