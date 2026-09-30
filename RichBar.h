@@ -173,6 +173,7 @@ WCHAR OctToDec( LPWSTR& p )
 #define EEID_EDIT_SELECT_ALL	4136	// select the whole document
 #define EEID_EDIT_COPY			4127	// copy the selection to the clipboard
 #define EEID_REFRESH_TOOLBARS	4422	// View > Toolbars > Refresh Toolbars
+#define EEID_VIEW_WEB			23243	// View > Web Browser (show/hide the pane)
 #define EI_OPEN_WEB			406		// opens a URL in the built-in Web Browser pane
 #define EEID_MARKDOWN_VIEW		23255	// Markdown design view toggle
 #define EEID_MARKDOWN_PREVIEW	23275	// Markdown rendered preview toggle
