@@ -15,6 +15,22 @@ this code base:
 | `0.9.0` – `0.17.x` | The HTML + Markdown dual-mode toolbar, heading towards `1.0.0`. |
 
 
+## [0.40.0] - 2026-10-01
+
+### Added
+
+- **Single-newline paragraphs (compatibility mode)**: documents that use
+  ONE newline per paragraph (instead of the strict blank line) now render
+  correctly. marked has no option for this (`breaks` only makes `<br>`),
+  so the preview preprocesses the source client-side:
+  `NormalizeSingleNewlines()` doubles lone newlines so every prose line
+  becomes its own `<p>`, while keeping block structure intact — list
+  items (with their continuation lines), blockquotes, table rows,
+  headings, horizontal rules and indented code are not split.
+  `breaks: true` renders the remaining lone newlines inside those blocks
+  as visible line breaks. Verified end-to-end against the shipped
+  marked v18 build.
+
 ## [0.39.0] - 2026-10-01
 
 ### Changed

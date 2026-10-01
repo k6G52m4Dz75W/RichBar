@@ -3135,11 +3135,21 @@ public:
 			if( bMarked ){
 				// the markdown source is embedded as a JSON/JS-escaped string;
 				// marked parses it client-side (full GFM)
-				sHtml += L"<div id=\"content\"></div>";
+								sHtml += L"<div id=\"content\"></div>";
 				sHtml += L"<script src=\"" + sMarkedUrl + L"\"></script>";
-				sHtml += L"<script>window.__md=\"";
+				sHtml += L"<script>";
+				sHtml += L"var NL=String.fromCharCode(10);";
+				sHtml += L"var isList=new RegExp('^\\\\s{0,3}([*+-]\\\\s|\\\\d{1,9}[.)]\\\\s)');";
+				sHtml += L"var isQuote=new RegExp('^\\\\s{0,3}>(\\\\s|$)');";
+				sHtml += L"var isTable=new RegExp('\\\\|');";
+				sHtml += L"var isHr=new RegExp('^\\\\s{0,3}([-*_])(\\\\s*\\\\1){2,}\\\\s*$');";
+				sHtml += L"var isHead=new RegExp('^\\\\s{0,3}#{1,6}\\\\s');";
+				sHtml += L"var isCode=new RegExp('^(\\\\s{4,}|\\\\t)');";
+				sHtml += L"var isSetextH=new RegExp('^={2,}\\\\s*$|^-{2,}\\\\s*$');";
+				sHtml += L"function NormalizeSingleNewlines(s){var L=s.split(NL),o=[];for(var i=0;i<L.length;i++){var t=L[i],keep=false;if(i>0){var pr=L[i-1];if(isList.test(t)||isQuote.test(t)||isTable.test(t)||isHr.test(t)||isHead.test(t)||isCode.test(t)||isCode.test(pr)||isList.test(pr)||isQuote.test(pr)||isTable.test(pr)||isHr.test(pr)||isSetextH.test(pr)){keep=true;}}if(!keep)o.push(NL);o.push(t);}return o.join(NL);}";
+				sHtml += L"window.__md=\"";
 				sHtml += JsEscape( sText );
-				sHtml += L"\";document.getElementById('content').innerHTML=marked.parse(window.__md);</script>";
+				sHtml += L"\";document.getElementById('content').innerHTML=marked.parse(NormalizeSingleNewlines(window.__md),{breaks:true,gfm:true});</script>";
 				sHtml += L"</body></html>";
 			}
 			else {
