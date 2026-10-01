@@ -2948,72 +2948,81 @@ public:
 		// with its luminance (bar colors stay PINNED until relaunch - the
 		// upstream dark<->light stickiness - so the page matches the
 		// theme as of the render)
-		// left = editor, right = preview: identical colors via the official
-		// EE_GET_COLOR query (SMART_COLOR_NORMAL = the view's normal text)
-		// - one fast SendMessage, no pixel sampling
-		COLORREF crBack = CLR_INVALID;
-		COLORREF crText = CLR_INVALID;
-		{
-			int nAttr = 0;
-			if( Editor_GetColor( m_hWnd, FALSE, SMART_COLOR_NORMAL, &crText, &crBack, &nAttr ) ){
-				if( crBack == DEFAULT_COLOR ){
-					crBack = GetSysColor( COLOR_WINDOW );
-				}
-				if( crText == DEFAULT_COLOR ){
-					crText = GetSysColor( COLOR_WINDOWTEXT );
+		tstring sHtml;
+		if( m_iMode == MODE_MD ){
+			// markdown: convert the buffer per line, themed like the view
+			// left = editor, right = preview: identical colors via the official
+			// EE_GET_COLOR query (SMART_COLOR_NORMAL = the view's normal text)
+			// - one fast SendMessage, no pixel sampling
+			COLORREF crBack = CLR_INVALID;
+			COLORREF crText = CLR_INVALID;
+			{
+				int nAttr = 0;
+				if( Editor_GetColor( m_hWnd, FALSE, SMART_COLOR_NORMAL, &crText, &crBack, &nAttr ) ){
+					if( crBack == DEFAULT_COLOR ){
+						crBack = GetSysColor( COLOR_WINDOW );
+					}
+					if( crText == DEFAULT_COLOR ){
+						crText = GetSysColor( COLOR_WINDOWTEXT );
+					}
 				}
 			}
-		}
-		if( crBack == CLR_INVALID || crBack == TRANSPARENT_COLOR || crBack == DEFAULT_COLOR ){
-			crBack = GetBarBackColor();	// fallback: the plug-in bar color
-		}
-		bool bLight = ( 299 * GetRValue( crBack ) + 587 * GetGValue( crBack ) + 114 * GetBValue( crBack ) ) / 1000 >= 128;
-		TCHAR szBack[ 12 ];
-		TCHAR szFg[ 12 ];
-		wsprintf( szBack, _T("#%02X%02X%02X"), (unsigned)GetRValue( crBack ), (unsigned)GetGValue( crBack ), (unsigned)GetBValue( crBack ) );
-		if( crText == CLR_INVALID || crText == TRANSPARENT_COLOR || crText == DEFAULT_COLOR ){
-			// no text sampled (empty document): derive from the background
-			wsprintf( szFg, _T("#%02X%02X%02X"), (unsigned)( bLight ? 0x22 : 0xD4 ), (unsigned)( bLight ? 0x22 : 0xD4 ), (unsigned)( bLight ? 0x22 : 0xD4 ) );
+			if( crBack == CLR_INVALID || crBack == TRANSPARENT_COLOR || crBack == DEFAULT_COLOR ){
+				crBack = GetBarBackColor();	// fallback: the plug-in bar color
+			}
+			bool bLight = ( 299 * GetRValue( crBack ) + 587 * GetGValue( crBack ) + 114 * GetBValue( crBack ) ) / 1000 >= 128;
+			TCHAR szBack[ 12 ];
+			TCHAR szFg[ 12 ];
+			wsprintf( szBack, _T("#%02X%02X%02X"), (unsigned)GetRValue( crBack ), (unsigned)GetGValue( crBack ), (unsigned)GetBValue( crBack ) );
+			if( crText == CLR_INVALID || crText == TRANSPARENT_COLOR || crText == DEFAULT_COLOR ){
+				// automatic/unknown text: derive from the background
+				wsprintf( szFg, _T("#%02X%02X%02X"), (unsigned)( bLight ? 0x22 : 0xD4 ), (unsigned)( bLight ? 0x22 : 0xD4 ), (unsigned)( bLight ? 0x22 : 0xD4 ) );
+			}
+			else {
+				wsprintf( szFg, _T("#%02X%02X%02X"), (unsigned)GetRValue( crText ), (unsigned)GetGValue( crText ), (unsigned)GetBValue( crText ) );
+			}
+			RbLogF( "theme: view back=%S fg=%S light=%d", szBack, szFg, (int)bLight );
+			sHtml = L"<!DOCTYPE html><html><head><meta charset=\"utf-8\"><style>";
+			sHtml += L"body{font-family:Segoe UI,Arial,sans-serif;margin:24px;line-height:1.6;color:";
+			sHtml += szFg;
+			sHtml += L";background:";
+			sHtml += szBack;
+			sHtml += L";}";
+			sHtml += L"h1{font-size:2em;} h2{font-size:1.5em;} h3,h4,h5,h6{font-size:1.2em;}";
+			sHtml += bLight
+				? L"pre,code{font-family:Consolas,monospace;} pre{background:#f6f6f6;padding:12px;border-radius:5px;white-space:pre-wrap;}"
+				: L"pre,code{font-family:Consolas,monospace;} pre{background:#2d2d30;padding:12px;border-radius:5px;white-space:pre-wrap;}";
+			sHtml += bLight
+				? L"blockquote{border-left:4px solid #ddd;margin:8px 0;padding:4px 16px;color:#555;}"
+				: L"blockquote{border-left:4px solid #555;margin:8px 0;padding:4px 16px;color:#aaa;}";
+			sHtml += L"li{margin:2px 0;} hr{border:0;border-top:1px solid ";
+			sHtml += bLight ? L"#ccc;}" : L"#555;}";
+			sHtml += bLight ? L"a{color:#0366d6;}" : L"a{color:#4da3ff;}";
+			sHtml += L"</style></head><body>";
+			// per-line conversion with list grouping
+			size_t pos = 0;
+			bool bInList = false;
+			while( pos <= sText.size() ){
+				size_t nl = sText.find( L"\n", pos );
+				tstring sLine = sText.substr( pos, ( nl == tstring::npos ? sText.size() : nl ) - pos );
+				if( !sLine.empty() && sLine[sLine.size()-1] == L'\r' )  sLine.erase( sLine.size()-1 );
+				tstring sOut;
+				MdToHtmlLine( sLine, sOut );
+				bool bIsLi = sOut.compare( 0, 4, L"<li>" ) == 0;
+				if( bIsLi && !bInList ){ sHtml += L"<ul>"; bInList = true; }
+				if( !bIsLi && bInList ){ sHtml += L"</ul>"; bInList = false; }
+				sHtml += sOut;
+				if( nl == tstring::npos )  break;
+				pos = nl + 1;
+			}
+			if( bInList ){ sHtml += L"</ul>"; }
+			sHtml += L"</body></html>";
 		}
 		else {
-			wsprintf( szFg, _T("#%02X%02X%02X"), (unsigned)GetRValue( crText ), (unsigned)GetGValue( crText ), (unsigned)GetBValue( crText ) );
+			// HTML: the buffer IS the page - the browser renders it directly
+			// (the markdown pipeline would mangle the tags)
+			sHtml = sText;
 		}
-		RbLogF( "theme: view back=%S fg=%S light=%d", szBack, szFg, (int)bLight );
-		tstring sHtml = L"<!DOCTYPE html><html><head><meta charset=\"utf-8\"><style>";
-		sHtml += L"body{font-family:Segoe UI,Arial,sans-serif;margin:24px;line-height:1.6;color:";
-		sHtml += szFg;
-		sHtml += L";background:";
-		sHtml += szBack;
-		sHtml += L";}";
-		sHtml += L"h1{font-size:2em;} h2{font-size:1.5em;} h3,h4,h5,h6{font-size:1.2em;}";
-		sHtml += bLight
-			? L"pre,code{font-family:Consolas,monospace;} pre{background:#f6f6f6;padding:12px;border-radius:5px;white-space:pre-wrap;}"
-			: L"pre,code{font-family:Consolas,monospace;} pre{background:#2d2d30;padding:12px;border-radius:5px;white-space:pre-wrap;}";
-		sHtml += bLight
-			? L"blockquote{border-left:4px solid #ddd;margin:8px 0;padding:4px 16px;color:#555;}"
-			: L"blockquote{border-left:4px solid #555;margin:8px 0;padding:4px 16px;color:#aaa;}";
-		sHtml += L"li{margin:2px 0;} hr{border:0;border-top:1px solid ";
-		sHtml += bLight ? L"#ccc;}" : L"#555;}";
-		sHtml += bLight ? L"a{color:#0366d6;}" : L"a{color:#4da3ff;}";
-		sHtml += L"</style></head><body>";
-		// per-line conversion with list grouping
-		size_t pos = 0;
-		bool bInList = false;
-		while( pos <= sText.size() ){
-			size_t nl = sText.find( L"\n", pos );
-			tstring sLine = sText.substr( pos, ( nl == tstring::npos ? sText.size() : nl ) - pos );
-			if( !sLine.empty() && sLine[sLine.size()-1] == L'\r' )  sLine.erase( sLine.size()-1 );
-			tstring sOut;
-			MdToHtmlLine( sLine, sOut );
-			bool bIsLi = sOut.compare( 0, 4, L"<li>" ) == 0;
-			if( bIsLi && !bInList ){ sHtml += L"<ul>"; bInList = true; }
-			if( !bIsLi && bInList ){ sHtml += L"</ul>"; bInList = false; }
-			sHtml += sOut;
-			if( nl == tstring::npos )  break;
-			pos = nl + 1;
-		}
-		if( bInList ){ sHtml += L"</ul>"; }
-		sHtml += L"</body></html>";
 		// write to a STABLE temp file: every refresh rewrites it and
 		// re-navigates the built-in Web bar to it (WebBar.Open) - the
 		// path never changes, only the content does

@@ -15,6 +15,17 @@ this code base:
 | `0.9.0` – `0.17.x` | The HTML + Markdown dual-mode toolbar, heading towards `1.0.0`. |
 
 
+## [0.35.0] - 2026-10-01
+
+### Fixed
+
+- **HTML documents are now rendered directly**: the preview pipeline
+  branches on the mode — Markdown buffers go through the themed per-line
+  converter as before, but HTML buffers are written to the preview file
+  verbatim (the buffer IS the page; the markdown conversion was mangling
+  the tags). The file is still UTF-8 with a BOM, so a document's own
+  charset declaration is overridden.
+
 ## [0.34.2] - 2026-10-01
 
 ### Fixed
