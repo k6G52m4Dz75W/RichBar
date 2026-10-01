@@ -475,6 +475,7 @@ public:
 	EventRegistrationToken m_tWV2ResReq;
 	bool m_bWV2InitFailed;		// loader/runtime missing: Preview falls back to the official command
 	vector<tstring> m_vPreviewDocs;	// documents (by name key) whose preview the user turned ON
+	vector<tstring> m_vPreviewOffDocs;	// documents whose preview the user explicitly turned OFF
 	bool m_bWV2InitPending;		// environment creation in flight
 	UINT m_nHoverMenuCmd;		// dropdown command waiting for the hover-open timer
 	UINT m_nLastMenuCmd;		// dropdown whose menu closed last; reopen only after the mouse leaves it
@@ -2580,26 +2581,36 @@ public:
 				return true;
 			}
 		}
-		return false;
+		for( size_t i = 0; i < m_vPreviewOffDocs.size(); i++ ){
+			if( m_vPreviewOffDocs[i] == sKey ){
+				return false;
+			}
+		}
+		// never touched: inherit the pane's live state
+		return IsOfficialPaneVisible();
 	}
 
 	void SetPreviewDocOn( bool bOn )
 	{
 		tstring sKey = CurrentDocKey();
 		RbLogF( "set preview doc: key=%S on=%d", AsciiLogKey( sKey ).c_str(), (int)bOn );
-		for( size_t i = 0; i < m_vPreviewDocs.size(); i++ ){
-			if( m_vPreviewDocs[i] == sKey ){
-				if( bOn ){
-					return;
-				}
-				m_vPreviewDocs.erase( m_vPreviewDocs.begin() + i );
-				return;
+		// drop the key from the OPPOSITE list first
+		std::vector<tstring>& vFrom = bOn ? m_vPreviewOffDocs : m_vPreviewDocs;
+		for( size_t i = 0; i < vFrom.size(); i++ ){
+			if( vFrom[ i ] == sKey ){
+				vFrom.erase( vFrom.begin() + i );
+				break;
 			}
 		}
-		if( bOn ){
-			m_vPreviewDocs.push_back( sKey );
+		std::vector<tstring>& vTo = bOn ? m_vPreviewDocs : m_vPreviewOffDocs;
+		for( size_t i = 0; i < vTo.size(); i++ ){
+			if( vTo[ i ] == sKey ){
+				RbLogF( "preview docs: %u+%u keys", (unsigned)m_vPreviewDocs.size(), (unsigned)m_vPreviewOffDocs.size() );
+				return;	// already recorded
+			}
 		}
-		RbLogF( "preview docs: %u keys", (unsigned)m_vPreviewDocs.size() );
+		vTo.push_back( sKey );
+		RbLogF( "preview docs: %u+%u keys", (unsigned)m_vPreviewDocs.size(), (unsigned)m_vPreviewOffDocs.size() );
 	}
 
 	bool IsOfficialPaneVisible()
@@ -2909,25 +2920,13 @@ public:
 		bool bWant = IsPreviewDocOn();
 		bool bPane = IsOfficialPaneVisible();
 		RbLogF( "doc sync: key=%S want=%d pane=%d btn=%d settled=%d", AsciiLogKey( sSyncKey ).c_str(), (int)bWant, (int)bPane, (int)m_bPreviewOn, (int)m_bStartupSettled );
+		// the button follows the DOCUMENT's own state (explicit or
+		// inherited); switching NEVER writes memory - that was the
+		// state-bleeding bug
+		m_bPreviewOn = bWant;
+		ApplyToggleStates();
 		if( !m_bStartupSettled ){
-			// restore window: we never open/close the pane here, but the
-			// button and the doc memory must stay CONSISTENT with whatever
-			// the pane shows - a switch during the window used to leave
-			// pane-open with the button unpressed (user report)
-			if( bPane ){
-				m_bPreviewOn = true;
-				SetPreviewDocOn( true );	// the pane is showing this doc: adopt it
-			}
-			else {
-				m_bPreviewOn = false;	// pane closed: button up (memory kept)
-			}
-			ApplyToggleStates();
-			return;
-		}
-		if( m_bPreviewOn != bWant ){
-			m_bPreviewOn = bWant;
-			SaveProfile();
-			ApplyToggleStates();
+			return;	// restore window: the pane is never touched
 		}
 		if( bWant && !bPane ){
 			OpenWebBarPreview();
@@ -3839,6 +3838,13 @@ public:
 					m_vPreviewDocs.push_back( pszTok );
 					pszTok = wcstok_s( NULL, _T("\n"), &pszCtx );
 				}
+				GetProfileString( _T("PreviewDocsOff"), szDocs, _countof( szDocs ), _T("") );
+				pszCtx = NULL;
+				pszTok = wcstok_s( szDocs, _T("\n"), &pszCtx );
+				while( pszTok ){
+					m_vPreviewOffDocs.push_back( pszTok );
+					pszTok = wcstok_s( NULL, _T("\n"), &pszCtx );
+				}
 			}
 			m_bCustomIconColor = !!GetProfileInt( _T("IconColorMode"), FALSE );
 			m_crCustomIcon = (COLORREF)GetProfileInt( _T("IconColor"), (int)RGB( 224, 224, 224 ) );
@@ -3870,6 +3876,14 @@ public:
 				sDocs += m_vPreviewDocs[ i ];
 			}
 			WriteProfileString( _T("PreviewDocs"), sDocs.c_str() );
+			tstring sOff;
+			for( size_t i = 0; i < m_vPreviewOffDocs.size(); i++ ){
+				if( !sOff.empty() ){
+					sOff += _T("\n");
+				}
+				sOff += m_vPreviewOffDocs[ i ];
+			}
+			WriteProfileString( _T("PreviewDocsOff"), sOff.c_str() );
 		}
 		WriteProfileInt( _T("IconColorMode"), !!m_bCustomIconColor );
 		WriteProfileInt( _T("IconColorMode"), !!m_bCustomIconColor );

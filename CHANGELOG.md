@@ -15,6 +15,18 @@ this code base:
 | `0.9.0` – `0.17.x` | The HTML + Markdown dual-mode toolbar, heading towards `1.0.0`. |
 
 
+## [0.37.0] - 2026-10-01
+
+### Fixed
+
+- **Per-document preview state no longer bleeds between documents**:
+  the memory is now three-state — an explicit ON list, an explicit OFF
+  list, and never-touched documents, which inherit the pane's live
+  state. Only clicking the preview button writes memory; merely
+  switching documents never does (the 0.36.3 adoption stomped every
+  visited document to ON, which leaked closes/opens across documents).
+  Both lists persist (`PreviewDocs` / `PreviewDocsOff`).
+
 ## [0.36.3] - 2026-10-01
 
 ### Fixed
