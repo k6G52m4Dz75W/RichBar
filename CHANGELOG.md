@@ -15,6 +15,20 @@ this code base:
 | `0.9.0` – `0.17.x` | The HTML + Markdown dual-mode toolbar, heading towards `1.0.0`. |
 
 
+## [0.29.3] - 2026-10-01
+
+### Fixed
+
+- **The macro language is now forced inside the macro itself**:
+  `#language = "V8"` is prepended to the in-memory macro text.
+  `nDefMacroLang` alone did not help — the engine selection apparently
+  follows the configured default (legacy JScript), which fails with
+  `REGDB_E_CLASSNOTREG` on Windows 11 26200+. The directive overrides
+  the default deterministically.
+- An engine sanity probe (a bare `var rbProbe = 1;`) runs before the
+  WebBar macro and is logged as its own `webbar macro hr=` line — a
+  failure there isolates the macro engine from the WebBar object.
+
 ## [0.29.2] - 2026-10-01
 
 ### Fixed

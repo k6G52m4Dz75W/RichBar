@@ -2753,8 +2753,12 @@ public:
 		ZeroMemory( &rmi, sizeof( rmi ) );
 		rmi.cbSize = sizeof( rmi );
 		rmi.nFlags = RUN_TEXT;
-		rmi.pszText = pszMacro;
-		rmi.nDefMacroLang = MACRO_LANG_V8 | MACRO_SYNC_ONLY;	// V8: JScript (Chakra) COM class is unregistered on Win11 26200+
+		// the directive OVERRIDES the configured default engine:
+		// nDefMacroLang alone still hit REGDB_E_CLASSNOTREG (0x29.2 log)
+		tstring sCode = _T("#language = \"V8\"\r\n");
+		sCode += pszMacro;
+		rmi.pszText = sCode.c_str();
+		rmi.nDefMacroLang = MACRO_LANG_V8 | MACRO_SYNC_ONLY;
 		rmi.ptErrorPos.x = rmi.ptErrorPos.y = -1;
 		HRESULT hr = (HRESULT)SendMessage( m_hWnd, EE_RUN_MACRO, 0, (LPARAM)&rmi );
 		RbLogF( "webbar macro hr=0x%08X: %S", (unsigned)hr, pszMacro );
@@ -4087,6 +4091,10 @@ void OnDlgCommand( WPARAM wParam )
 				ApplyToggleStates();
 				RbLogF( "preview click: want=%d -> webbar", (int)bWant );
 				if( bWant ){
+					// engine sanity probe: no EmEditor objects at all; a failure
+					// here means the macro ENGINE is unavailable (vs a WebBar
+					// object failure, which the next log line would show)
+					RunWebBarMacro( _T("var rbProbe = 1;") );
 					OpenWebBarPreview();
 				}
 				else {
