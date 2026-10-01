@@ -7,7 +7,7 @@ toolbar, forked from the official Emurasoft HTMLBar plug-in source
 (`19.5.0`). It is meant to replace the HTML/Markdown toolbar built into
 EmEditor v26 (closed source, with most tags hidden inside dropdown menus).
 
-Current release: **0.40.1 — 2026-10-01**.
+Current release: **0.41.0 — 2026-10-01**.
 
 ## Features
 
@@ -110,11 +110,38 @@ adaptivity changed. The 59 unique names and codepoints are mapped in
   toolbar itself** (popup: *Automatic* / *Custom Color...*) drive it; the
   toolbar button is added to saved layouts automatically.
 - **Design View and Preview buttons**: *Design View* (Markdown mode only)
-  toggles EmEditor's Markdown design view; *Preview* runs EmEditor's
-  official WebPreview plug-in to render the current HTML/Markdown
-  document in its embedded pane (`EEID_MARKDOWN_VIEW` / the WebPreview
-  plug-in interface). Added to saved layouts automatically, with
-  dedicated `layout-column-line` / `eye-line` glyphs.
+  toggles EmEditor's Markdown design view. Added to saved layouts
+  automatically, with dedicated glyphs.
+
+### Markdown preview (better than the original)
+
+The *Preview* button renders the CURRENT buffer — no saving required — in
+EmEditor's built-in Web pane, and **auto-refreshes about a second after
+you stop typing**. It deliberately outclasses the official WebPreview
+plug-in:
+
+- **Fresh content, always**: the official pane shows the SAVED file (or a
+  snapshot taken when it opened) and its refresh re-reads that stale
+  source; RichBar re-renders the live buffer on every refresh/keystroke
+  pause.
+- **marked.js v18** — the same rendering engine the official preview
+  uses, at the latest version: full GFM (tables, fenced code, links,
+  ordered/nested/task lists, strikethrough, autolinks).
+- **Single-newline paragraphs**: documents that use one newline per
+  paragraph (instead of the strict blank line) render correctly, with
+  block structure (lists, quotes, tables, headings) protected.
+- **Theme-matched appearance**: the page background and text colors are
+  queried from the editor (and its text font with a Microsoft YaHei
+  fallback for CJK), so the preview blends into the editor instead of
+  flashing a white page in a dark theme.
+- **Per-document pressed state**: each saved file remembers whether its
+  preview was on (across sessions); unsaved documents follow the pane;
+  startup never displaces EmEditor's session-restore panel.
+- **User CSS themes**: drop a `preview.css` into
+  `%APPDATA%\Emurasoft\EmEditor\RichBar\` and it loads after the built-in
+  styles — pick any GitHub/serif/dark stylesheet you like (see
+  `preview-sample.css` in the distribution for a paper-style example).
+  Delete the file to return to the built-in theme.
 - The **legacy colored HTML BMPs are no longer loaded** (their resources
   remain in the DLL, and the plug-in entry icon still uses its own bitmap).
   Because both modes draw monochrome glyphs, the **hover (hot) image list

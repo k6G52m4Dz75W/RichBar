@@ -3108,7 +3108,38 @@ public:
 				? L"table{border-collapse:collapse;} th,td{border:1px solid #ccc;padding:4px 10px;}"
 				: L"table{border-collapse:collapse;} th,td{border:1px solid #555;padding:4px 10px;}";
 			sHtml += L"img{max-width:100%;}";
-			sHtml += L"</style></head><body>";
+			sHtml += L"</style>";
+			// USER THEME: %APPDATA%\Emurasoft\EmEditor\RichBar\preview.css
+			// is appended AFTER the built-in styles, so its rules override
+			// them; absent file -> the built-in theme stands alone
+			{
+				TCHAR szCss[ MAX_PATH ];
+				if( SUCCEEDED( SHGetFolderPathW( NULL, CSIDL_APPDATA, NULL, 0, szCss ) ) ){
+					wcscat_s( szCss, MAX_PATH, L"\\Emurasoft\\EmEditor\\RichBar" );
+					SHCreateDirectoryExW( NULL, szCss, NULL );	// no-op if exists
+					wcscat_s( szCss, MAX_PATH, L"\\preview.css" );
+					sHtml += L"<style>";
+					FILE* fCss = _wfopen( szCss, L"rb" );
+					if( fCss ){
+						TCHAR szLine[ 2048 ];
+						while( fgetws( szLine, _countof( szLine ), fCss ) ){
+							// escape & and < so raw CSS cannot close the tag
+							for( TCHAR* q = szLine; *q; q++ ){
+								if( *q == L'&' )  sHtml += L"&amp;";
+								else if( *q == L'<' )  sHtml += L"&lt;";
+								else  sHtml += *q;
+							}
+						}
+						fclose( fCss );
+						RbLogF( "user css: %S", szCss );
+					}
+					else {
+						RbLogF( "user css: absent" );
+					}
+					sHtml += L"</style>";
+				}
+			}
+			sHtml += L"</head><body>";
 			// marked.js v18 (the same engine the official preview uses,
 			// latest version): the library file sits beside our DLL; the
 			// page references it and renders the embedded source. Missing

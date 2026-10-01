@@ -16,6 +16,7 @@
 #include <olectl.h>
 #include <shlwapi.h>
 #include <commdlg.h>
+#include <shlobj.h>
 
 #pragma comment(lib, "uxtheme.lib")
 

@@ -15,6 +15,23 @@ this code base:
 | `0.9.0` – `0.17.x` | The HTML + Markdown dual-mode toolbar, heading towards `1.0.0`. |
 
 
+## [0.41.0] - 2026-10-01
+
+### Added
+
+- **User-defined preview CSS themes**: a `preview.css` placed in
+  `%APPDATA%\Emurasoft\EmEditor\RichBar\` is loaded after the built-in
+  theme (its rules override; anything unset keeps the built-in
+  editor-matched behavior). Absent file = zero-config default. The
+  directory is created on demand; the file is read per render, so
+  edits apply on the next refresh. Content is `&`/`<`-escaped so raw
+  CSS cannot break the page. A paper-style `preview-sample.css` ships
+  with the distribution.
+- **README feature section "Markdown preview (better than the
+  original)"** documenting the live-buffer rendering, marked.js v18,
+  single-newline paragraphs, theme-matched appearance, per-document
+  memory and user CSS themes (both languages).
+
 ## [0.40.1] - 2026-10-01
 
 ### Fixed
