@@ -15,6 +15,17 @@ this code base:
 | `0.9.0` – `0.17.x` | The HTML + Markdown dual-mode toolbar, heading towards `1.0.0`. |
 
 
+## [0.29.2] - 2026-10-01
+
+### Fixed
+
+- **"Class not registered" on the preview/refresh click**: the in-memory
+  macro was declared as JScript (`MACRO_LANG_JSCRIPT`), but the legacy
+  JScript/Chakra COM engine is gone on Windows 11 26200+, so
+  `EE_RUN_MACRO` failed with `REGDB_E_CLASSNOTREG` (0x80040154). The
+  macro now uses EmEditor's built-in V8 engine (`MACRO_LANG_V8`), which
+  needs no system COM registration.
+
 ## [0.29.1] - 2026-10-01
 
 ### Fixed

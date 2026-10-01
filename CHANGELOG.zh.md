@@ -11,6 +11,16 @@
 | `0.9.0` – `0.17.x` | HTML + Markdown 双模式工具栏，向 `1.0.0` 迈进。 |
 
 
+## [0.29.2] - 2026-10-01
+
+### 修复
+
+- **点击预览/刷新提示"没有注册类"**：内存宏声明为 JScript
+  （`MACRO_LANG_JSCRIPT`），而 Windows 11 26200+ 已移除旧版
+  JScript/Chakra COM 引擎，`EE_RUN_MACRO` 因此以
+  `REGDB_E_CLASSNOTREG`（0x80040154）失败。现改用 EmEditor 内置的
+  V8 引擎（`MACRO_LANG_V8`），无需系统 COM 注册。
+
 ## [0.29.1] - 2026-10-01
 
 ### 修复

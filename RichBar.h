@@ -177,8 +177,8 @@ WCHAR OctToDec( LPWSTR& p )
 #define EI_OPEN_WEB			406		// opens a URL in the built-in Web Browser pane
 #define EEID_MARKDOWN_VIEW		23255	// Markdown design view toggle
 #define EEID_MARKDOWN_PREVIEW	23275	// Markdown rendered preview toggle
-#ifndef RUN_TEXT
-#define RUN_TEXT				1		// EE_RUN_MACRO: pszText is the macro source
+#ifndef MACRO_LANG_V8
+#define MACRO_LANG_V8			2		// EE_RUN_MACRO: EmEditor built-in V8 engine (no COM registration)
 #endif
 #ifndef MACRO_SYNC_ONLY
 #define MACRO_SYNC_ONLY			0x00000200	// EE_RUN_MACRO: run synchronously
@@ -2744,7 +2744,7 @@ public:
 
 	// build the standalone preview document and write it over the pane's
 	// EEW snapshot (the newest EEW*.htm in %TEMP%)
-	// run an in-memory JScript macro through EE_RUN_MACRO (no temp file).
+	// run an in-memory V8 macro through EE_RUN_MACRO (no temp file).
 	// nFlags MUST be RUN_TEXT: 0 selects no source and EmEditor fails the
 	// whole call with E_FAIL (0x80004005 in the 0.29.0 log)
 	HRESULT RunWebBarMacro( const TCHAR* pszMacro )
@@ -2754,7 +2754,7 @@ public:
 		rmi.cbSize = sizeof( rmi );
 		rmi.nFlags = RUN_TEXT;
 		rmi.pszText = pszMacro;
-		rmi.nDefMacroLang = MACRO_LANG_JSCRIPT | MACRO_SYNC_ONLY;
+		rmi.nDefMacroLang = MACRO_LANG_V8 | MACRO_SYNC_ONLY;	// V8: JScript (Chakra) COM class is unregistered on Win11 26200+
 		rmi.ptErrorPos.x = rmi.ptErrorPos.y = -1;
 		HRESULT hr = (HRESULT)SendMessage( m_hWnd, EE_RUN_MACRO, 0, (LPARAM)&rmi );
 		RbLogF( "webbar macro hr=0x%08X: %S", (unsigned)hr, pszMacro );
