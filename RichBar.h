@@ -205,6 +205,7 @@ WCHAR OctToDec( LPWSTR& p )
 #define IDT_WEB_NAVIGATE		7
 #define IDT_WEBBAR_RETRY		8
 #define IDT_DOC_SYNC			9
+#define IDT_STARTUP_SETTLE		10
 // one-shot deferred design-view reconcile (m_hDlg): a 23255 posted during
 // the document-switch event lands before the switch settles and misapplies
 // runtime-drawn glyphs appended to every toolbar image list
@@ -459,6 +460,7 @@ public:
 	tstring m_sPreviewUrl;		// staged preview URL
 	tstring m_sPendingMacro;	// WebBar macro awaiting retry (V8 engine not ready)
 	int m_nMacroRetries = 0;
+	bool m_bStartupSettled = false;	// pane open/close suppressed until the session restore finishes
 	HWND m_hwndView;				// the EmEditor VIEW window (plug-in OnCommand contract)
 	bool m_bPanesRestored;		// startup pane restore done (first state-sync tick)
 	UINT m_nPreviewBarID;		// custom-bar id of the live preview pane
@@ -2681,20 +2683,14 @@ public:
 			return;
 		}
 		m_bPanesRestored = true;
-		// startup preview reconcile (per-document memory, persisted for
-		// saved files): a restored doc whose preview was ON re-renders
-		// the pane immediately (blank-restored-pane fix); anything else
-		// closes the pane EmEditor restored (no orphan browser over an
-		// empty startup)
-		const bool bWant = IsPreviewDocOn();
-		const bool bPane = IsOfficialPaneVisible();
-		m_bPreviewOn = bWant;
+		// startup is HANDS-OFF: opening/closing the preview pane here
+		// DISPLACES EmEditor's session-restore panel (user report). The
+		// button follows the per-document memory; the pane is reconciled
+		// once the settle window ends (see IDT_STARTUP_SETTLE)
+		m_bPreviewOn = IsPreviewDocOn();
 		ApplyToggleStates();
-		if( bWant ){
-			OpenWebBarPreview();
-		}
-		else if( bPane ){
-			RunWebBarMacroStaged( _T("WebBar.Visible = false;") );
+		if( m_hDlg ){
+			SetTimer( m_hDlg, IDT_STARTUP_SETTLE, 10000, NULL );
 		}
 		// EmEditor restores the design view itself; query the command status
 		// and align the button
@@ -2897,12 +2893,24 @@ public:
 			SaveProfile();
 			ApplyToggleStates();
 		}
+		if( !m_bStartupSettled ){
+			return;	// restore window: the pane is never touched
+		}
 		if( bWant && !bPane ){
 			OpenWebBarPreview();
 		}
 		else if( !bWant && bPane ){
 			RunWebBarMacroStaged( _T("WebBar.Visible = false;") );
 		}
+	}
+
+	// the settle window ended: the session restore is long done, so ONE
+	// full reconcile is now safe (memory-ON doc -> open+render;
+	// otherwise close a pane EmEditor restored - the empty-startup case)
+	void OnStartupSettle()
+	{
+		m_bStartupSettled = true;
+		OnDocSyncTimer();
 	}
 
 	// render the CURRENT buffer into the stable preview file and navigate
@@ -5376,6 +5384,14 @@ INT_PTR CALLBACK NewProc( HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam )
 				CMyFrame* pFrame = static_cast<CMyFrame*>(GetFrame( hwnd ));
 				if( pFrame ){
 					pFrame->OnDocSyncTimer();
+				}
+				return 0;
+			}
+			else if( wParam == IDT_STARTUP_SETTLE ){
+				KillTimer( hwnd, IDT_STARTUP_SETTLE );
+				CMyFrame* pFrame = static_cast<CMyFrame*>(GetFrame( hwnd ));
+				if( pFrame ){
+					pFrame->OnStartupSettle();
 				}
 				return 0;
 			}

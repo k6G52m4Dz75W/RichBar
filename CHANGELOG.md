@@ -15,6 +15,21 @@ this code base:
 | `0.9.0` – `0.17.x` | The HTML + Markdown dual-mode toolbar, heading towards `1.0.0`. |
 
 
+## [0.34.1] - 2026-10-01
+
+### Fixed
+
+- **Startup is now fully hands-off**: opening or closing the preview
+  pane during startup DISPLACES EmEditor's session-restore panel (the
+  quick document-reopen UI disappears). OnStartupRestore now only sets
+  the button from the per-document memory and never touches the pane;
+  the deferred doc-switch reconcile likewise only updates the button
+  until a 10-second settle window ends, after which ONE full reconcile
+  runs (restore long finished: memory-ON document → pane opens and
+  renders; otherwise a pane EmEditor restored is closed, which covers
+  the empty-startup case). Auto-refresh is unaffected — it only
+  re-renders an already-open pane.
+
 ## [0.34.0] - 2026-10-01
 
 ### Added
