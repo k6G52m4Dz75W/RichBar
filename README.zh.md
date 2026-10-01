@@ -117,11 +117,12 @@ WebPreview 插件：
   下不会闪出白页。
 - **按文档记忆按压态**：每个已保存文件跨会话记住自己的预览开/关；
   未保存文档跟随面板；启动时绝不干扰 EmEditor 的会话恢复面板。
-- **用户自定义 CSS 主题**：把 `preview.css` 放到
-  `%APPDATA%\Emurasoft\EmEditor\RichBar\`，它会加载在内置样式之后
-  ——GitHub 风、衬线、深色主题任你挑选（发行包中的
-  `preview-sample.css` 是一个纸张风示例）。删除该文件即恢复内置
-  主题。
+- **用户自定义 CSS 主题**：在插件属性的 *Preview CSS* 框中指定任意
+  样式表——GitHub 风、衬线、深色主题都可以。发行包的 `themes\` 目录
+  附带现成示例（`paper-serif.css`、`emeditor-template.css`）。该框留
+  空时使用默认位置
+  （`%APPDATA%\Emurasoft\EmEditor\RichBar\preview.css`），删除该文件
+  即恢复内置主题。
 - **旧版 HTML 彩色 BMP 不再被加载**（资源仍保留在 DLL 中，插件列表中的
   插件入口图标仍使用自己的位图）。悬停/按下为浅色系统高亮填充，深色
   字形副本保证其上可读。

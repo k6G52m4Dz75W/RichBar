@@ -48,8 +48,8 @@ this code base:
   editor-matched behavior). Absent file = zero-config default. The
   directory is created on demand; the file is read per render, so
   edits apply on the next refresh. Content is `&`/`<`-escaped so raw
-  CSS cannot break the page. A paper-style `preview-sample.css` ships
-  with the distribution.
+  CSS cannot break the page. Sample themes ship in the distribution's
+  `themes\` folder.
 - **README feature section "Markdown preview (better than the
   original)"** documenting the live-buffer rendering, marked.js v18,
   single-newline paragraphs, theme-matched appearance, per-document
