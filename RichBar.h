@@ -2859,6 +2859,87 @@ public:
 		return ( nBest >= 0 ) ? clrSeen[ nBest ] : (COLORREF)CLR_INVALID;
 	}
 
+	// the REAL edit-view colors (left pane): a dense GetPixel grid over
+	// the view; background = the modal color, text = the dominant color
+	// far from the background (glyph cores carry the exact text color).
+	// There is NO theme-color query API and the bar API stays pinned
+	// until relaunch, so live pixels are the only truthful source
+	bool MeasureViewColors( COLORREF* pcrBack, COLORREF* pcrText )
+	{
+		*pcrBack = CLR_INVALID;
+		*pcrText = CLR_INVALID;
+		if( !m_hwndView || !IsWindow( m_hwndView ) || !IsWindowVisible( m_hwndView ) ){
+			return false;
+		}
+		RECT rc;
+		if( !GetWindowRect( m_hwndView, &rc ) ){
+			return false;
+		}
+		int cx = rc.right - rc.left;
+		int cy = rc.bottom - rc.top;
+		if( cx < 120 || cy < 80 ){
+			return false;
+		}
+		HDC hdc = GetDC( NULL );
+		if( !hdc ){
+			return false;
+		}
+		COLORREF clrSeen[ 32 ];
+		int nCount[ 32 ] = { 0 };
+		int nFound = 0;
+		const int nCols = 48;
+		const int nRows = 30;
+		for( int iy = 1; iy <= nRows; iy++ ){
+			int y = rc.top + iy * cy / ( nRows + 1 );
+			for( int ix = 1; ix <= nCols; ix++ ){
+				COLORREF c = GetPixel( hdc, rc.left + ix * cx / ( nCols + 1 ), y );
+				if( c == CLR_INVALID )  continue;
+				int k;
+				for( k = 0; k < nFound; k++ ){
+					if( clrSeen[ k ] == c ){
+						nCount[ k ]++;
+						break;
+					}
+				}
+				if( k == nFound && nFound < 32 ){
+					clrSeen[ nFound ] = c;
+					nCount[ nFound ] = 1;
+					nFound++;
+				}
+			}
+		}
+		ReleaseDC( NULL, hdc );
+		int nBack = -1;
+		int nBackN = 0;
+		for( int k = 0; k < nFound; k++ ){
+			if( nCount[ k ] > nBackN ){
+				nBackN = nCount[ k ];
+				nBack = k;
+			}
+		}
+		if( nBack < 0 )  return false;
+		*pcrBack = clrSeen[ nBack ];
+		// text: the dominant color clearly separated from the background
+		int nR = GetRValue( *pcrBack ), nG = GetGValue( *pcrBack ), nB = GetBValue( *pcrBack );
+		int nText = -1;
+		int nTextN = 8;
+		for( int k = 0; k < nFound; k++ ){
+			if( k == nBack )  continue;
+			int dR = GetRValue( clrSeen[ k ] ) - nR;
+			int dG = GetGValue( clrSeen[ k ] ) - nG;
+			int dB = GetBValue( clrSeen[ k ] ) - nB;
+			if( dR * dR + dG * dG + dB * dB < 60 * 60 )  continue;
+			if( nCount[ k ] > nTextN ){
+				nTextN = nCount[ k ];
+				nText = k;
+			}
+		}
+		if( nText >= 0 ){
+			*pcrText = clrSeen[ nText ];
+		}
+		return true;
+	}
+
 	// render the CURRENT buffer into the stable preview file and navigate
 	// the built-in Web bar to it via the WebBar macro object; the ?t= stamp
 	// makes every URL unique so the browser cannot show a cached page
@@ -2892,17 +2973,32 @@ public:
 		// with its luminance (bar colors stay PINNED until relaunch - the
 		// upstream dark<->light stickiness - so the page matches the
 		// theme as of the render)
-		COLORREF crBack = MeasureBarBackColor();
+		// left = editor, right = preview: make both sides IDENTICAL by
+		// sampling the edit view itself (view -> toolbar -> bar API)
+		COLORREF crBack = CLR_INVALID;
+		COLORREF crText = CLR_INVALID;
+		MeasureViewColors( &crBack, &crText );
 		if( crBack == CLR_INVALID ){
-			crBack = GetBarBackColor();	// toolbar hidden: pinned API value
+			crBack = MeasureBarBackColor();
+		}
+		if( crBack == CLR_INVALID ){
+			crBack = GetBarBackColor();	// toolbars hidden: pinned API value
 		}
 		bool bLight = ( 299 * GetRValue( crBack ) + 587 * GetGValue( crBack ) + 114 * GetBValue( crBack ) ) / 1000 >= 128;
 		TCHAR szBack[ 12 ];
+		TCHAR szFg[ 12 ];
 		wsprintf( szBack, _T("#%02X%02X%02X"), (unsigned)GetRValue( crBack ), (unsigned)GetGValue( crBack ), (unsigned)GetBValue( crBack ) );
-		RbLogF( "theme: back=%S light=%d", szBack, (int)bLight );
+		if( crText == CLR_INVALID ){
+			// no text sampled (empty document): derive from the background
+			wsprintf( szFg, _T("#%02X%02X%02X"), (unsigned)( bLight ? 0x22 : 0xD4 ), (unsigned)( bLight ? 0x22 : 0xD4 ), (unsigned)( bLight ? 0x22 : 0xD4 ) );
+		}
+		else {
+			wsprintf( szFg, _T("#%02X%02X%02X"), (unsigned)GetRValue( crText ), (unsigned)GetGValue( crText ), (unsigned)GetBValue( crText ) );
+		}
+		RbLogF( "theme: view back=%S fg=%S light=%d", szBack, szFg, (int)bLight );
 		tstring sHtml = L"<!DOCTYPE html><html><head><meta charset=\"utf-8\"><style>";
 		sHtml += L"body{font-family:Segoe UI,Arial,sans-serif;margin:24px;line-height:1.6;color:";
-		sHtml += bLight ? L"#222222" : L"#D4D4D4";
+		sHtml += szFg;
 		sHtml += L";background:";
 		sHtml += szBack;
 		sHtml += L";}";

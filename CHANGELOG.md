@@ -15,6 +15,20 @@ this code base:
 | `0.9.0` – `0.17.x` | The HTML + Markdown dual-mode toolbar, heading towards `1.0.0`. |
 
 
+## [0.31.0] - 2026-10-01
+
+### Added
+
+- **The preview page now matches the edit view exactly** (left = editor,
+  right = preview): the background is the modal color of a dense pixel
+  sample of the edit view itself, and the body text color is the dominant
+  color clearly separated from that background (glyph cores carry the
+  exact text color). There is no theme-color query API in EmEditor, and
+  the bar colors stay pinned until relaunch — live pixels are the only
+  truthful source. Fallback chain: view pixels → toolbar pixels → bar
+  API; if no text is sampled (empty document) the text color is derived
+  from the background luminance.
+
 ## [0.30.1] - 2026-10-01
 
 ### Fixed
