@@ -15,6 +15,22 @@ this code base:
 | `0.9.0` – `0.17.x` | The HTML + Markdown dual-mode toolbar, heading towards `1.0.0`. |
 
 
+## [0.30.1] - 2026-10-01
+
+### Fixed
+
+- **The first preview click of a session did nothing**: the V8 macro
+  engine rejects the FIRST macro burst after process start with
+  `0x2000000B` (every session's first preview click failed; seconds
+  later everything succeeded). Macro calls now retry on a 1 s timer
+  (6 attempts), so the first click lands once the engine is ready.
+- **Theme detection now measures the real pixels**: instead of the
+  pinned `EI_GET_BAR_BACK_COLOR` value (which never updates until
+  relaunch — the same upstream stickiness as the toolbar glyph colors),
+  the preview samples the actual toolbar background pixels and uses the
+  most frequent color; the API value remains the fallback when the
+  toolbar is hidden.
+
 ## [0.30.0] - 2026-10-01
 
 ### Added

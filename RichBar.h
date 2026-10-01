@@ -203,6 +203,7 @@ WCHAR OctToDec( LPWSTR& p )
 #define IDT_DESIGN_SYNC			4
 #define IDT_EDIT_TEMP			6
 #define IDT_WEB_NAVIGATE		7
+#define IDT_WEBBAR_RETRY		8
 // one-shot deferred design-view reconcile (m_hDlg): a 23255 posted during
 // the document-switch event lands before the switch settles and misapplies
 // runtime-drawn glyphs appended to every toolbar image list
@@ -457,6 +458,8 @@ public:
 	tstring m_sPreviewText;
 	TCHAR m_szPreviewConfig[ MAX_CONFIG_NAME ];
 	tstring m_sPreviewUrl;		// staged preview URL
+	tstring m_sPendingMacro;	// WebBar macro awaiting retry (V8 engine not ready)
+	int m_nMacroRetries = 0;
 	HWND m_hwndView;				// the EmEditor VIEW window (plug-in OnCommand contract)
 	bool m_bPanesRestored;		// startup pane restore done (first state-sync tick)
 	UINT m_nPreviewBarID;		// custom-bar id of the live preview pane
@@ -2765,6 +2768,97 @@ public:
 		return hr;
 	}
 
+	// the V8 macro engine rejects the FIRST macro burst after process
+	// start with 0x2000000B (every session's first preview click fails;
+	// a few seconds later everything succeeds) - retry on a timer
+	void RunWebBarMacroStaged( const TCHAR* pszMacro )
+	{
+		HRESULT hr = RunWebBarMacro( pszMacro );
+		if( hr == S_OK ){
+			m_sPendingMacro.clear();
+			return;
+		}
+		m_sPendingMacro = pszMacro;
+		m_nMacroRetries = 6;
+		if( m_hDlg ){
+			SetTimer( m_hDlg, IDT_WEBBAR_RETRY, 1000, NULL );
+		}
+	}
+
+	void OnWebBarRetryTimer()
+	{
+		if( m_sPendingMacro.empty() )  return;
+		HRESULT hr = RunWebBarMacro( m_sPendingMacro.c_str() );
+		if( hr == S_OK ){
+			RbLogF( "webbar retry: SUCCEEDED" );
+			m_sPendingMacro.clear();
+		}
+		else if( --m_nMacroRetries <= 0 ){
+			RbLogF( "webbar retry: gave up" );
+			m_sPendingMacro.clear();
+		}
+		else if( m_hDlg ){
+			SetTimer( m_hDlg, IDT_WEBBAR_RETRY, 1000, NULL );
+		}
+		if( m_sPendingMacro.empty() && m_hDlg ){
+			KillTimer( m_hDlg, IDT_WEBBAR_RETRY );
+		}
+	}
+
+	// the REAL painted toolbar background: EI_GET_BAR_BACK_COLOR stays
+	// pinned across theme switches until relaunch (upstream), so sample
+	// the actual toolbar pixels and take the most frequent color
+	COLORREF MeasureBarBackColor()
+	{
+		if( !m_hwndToolbar || !IsWindow( m_hwndToolbar ) || !IsWindowVisible( m_hwndToolbar ) ){
+			return CLR_INVALID;
+		}
+		RECT rc;
+		if( !GetWindowRect( m_hwndToolbar, &rc ) ){
+			return CLR_INVALID;
+		}
+		int cx = rc.right - rc.left;
+		int cy = rc.bottom - rc.top;
+		if( cx < 40 || cy < 12 ){
+			return CLR_INVALID;
+		}
+		HDC hdc = GetDC( NULL );
+		if( !hdc ){
+			return CLR_INVALID;
+		}
+		COLORREF clrSeen[ 16 ];
+		int nCount[ 16 ] = { 0 };
+		int nFound = 0;
+		for( int iy = cy / 4; iy < cy; iy += cy / 2 + 1 ){
+			for( int ix = cx / 8; ix < cx; ix += cx / 8 + 1 ){
+				COLORREF c = GetPixel( hdc, rc.left + ix, rc.top + iy );
+				if( c == CLR_INVALID )  continue;
+				int k;
+				for( k = 0; k < nFound; k++ ){
+					if( clrSeen[ k ] == c ){
+						nCount[ k ]++;
+						break;
+					}
+				}
+				if( k == nFound && nFound < 16 ){
+					clrSeen[ nFound ] = c;
+					nCount[ nFound ] = 1;
+					nFound++;
+				}
+			}
+		}
+		ReleaseDC( NULL, hdc );
+		int nBest = -1;
+		int nBestN = 0;
+		for( int k = 0; k < nFound; k++ ){
+			if( nCount[ k ] > nBestN ){
+				nBestN = nCount[ k ];
+				nBest = k;
+			}
+		}
+		return ( nBest >= 0 ) ? clrSeen[ nBest ] : (COLORREF)CLR_INVALID;
+	}
+
 	// render the CURRENT buffer into the stable preview file and navigate
 	// the built-in Web bar to it via the WebBar macro object; the ?t= stamp
 	// makes every URL unique so the browser cannot show a cached page
@@ -2785,7 +2879,7 @@ public:
 		tstring sMacro = _T("WebBar.Visible = true; WebBar.Open( \"");
 		sMacro += sUrl;
 		sMacro += _T("\" );");
-		RunWebBarMacro( sMacro.c_str() );
+		RunWebBarMacroStaged( sMacro.c_str() );
 	}
 
 	void WritePreviewHtml()
@@ -2798,7 +2892,10 @@ public:
 		// with its luminance (bar colors stay PINNED until relaunch - the
 		// upstream dark<->light stickiness - so the page matches the
 		// theme as of the render)
-		COLORREF crBack = GetBarBackColor();
+		COLORREF crBack = MeasureBarBackColor();
+		if( crBack == CLR_INVALID ){
+			crBack = GetBarBackColor();	// toolbar hidden: pinned API value
+		}
 		bool bLight = ( 299 * GetRValue( crBack ) + 587 * GetGValue( crBack ) + 114 * GetBValue( crBack ) ) / 1000 >= 128;
 		TCHAR szBack[ 12 ];
 		wsprintf( szBack, _T("#%02X%02X%02X"), (unsigned)GetRValue( crBack ), (unsigned)GetGValue( crBack ), (unsigned)GetBValue( crBack ) );
@@ -4111,14 +4208,10 @@ void OnDlgCommand( WPARAM wParam )
 				ApplyToggleStates();
 				RbLogF( "preview click: want=%d -> webbar", (int)bWant );
 				if( bWant ){
-					// engine sanity probe: no EmEditor objects at all; a failure
-					// here means the macro ENGINE is unavailable (vs a WebBar
-					// object failure, which the next log line would show)
-					RunWebBarMacro( _T("var rbProbe = 1;") );
 					OpenWebBarPreview();
 				}
 				else {
-					RunWebBarMacro( _T("WebBar.Visible = false;") );
+					RunWebBarMacroStaged( _T("WebBar.Visible = false;") );
 				}
 			}
 				else if( cmd.m_iCmd == CMD_REFRESH_PREVIEW ){
@@ -5152,6 +5245,13 @@ INT_PTR CALLBACK NewProc( HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam )
 				CMyFrame* pFrame = static_cast<CMyFrame*>(GetFrame( hwnd ));
 				if( pFrame ){
 					pFrame->OnWebNavigateTimer();
+				}
+				return 0;
+			}
+			else if( wParam == IDT_WEBBAR_RETRY ){
+				CMyFrame* pFrame = static_cast<CMyFrame*>(GetFrame( hwnd ));
+				if( pFrame ){
+					pFrame->OnWebBarRetryTimer();
 				}
 				return 0;
 			}
