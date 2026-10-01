@@ -204,6 +204,7 @@ WCHAR OctToDec( LPWSTR& p )
 #define IDT_EDIT_TEMP			6
 #define IDT_WEB_NAVIGATE		7
 #define IDT_WEBBAR_RETRY		8
+#define IDT_DOC_SYNC			9
 // one-shot deferred design-view reconcile (m_hDlg): a 23255 posted during
 // the document-switch event lands before the switch settles and misapplies
 // runtime-drawn glyphs appended to every toolbar image list
@@ -2680,10 +2681,21 @@ public:
 			return;
 		}
 		m_bPanesRestored = true;
-		// preview starts OFF: the Web-bar snapshot is per-click, there is
-		// nothing meaningful to restore across sessions
-		m_bPreviewOn = false;
+		// startup preview reconcile (per-document memory, persisted for
+		// saved files): a restored doc whose preview was ON re-renders
+		// the pane immediately (blank-restored-pane fix); anything else
+		// closes the pane EmEditor restored (no orphan browser over an
+		// empty startup)
+		const bool bWant = IsPreviewDocOn();
+		const bool bPane = IsOfficialPaneVisible();
+		m_bPreviewOn = bWant;
 		ApplyToggleStates();
+		if( bWant ){
+			OpenWebBarPreview();
+		}
+		else if( bPane ){
+			RunWebBarMacroStaged( _T("WebBar.Visible = false;") );
+		}
 		// EmEditor restores the design view itself; query the command status
 		// and align the button
 		{
@@ -2871,6 +2883,26 @@ public:
 			return;
 		}
 		OpenWebBarPreview();
+	}
+
+	// deferred doc-switch reconcile: the per-document preview memory
+	// decides the button AND the pane (queries right at the switch
+	// event read the PREVIOUS document - the 0.22.9 lesson)
+	void OnDocSyncTimer()
+	{
+		bool bWant = IsPreviewDocOn();
+		bool bPane = IsOfficialPaneVisible();
+		if( m_bPreviewOn != bWant ){
+			m_bPreviewOn = bWant;
+			SaveProfile();
+			ApplyToggleStates();
+		}
+		if( bWant && !bPane ){
+			OpenWebBarPreview();
+		}
+		else if( !bWant && bPane ){
+			RunWebBarMacroStaged( _T("WebBar.Visible = false;") );
+		}
 	}
 
 	// render the CURRENT buffer into the stable preview file and navigate
@@ -3278,6 +3310,9 @@ public:
 			int iNewMode = DetectMode();
 			if( m_hDlg && IsOfficialPaneVisible() ){
 				SetTimer( m_hDlg, IDT_PREVIEW_REFRESH, 1000, NULL );	// the pane follows the document
+			}
+			if( m_hDlg ){
+				SetTimer( m_hDlg, IDT_DOC_SYNC, 250, NULL );	// deferred per-doc reconcile
 			}
 			// follow the document, exactly like the official button: query the
 			// built-in command's REAL per-document checked state (EE_QUERY_STATUS,
@@ -3719,6 +3754,21 @@ public:
 			m_bAutoDisplay = !!GetProfileInt( _T("AutoDisplay"), FALSE );
 			m_bDesignViewOn = !!GetProfileInt( _T("DesignViewOn"), FALSE );
 			m_bPreviewOn = !!GetProfileInt( _T("PreviewOn"), FALSE );
+			{
+				// per-document preview memory (path keys only - untitled
+				// names are reused across sessions, so they stay
+				// session-scope)
+				TCHAR szDocs[ 4096 ];
+				GetProfileString( _T("PreviewDocs"), szDocs, _countof( szDocs ), _T("") );
+				TCHAR* pszCtx = NULL;
+				TCHAR* pszTok = wcstok_s( szDocs, _T("\n"), &pszCtx );
+				while( pszTok ){
+					if( wcschr( pszTok, _T('\\') ) != NULL ){
+						m_vPreviewDocs.push_back( pszTok );
+					}
+					pszTok = wcstok_s( NULL, _T("\n"), &pszCtx );
+				}
+			}
 			m_bCustomIconColor = !!GetProfileInt( _T("IconColorMode"), FALSE );
 			m_crCustomIcon = (COLORREF)GetProfileInt( _T("IconColor"), (int)RGB( 224, 224, 224 ) );
 			m_cx = GetProfileInt( _T("cx"), 0 );
@@ -3738,6 +3788,20 @@ public:
 		WriteProfileInt( _T("AutoDisplay"), !!m_bAutoDisplay );
 		WriteProfileInt( _T("DesignViewOn"), !!m_bDesignViewOn );
 		WriteProfileInt( _T("PreviewOn"), !!m_bPreviewOn );
+		{
+			// persist the per-document preview memory (path keys only)
+			tstring sDocs;
+			for( size_t i = 0; i < m_vPreviewDocs.size(); i++ ){
+				if( m_vPreviewDocs[ i ].find( _T('\\') ) == tstring::npos ){
+					continue;
+				}
+				if( !sDocs.empty() ){
+					sDocs += _T("\n");
+				}
+				sDocs += m_vPreviewDocs[ i ];
+			}
+			WriteProfileString( _T("PreviewDocs"), sDocs.c_str() );
+		}
 		WriteProfileInt( _T("IconColorMode"), !!m_bCustomIconColor );
 		WriteProfileInt( _T("IconColorMode"), !!m_bCustomIconColor );
 		WriteProfileInt( _T("IconColor"), (int)m_crCustomIcon );
@@ -4247,6 +4311,7 @@ void OnDlgCommand( WPARAM wParam )
 				// snapshots - the WebBar macro object drives the built-in pane
 				bool bWant = ( SendMessage( m_hwndToolbar, TB_GETSTATE, wParam, 0 ) & TBSTATE_CHECKED ) != 0;
 				m_bPreviewOn = bWant;
+				SetPreviewDocOn( bWant );	// per-document pressed-state memory
 				SaveProfile();
 				ApplyToggleStates();
 				RbLogF( "preview click: want=%d -> webbar", (int)bWant );
@@ -5303,6 +5368,14 @@ INT_PTR CALLBACK NewProc( HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam )
 				CMyFrame* pFrame = static_cast<CMyFrame*>(GetFrame( hwnd ));
 				if( pFrame ){
 					pFrame->OnPreviewAutoRefresh();
+				}
+				return 0;
+			}
+			else if( wParam == IDT_DOC_SYNC ){
+				KillTimer( hwnd, IDT_DOC_SYNC );
+				CMyFrame* pFrame = static_cast<CMyFrame*>(GetFrame( hwnd ));
+				if( pFrame ){
+					pFrame->OnDocSyncTimer();
 				}
 				return 0;
 			}

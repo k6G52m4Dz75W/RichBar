@@ -15,6 +15,22 @@ this code base:
 | `0.9.0` – `0.17.x` | The HTML + Markdown dual-mode toolbar, heading towards `1.0.0`. |
 
 
+## [0.34.0] - 2026-10-01
+
+### Added
+
+- **Per-document preview pressed-state memory** (restored from the 0.22.8
+  design and now persisted): every saved file carries its own preview
+  ON/OFF state in the profile (`PreviewDocs`, path keys only — untitled
+  documents keep session-scope memory since their names are reused
+  across sessions). Switching documents restores that document's button
+  state after a 250 ms deferred reconcile, opening and rendering the
+  pane for preview-ON documents and closing it for preview-OFF ones.
+- **Startup reconcile**: a restored document whose preview was ON has
+  its pane re-rendered immediately (fixes the blank restored pane); any
+  other startup closes the pane EmEditor restored, so an empty startup
+  no longer shows an orphan browser pane over nothing.
+
 ## [0.33.3] - 2026-10-01
 
 ### Fixed
