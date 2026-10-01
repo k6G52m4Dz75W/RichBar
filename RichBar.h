@@ -3001,7 +3001,7 @@ public:
 				int nPx = MulDiv( nHeight, 96, nDpi );	// device px -> CSS px
 				if( nPx < 9 )  nPx = 9;
 				TCHAR szCss[ 256 ];
-				wsprintf( szCss, _T("body{font-family:'%s',Segoe UI,Arial,sans-serif;font-size:%dpx;"), (LPCWSTR)lfView.lfFaceName, (unsigned)nPx );
+				wsprintf( szCss, _T("body{font-family:'%s','Microsoft YaHei',Segoe UI,Arial,sans-serif;font-size:%dpx;"), (LPCWSTR)lfView.lfFaceName, (unsigned)nPx );
 				sHtml += szCss;
 				if( lfView.lfWeight >= FW_BOLD )  sHtml += L"font-weight:bold;";
 				if( lfView.lfItalic )  sHtml += L"font-style:italic;";
@@ -3799,17 +3799,15 @@ public:
 			m_bDesignViewOn = !!GetProfileInt( _T("DesignViewOn"), FALSE );
 			m_bPreviewOn = !!GetProfileInt( _T("PreviewOn"), FALSE );
 			{
-				// per-document preview memory (path keys only - untitled
-				// names are reused across sessions, so they stay
-				// session-scope)
+				// per-document preview memory (path keys AND untitled title
+				// keys: EmEditor restores untitled docs reusing their titles,
+				// so the pressed state follows them across sessions)
 				TCHAR szDocs[ 4096 ];
 				GetProfileString( _T("PreviewDocs"), szDocs, _countof( szDocs ), _T("") );
 				TCHAR* pszCtx = NULL;
 				TCHAR* pszTok = wcstok_s( szDocs, _T("\n"), &pszCtx );
 				while( pszTok ){
-					if( wcschr( pszTok, _T('\\') ) != NULL ){
-						m_vPreviewDocs.push_back( pszTok );
-					}
+					m_vPreviewDocs.push_back( pszTok );
 					pszTok = wcstok_s( NULL, _T("\n"), &pszCtx );
 				}
 			}
@@ -3833,12 +3831,10 @@ public:
 		WriteProfileInt( _T("DesignViewOn"), !!m_bDesignViewOn );
 		WriteProfileInt( _T("PreviewOn"), !!m_bPreviewOn );
 		{
-			// persist the per-document preview memory (path keys only)
+			// persist the per-document preview memory (path keys AND
+			// untitled title keys - see LoadProfile)
 			tstring sDocs;
 			for( size_t i = 0; i < m_vPreviewDocs.size(); i++ ){
-				if( m_vPreviewDocs[ i ].find( _T('\\') ) == tstring::npos ){
-					continue;
-				}
 				if( !sDocs.empty() ){
 					sDocs += _T("\n");
 				}

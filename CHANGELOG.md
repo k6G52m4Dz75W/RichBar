@@ -15,6 +15,21 @@ this code base:
 | `0.9.0` – `0.17.x` | The HTML + Markdown dual-mode toolbar, heading towards `1.0.0`. |
 
 
+## [0.36.1] - 2026-10-01
+
+### Fixed
+
+- **CJK font fallback in the preview**: `'Microsoft YaHei'` now follows
+  the editor font in the preview font stack — English glyphs render with
+  the editor font and Chinese glyphs fall through to YaHei (matching the
+  editor's own font linking) instead of the bare system default. A
+  user-selected Chinese font stays first and is unaffected.
+- **Unsaved documents keep their preview pressed state across
+  sessions**: the per-document memory now persists untitled title keys
+  as well (EmEditor restores untitled documents reusing their titles, so
+  the state follows them). This lifts the 0.23.3-era filter for the
+  preview per the user's request.
+
 ## [0.36.0] - 2026-10-01
 
 ### Added
