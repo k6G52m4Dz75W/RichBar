@@ -15,6 +15,17 @@ this code base:
 | `0.9.0` – `0.17.x` | The HTML + Markdown dual-mode toolbar, heading towards `1.0.0`. |
 
 
+## [0.34.2] - 2026-10-01
+
+### Fixed
+
+- **The pane walk shipped INVERTED (0.33.2 regression)**: the check
+  accepted the first NON-Chrome child (the log caught it matching the
+  status bar), so the pane-presence guard was always true. Consequences:
+  auto-refresh opened the preview pane during startup — displacing the
+  session-restore panel — and re-opened panes the user had closed. The
+  condition now accepts only `Chrome_*` (WebView2) windows.
+
 ## [0.34.1] - 2026-10-01
 
 ### Fixed

@@ -2538,9 +2538,10 @@ public:
 		// signature that identifies it, regardless of the host class name
 		// (window class names drift between EmEditor versions)
 		if( wcsncmp( szCls, L"Chrome_", 7 ) != 0 ){
-			*(HWND*)lParam = hwnd;
-			return FALSE;
+			return TRUE;	// not a WebView2 window: keep walking
 		}
+		*(HWND*)lParam = hwnd;
+		return FALSE;
 		return TRUE;
 	}
 
