@@ -461,6 +461,7 @@ public:
 	tstring m_sPreviewText;
 	TCHAR m_szPreviewConfig[ MAX_CONFIG_NAME ];
 	tstring m_sPreviewUrl;		// staged preview URL
+	tstring m_sPreviewCss;		// user-selected preview CSS file (empty = default location)
 	tstring m_sPendingMacro;	// WebBar macro awaiting retry (V8 engine not ready)
 	int m_nMacroRetries = 0;
 	bool m_bStartupSettled = false;	// pane open/close suppressed until the session restore finishes
@@ -3109,12 +3110,16 @@ public:
 				: L"table{border-collapse:collapse;} th,td{border:1px solid #555;padding:4px 10px;}";
 			sHtml += L"img{max-width:100%;}";
 			sHtml += L"</style>";
-			// USER THEME: %APPDATA%\Emurasoft\EmEditor\RichBar\preview.css
+			// USER THEME: the configured preview CSS file (properties dialog)
+			// or, when empty, %APPDATA%\Emurasoft\EmEditor\RichBar\preview.css\Emurasoft\EmEditor\RichBar\preview.css
 			// is appended AFTER the built-in styles, so its rules override
 			// them; absent file -> the built-in theme stands alone
 			{
 				TCHAR szCss[ MAX_PATH ];
-				if( SUCCEEDED( SHGetFolderPathW( NULL, CSIDL_APPDATA, NULL, 0, szCss ) ) ){
+				if( !m_sPreviewCss.empty() ){
+					lstrcpyn( szCss, m_sPreviewCss.c_str(), MAX_PATH );
+				}
+				else if( SUCCEEDED( SHGetFolderPathW( NULL, CSIDL_APPDATA, NULL, 0, szCss ) ) ){
 					wcscat_s( szCss, MAX_PATH, L"\\Emurasoft\\EmEditor\\RichBar" );
 					SHCreateDirectoryExW( NULL, szCss, NULL );	// no-op if exists
 					wcscat_s( szCss, MAX_PATH, L"\\preview.css" );
@@ -3765,6 +3770,7 @@ public:
 			GetRValue( m_crCustomIcon ), GetGValue( m_crCustomIcon ), GetBValue( m_crCustomIcon ) );
 		SetDlgItemText( hDlg, IDC_BTN_ICON_COLOR, szColor );
 
+		SetDlgItemText( hDlg, IDC_CSS_EDIT, m_sPreviewCss.c_str() );
 		TCHAR szText[40];
 		LoadString( EEGetLocaleInstanceHandle(), IDS_CONFIGS, szText, _countof( szText ) );
 
@@ -3842,6 +3848,17 @@ public:
 		if( wParam == IDOK ){
 			m_bAutoDisplay = !!IsDlgButtonChecked( hDlg, IDC_AUTO_DISPLAY );
 			m_bCustomIconColor = IsDlgButtonChecked( hDlg, IDC_RADIO_ICON_CUSTOM ) ? true : false;
+			{
+				TCHAR szCssPath[ MAX_PATH ];
+				GetDlgItemText( hDlg, IDC_CSS_EDIT, szCssPath, MAX_PATH );
+				// trim quotes (Explorer "Copy as path") and spaces
+				TCHAR* a = szCssPath;
+				while( *a == _T(' ') || *a == _T('"') )  a++;
+				TCHAR* b = a + lstrlen( a );
+				while( b > a && ( b[-1] == _T(' ') || b[-1] == _T('"') ) )  b--;
+				*b = 0;
+				m_sPreviewCss = a;
+			}
 
 			m_AutoConfigArray.clear();
 			HWND hwndList = GetDlgItem( hDlg, IDC_LIST );
@@ -3864,6 +3881,25 @@ public:
 				CustomBarClosed();
 				DisplayBar( true );
 			}
+		}
+		else if( wParam == IDC_CSS_BROWSE ){
+			TCHAR szCssPath[ MAX_PATH ];
+			GetDlgItemText( hDlg, IDC_CSS_EDIT, szCssPath, MAX_PATH );
+			OPENFILENAMEW ofn;
+			ZeroMemory( &ofn, sizeof( ofn ) );
+			ofn.lStructSize = sizeof( ofn );
+			ofn.hwndOwner = hDlg;
+			ofn.lpstrFilter = L"CSS files (*.css)\0*.css\0All files (*.*)\0*.*\0";
+			ofn.lpstrFile = szCssPath;
+			ofn.nMaxFile = MAX_PATH;
+			ofn.Flags = OFN_FILEMUSTEXIST | OFN_HIDEREADONLY;
+			ofn.lpstrDefExt = L"css";
+			if( GetOpenFileNameW( &ofn ) ){
+				SetDlgItemText( hDlg, IDC_CSS_EDIT, szCssPath );
+			}
+		}
+		else if( wParam == IDC_CSS_DEFAULT ){
+			SetDlgItemText( hDlg, IDC_CSS_EDIT, _T("") );
 		}
 		else if( wParam == IDCANCEL ){
 			EndDialog( hDlg, IDCANCEL );
@@ -3958,6 +3994,10 @@ public:
 			m_bAutoDisplay = !!GetProfileInt( _T("AutoDisplay"), FALSE );
 			m_bDesignViewOn = !!GetProfileInt( _T("DesignViewOn"), FALSE );
 			m_bPreviewOn = !!GetProfileInt( _T("PreviewOn"), FALSE );
+			{				TCHAR szCssPath[ MAX_PATH ];
+				GetProfileString( _T("PreviewCss"), szCssPath, _countof( szCssPath ), _T("") );
+				m_sPreviewCss = szCssPath;
+			}
 			{
 				// per-document preview memory (path keys AND untitled title
 				// keys: EmEditor restores untitled docs reusing their titles,
@@ -4016,6 +4056,7 @@ public:
 				sOff += m_vPreviewOffDocs[ i ];
 			}
 			WriteProfileString( _T("PreviewDocsOff"), sOff.c_str() );
+			WriteProfileString( _T("PreviewCss"), m_sPreviewCss.c_str() );
 		}
 		WriteProfileInt( _T("IconColorMode"), !!m_bCustomIconColor );
 		WriteProfileInt( _T("IconColorMode"), !!m_bCustomIconColor );

@@ -15,6 +15,18 @@ this code base:
 | `0.9.0` – `0.17.x` | The HTML + Markdown dual-mode toolbar, heading towards `1.0.0`. |
 
 
+## [0.42.0] - 2026-10-01
+
+### Added
+
+- **The preview CSS file is selectable in the plug-in properties**: the
+  RichBar Properties dialog gained a "Preview CSS:" row with an edit
+  box, a *Browse...* button (CSS filter, quotes/spaces trimmed) and a
+  *Default* button that clears the override. The chosen path is
+  persisted (`PreviewCss`); when empty the built-in default
+  `%APPDATA%\Emurasoft\EmEditor\RichBar\preview.css` is used, so the
+  0.41.0 convention keeps working unchanged.
+
 ## [0.41.0] - 2026-10-01
 
 ### Added
