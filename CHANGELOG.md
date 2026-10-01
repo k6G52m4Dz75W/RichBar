@@ -15,6 +15,20 @@ this code base:
 | `0.9.0` – `0.17.x` | The HTML + Markdown dual-mode toolbar, heading towards `1.0.0`. |
 
 
+## [0.36.3] - 2026-10-01
+
+### Fixed
+
+- **The button/pane state no longer diverges during the startup settle
+  window**: a document switch while the pane is open now adopts that
+  document as preview-on (button pressed, remembered — so the settle
+  reconcile never closes a pane in use); with the pane closed the button
+  stays up and the memory is not erased.
+- **Diagnostic logs no longer truncate at Chinese characters**: the CRT's
+  default locale cuts `%S` at the first non-ASCII byte (the doc keys are
+  Chinese paths/titles), which hid every field after the key; keys are
+  now logged ASCII-safe.
+
 ## [0.36.2] - 2026-10-01
 
 ### Changed

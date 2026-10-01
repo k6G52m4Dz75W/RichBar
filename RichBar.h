@@ -2559,6 +2559,19 @@ public:
 		return tstring( _T("<untitled>") );	// untitled documents share one slot
 	}
 
+	// ASCII-safe copy for the log: the CRT's default locale truncates
+	// %S at the first non-ASCII character, hiding the rest of the line
+	tstring AsciiLogKey( const tstring& sKey )
+	{
+		tstring sLog = sKey;
+		for( size_t i = 0; i < sLog.size(); i++ ){
+			if( (unsigned) sLog[ i ] > 127 ){
+				sLog[ i ] = _T('?');
+			}
+		}
+		return sLog;
+	}
+
 	bool IsPreviewDocOn()
 	{
 		tstring sKey = CurrentDocKey();
@@ -2573,7 +2586,7 @@ public:
 	void SetPreviewDocOn( bool bOn )
 	{
 		tstring sKey = CurrentDocKey();
-		RbLogF( "set preview doc: key=%S on=%d", sKey.c_str(), (int)bOn );
+		RbLogF( "set preview doc: key=%S on=%d", AsciiLogKey( sKey ).c_str(), (int)bOn );
 		for( size_t i = 0; i < m_vPreviewDocs.size(); i++ ){
 			if( m_vPreviewDocs[i] == sKey ){
 				if( bOn ){
@@ -2895,14 +2908,26 @@ public:
 		tstring sSyncKey = CurrentDocKey();
 		bool bWant = IsPreviewDocOn();
 		bool bPane = IsOfficialPaneVisible();
-		RbLogF( "doc sync: key=%S want=%d pane=%d btn=%d settled=%d", sSyncKey.c_str(), (int)bWant, (int)bPane, (int)m_bPreviewOn, (int)m_bStartupSettled );
+		RbLogF( "doc sync: key=%S want=%d pane=%d btn=%d settled=%d", AsciiLogKey( sSyncKey ).c_str(), (int)bWant, (int)bPane, (int)m_bPreviewOn, (int)m_bStartupSettled );
+		if( !m_bStartupSettled ){
+			// restore window: we never open/close the pane here, but the
+			// button and the doc memory must stay CONSISTENT with whatever
+			// the pane shows - a switch during the window used to leave
+			// pane-open with the button unpressed (user report)
+			if( bPane ){
+				m_bPreviewOn = true;
+				SetPreviewDocOn( true );	// the pane is showing this doc: adopt it
+			}
+			else {
+				m_bPreviewOn = false;	// pane closed: button up (memory kept)
+			}
+			ApplyToggleStates();
+			return;
+		}
 		if( m_bPreviewOn != bWant ){
 			m_bPreviewOn = bWant;
 			SaveProfile();
 			ApplyToggleStates();
-		}
-		if( !m_bStartupSettled ){
-			return;	// restore window: the pane is never touched
 		}
 		if( bWant && !bPane ){
 			OpenWebBarPreview();
