@@ -15,6 +15,17 @@ this code base:
 | `0.9.0` – `0.17.x` | The HTML + Markdown dual-mode toolbar, heading towards `1.0.0`. |
 
 
+## [0.38.1] - 2026-10-01
+
+### Fixed
+
+- **The pane walk now checks visibility**: `WebBar.Visible = false` only
+  HIDES the bar — the WebView2 browser windows (Chrome_\*) stay alive
+  behind it, so the existence-only walk reported "pane open" while it
+  was closed, and new documents initialized their sticky preview state
+  as ON. The walk additionally requires `IsWindowVisible`, which
+  accounts for the whole parent chain.
+
 ## [0.38.0] - 2026-10-01
 
 ### Changed

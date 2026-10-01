@@ -2544,6 +2544,9 @@ public:
 		if( wcsncmp( szCls, L"Chrome_", 7 ) != 0 ){
 			return TRUE;	// not a WebView2 window: keep walking
 		}
+		if( !IsWindowVisible( hwnd ) ){
+			return TRUE;	// the WebView2 lives on but its pane is HIDDEN (Visible=false only hides the bar)
+		}
 		*(HWND*)lParam = hwnd;
 		return FALSE;
 		return TRUE;
