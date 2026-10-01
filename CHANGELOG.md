@@ -15,6 +15,16 @@ this code base:
 | `0.9.0` – `0.17.x` | The HTML + Markdown dual-mode toolbar, heading towards `1.0.0`. |
 
 
+## [0.36.0] - 2026-10-01
+
+### Added
+
+- **The Markdown preview font follows the editor text font**: the
+  preview queries the view's real font handle
+  (`EI_GET_VIEW_FONT`, v20.5+) and mirrors its face name, pixel size
+  (converted to CSS px via the document DPI), bold and italic. If the
+  query fails it falls back to Segoe UI.
+
 ## [0.35.0] - 2026-10-01
 
 ### Fixed

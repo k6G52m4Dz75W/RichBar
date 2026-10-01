@@ -180,6 +180,9 @@ WCHAR OctToDec( LPWSTR& p )
 #ifndef MACRO_LANG_V8
 #define MACRO_LANG_V8			2		// EE_RUN_MACRO: EmEditor built-in V8 engine (no COM registration)
 #endif
+#ifndef EI_GET_VIEW_FONT
+#define EI_GET_VIEW_FONT		382	// EE_INFO: returns the editor view text HFONT (v20.5+)
+#endif
 #ifndef MACRO_SYNC_ONLY
 #define MACRO_SYNC_ONLY			0x00000200	// EE_RUN_MACRO: run synchronously
 #endif
@@ -2982,8 +2985,31 @@ public:
 				wsprintf( szFg, _T("#%02X%02X%02X"), (unsigned)GetRValue( crText ), (unsigned)GetGValue( crText ), (unsigned)GetBValue( crText ) );
 			}
 			RbLogF( "theme: view back=%S fg=%S light=%d", szBack, szFg, (int)bLight );
+			// the preview font follows the EDITOR text font: EI_GET_VIEW_FONT
+			// returns the view's real HFONT (face/size/weight/italic live in it)
+			HFONT hViewFont = (HFONT)Editor_Info( m_hWnd, EI_GET_VIEW_FONT, 0 );
+			LOGFONTW lfView;
+			ZeroMemory( &lfView, sizeof( lfView ) );
+			const bool bFont = hViewFont && GetObjectW( hViewFont, sizeof( lfView ), &lfView ) == sizeof( lfView ) && lfView.lfFaceName[ 0 ];
 			sHtml = L"<!DOCTYPE html><html><head><meta charset=\"utf-8\"><style>";
-			sHtml += L"body{font-family:Segoe UI,Arial,sans-serif;margin:24px;line-height:1.6;color:";
+			if( bFont ){
+				int nHeight = lfView.lfHeight;
+				if( nHeight < 0 )  nHeight = -nHeight;
+				else if( nHeight > 0 )  nHeight = MulDiv( nHeight, 4, 5 );	// cell height -> approx em
+				int nDpi = (int)Editor_DocInfo( m_hWnd, 0, EI_GET_DPI, 0 );
+				if( nDpi <= 0 )  nDpi = 96;
+				int nPx = MulDiv( nHeight, 96, nDpi );	// device px -> CSS px
+				if( nPx < 9 )  nPx = 9;
+				TCHAR szCss[ 256 ];
+				wsprintf( szCss, _T("body{font-family:'%s',Segoe UI,Arial,sans-serif;font-size:%dpx;"), (LPCWSTR)lfView.lfFaceName, (unsigned)nPx );
+				sHtml += szCss;
+				if( lfView.lfWeight >= FW_BOLD )  sHtml += L"font-weight:bold;";
+				if( lfView.lfItalic )  sHtml += L"font-style:italic;";
+				sHtml += L"line-height:1.6;margin:24px;color:";
+			}
+			else {
+				sHtml += L"body{font-family:Segoe UI,Arial,sans-serif;margin:24px;line-height:1.6;color:";
+			}
 			sHtml += szFg;
 			sHtml += L";background:";
 			sHtml += szBack;
