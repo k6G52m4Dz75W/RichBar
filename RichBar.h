@@ -1982,28 +1982,40 @@ public:
 			Editor_GetCaretPos( m_hWnd, POS_LOGICAL_W, &ptSaveA );
 			ptSaveB = ptSaveA;
 		}
+		// if the Copy is a no-op (EMPTY document - nothing selected) the
+		// clipboard keeps WHATEVER the user had there; trusting it would
+		// render clipboard content as the document (observed at startup:
+		// the preview showed the user's copied text with no file open)
+		DWORD nSeqBefore = GetClipboardSequenceNumber();
 		SendMessage( m_hWnd, WM_COMMAND, MAKEWPARAM( EEID_EDIT_SELECT_ALL, 0 ), 0 );
 		SendMessage( m_hWnd, WM_COMMAND, MAKEWPARAM( EEID_EDIT_COPY, 0 ), 0 );
-		if( !OpenClipboard( m_hWnd ) ){
-			return false;
-		}
+		const bool bCopied = GetClipboardSequenceNumber() != nSeqBefore;
 		bool bOK = false;
-		HANDLE h = GetClipboardData( CF_UNICODETEXT );
-		if( h ){
-			LPCWSTR psz = (LPCWSTR)GlobalLock( h );
-			if( psz ){
-				sText = psz;
-				bOK = true;
-				GlobalUnlock( h );
+		if( bCopied && OpenClipboard( m_hWnd ) ){
+			HANDLE h = GetClipboardData( CF_UNICODETEXT );
+			if( h ){
+				LPCWSTR psz = (LPCWSTR)GlobalLock( h );
+				if( psz ){
+					sText = psz;
+					bOK = true;
+					GlobalUnlock( h );
+				}
 			}
+			CloseClipboard();
 		}
-		CloseClipboard();
 		// restore the user's selection/caret (select-all left it expanded)
 		Editor_SetCaretPosEx( m_hWnd, POS_LOGICAL_W, &ptSaveA, FALSE );
 		Editor_SetCaretPosEx( m_hWnd, POS_LOGICAL_W, &ptSaveB, ( ptSaveB.x != ptSaveA.x || ptSaveB.y != ptSaveA.y ) ? TRUE : FALSE );
-		// restore the user's clipboard text (we are the owner now; other
-		// formats were already destroyed by the Copy above)
-		if( !sClipSave.empty() && OpenClipboard( m_hWnd ) ){
+		if( !bCopied ){
+			// empty document: feed an empty page so the preview clears
+			// instead of showing stale or clipboard content
+			sText.clear();
+			bOK = true;
+			RbLogF( "doc empty: preview cleared" );
+		}
+		else if( !sClipSave.empty() && OpenClipboard( m_hWnd ) ){
+			// restore the user's clipboard text (we are the owner now; other
+			// formats were already destroyed by the Copy above)
 			EmptyClipboard();
 			HGLOBAL hClipNew = GlobalAlloc( GMEM_MOVEABLE, ( sClipSave.size() + 1 ) * sizeof( WCHAR ) );
 			if( hClipNew ){

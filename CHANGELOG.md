@@ -15,6 +15,19 @@ this code base:
 | `0.9.0` – `0.17.x` | The HTML + Markdown dual-mode toolbar, heading towards `1.0.0`. |
 
 
+## [0.33.3] - 2026-10-01
+
+### Fixed
+
+- **The preview could render clipboard content as the document** (seen at
+  startup with no file open): on an EMPTY document the SelectAll+Copy
+  buffer read is a no-op, so the clipboard kept whatever the user had
+  copied — and the preview rendered that. `GetDocTextAll` now verifies
+  the Copy actually happened via the clipboard sequence number; on a
+  no-op it feeds an empty page (clearing the preview) and leaves the
+  clipboard untouched. The clipboard-text restore also only runs when
+  our Copy really replaced it.
+
 ## [0.33.2] - 2026-10-01
 
 ### Changed
