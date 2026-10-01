@@ -2999,6 +2999,28 @@ public:
 		RbLogF( "pane walk after open: visible=%d", (int)IsOfficialPaneVisible() );
 	}
 
+	// JSON/JS string escape for embedding the markdown source into the
+	// preview page: < and > become \u003c/\u003e so a literal
+	// "</script>" inside the text cannot terminate the script tag
+	tstring JsEscape( const tstring& sIn )
+	{
+		tstring r;
+		for( size_t i = 0; i < sIn.size(); i++ ){
+			WCHAR c = sIn[ i ];
+			if( c == L'\\' )  r += L"\\\\";
+			else if( c == L'"' )  r += L"\\\"";
+			else if( c == L'\n' )  r += L"\\n";
+			else if( c == L'\r' ){ }	// CRLF -> single \n
+			else if( c == L'\t' )  r += L"\\t";
+			else if( c == L'<' )  r += L"\\u003c";
+			else if( c == L'>' )  r += L"\\u003e";
+			else if( c == 0x2028 )  r += L"\\u2028";
+			else if( c == 0x2029 )  r += L"\\u2029";
+			else  r += c;
+		}
+		return r;
+	}
+
 	void WritePreviewHtml()
 	{
 		tstring sText;
@@ -3082,8 +3104,46 @@ public:
 			sHtml += L"li{margin:2px 0;} hr{border:0;border-top:1px solid ";
 			sHtml += bLight ? L"#ccc;}" : L"#555;}";
 			sHtml += bLight ? L"a{color:#0366d6;}" : L"a{color:#4da3ff;}";
+			sHtml += bLight
+				? L"table{border-collapse:collapse;} th,td{border:1px solid #ccc;padding:4px 10px;}"
+				: L"table{border-collapse:collapse;} th,td{border:1px solid #555;padding:4px 10px;}";
+			sHtml += L"img{max-width:100%;}";
 			sHtml += L"</style></head><body>";
-			// per-line conversion with list grouping
+			// marked.js v18 (the same engine the official preview uses,
+			// latest version): the library file sits beside our DLL; the
+			// page references it and renders the embedded source. Missing
+			// file -> the built-in line converter below takes over
+			tstring sMarkedUrl;
+			bool bMarked = false;
+			{
+				TCHAR szDll[ MAX_PATH ];
+				if( GetModuleFileName( EEGetInstanceHandle(), szDll, MAX_PATH ) > 0 ){
+					LPTSTR pEnd = szDll + lstrlen( szDll );
+					while( pEnd > szDll && pEnd[-1] != _T('\\') )  pEnd--;
+					*pEnd = 0;
+					StringCat( szDll, MAX_PATH, _T("marked.umd.min.js") );
+					if( GetFileAttributes( szDll ) != INVALID_FILE_ATTRIBUTES ){
+						for( LPTSTR p = szDll; *p; p++ ){
+							if( *p == _T('\\') )  *p = _T('/');
+						}
+						sMarkedUrl = _T("file:///");
+						UrlAppendEncoded( sMarkedUrl, szDll, true );
+						bMarked = true;
+					}
+				}
+			}
+			if( bMarked ){
+				// the markdown source is embedded as a JSON/JS-escaped string;
+				// marked parses it client-side (full GFM)
+				sHtml += L"<div id=\"content\"></div>";
+				sHtml += L"<script src=\"" + sMarkedUrl + L"\"></script>";
+				sHtml += L"<script>window.__md=\"";
+				sHtml += JsEscape( sText );
+				sHtml += L"\";document.getElementById('content').innerHTML=marked.parse(window.__md);</script>";
+				sHtml += L"</body></html>";
+			}
+			else {
+			// per-line conversion with list grouping (fallback)
 			size_t pos = 0;
 			bool bInList = false;
 			while( pos <= sText.size() ){
@@ -3101,6 +3161,7 @@ public:
 			}
 			if( bInList ){ sHtml += L"</ul>"; }
 			sHtml += L"</body></html>";
+			}
 		}
 		else {
 			// HTML: the buffer IS the page - the browser renders it directly

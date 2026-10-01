@@ -15,6 +15,22 @@ this code base:
 | `0.9.0` – `0.17.x` | The HTML + Markdown dual-mode toolbar, heading towards `1.0.0`. |
 
 
+## [0.39.0] - 2026-10-01
+
+### Changed
+
+- **Markdown preview now renders with marked.js v18.0.14** — the same
+  engine the official EmEditor preview uses, at the latest version
+  (user-directed). The minified UMD build ships as
+  `marked.umd.min.js` beside the plug-in DLL; the preview page
+  references it and renders the buffer client-side (full GFM: tables,
+  fenced code blocks, links, ordered/nested lists, task lists,
+  strikethrough, autolinks). The markdown source is embedded as a
+  JSON/JS-escaped string with `<`/`>` as `\u003c`/`\u003e` so a literal
+  `</script>` in the text cannot break out. If the library file is
+  missing, the built-in line converter takes over unchanged (graceful
+  fallback). MIT license text added to LICENSE.third-party.
+
 ## [0.38.2] - 2026-10-01
 
 ### Changed
