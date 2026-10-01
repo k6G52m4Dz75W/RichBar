@@ -204,7 +204,6 @@ WCHAR OctToDec( LPWSTR& p )
 #define IDT_EDIT_TEMP			6
 #define IDT_WEB_NAVIGATE		7
 #define IDT_WEBBAR_RETRY		8
-#define IDT_V8_PRIME			9
 // one-shot deferred design-view reconcile (m_hDlg): a 23255 posted during
 // the document-switch event lands before the switch settles and misapplies
 // runtime-drawn glyphs appended to every toolbar image list
@@ -2624,9 +2623,6 @@ public:
 			return;
 		}
 		m_bPanesRestored = true;
-		if( m_hDlg ){
-			SetTimer( m_hDlg, IDT_V8_PRIME, 3000, NULL );	// engine warmup
-		}
 		// preview starts OFF: the Web-bar snapshot is per-click, there is
 		// nothing meaningful to restore across sessions
 		m_bPreviewOn = false;
@@ -2809,177 +2805,6 @@ public:
 		}
 	}
 
-	// warm the V8 macro engine in the background so the FIRST preview
-	// click does not wait for the cold-start spawn (the engine rejects
-	// the first macro burst with 0x2000000B; a failed attempt still
-	// triggers the spawn)
-	void OnV8PrimeTimer()
-	{
-		RunWebBarMacro( _T("var rbPrime = 1;") );
-	}
-
-	// the REAL painted toolbar background: EI_GET_BAR_BACK_COLOR stays
-	// pinned across theme switches until relaunch (upstream), so sample
-	// the actual toolbar pixels and take the most frequent color
-	COLORREF MeasureBarBackColor()
-	{
-		if( !m_hwndToolbar || !IsWindow( m_hwndToolbar ) || !IsWindowVisible( m_hwndToolbar ) ){
-			return CLR_INVALID;
-		}
-		RECT rc;
-		if( !GetWindowRect( m_hwndToolbar, &rc ) ){
-			return CLR_INVALID;
-		}
-		int cx = rc.right - rc.left;
-		int cy = rc.bottom - rc.top;
-		if( cx < 40 || cy < 12 ){
-			return CLR_INVALID;
-		}
-		HDC hdc = GetDC( NULL );
-		if( !hdc ){
-			return CLR_INVALID;
-		}
-		COLORREF clrSeen[ 16 ];
-		int nCount[ 16 ] = { 0 };
-		int nFound = 0;
-		for( int iy = cy / 4; iy < cy; iy += cy / 2 + 1 ){
-			for( int ix = cx / 8; ix < cx; ix += cx / 8 + 1 ){
-				COLORREF c = GetPixel( hdc, rc.left + ix, rc.top + iy );
-				if( c == CLR_INVALID )  continue;
-				int k;
-				for( k = 0; k < nFound; k++ ){
-					if( clrSeen[ k ] == c ){
-						nCount[ k ]++;
-						break;
-					}
-				}
-				if( k == nFound && nFound < 16 ){
-					clrSeen[ nFound ] = c;
-					nCount[ nFound ] = 1;
-					nFound++;
-				}
-			}
-		}
-		ReleaseDC( NULL, hdc );
-		int nBest = -1;
-		int nBestN = 0;
-		for( int k = 0; k < nFound; k++ ){
-			if( nCount[ k ] > nBestN ){
-				nBestN = nCount[ k ];
-				nBest = k;
-			}
-		}
-		return ( nBest >= 0 ) ? clrSeen[ nBest ] : (COLORREF)CLR_INVALID;
-	}
-
-	// the REAL edit-view colors (left pane): a dense GetPixel grid over
-	// the view; background = the modal color, text = the dominant color
-	// far from the background (glyph cores carry the exact text color).
-	// There is NO theme-color query API and the bar API stays pinned
-	// until relaunch, so live pixels are the only truthful source
-	bool MeasureViewColors( COLORREF* pcrBack, COLORREF* pcrText )
-	{
-		*pcrBack = CLR_INVALID;
-		*pcrText = CLR_INVALID;
-		if( !m_hwndView || !IsWindow( m_hwndView ) || !IsWindowVisible( m_hwndView ) ){
-			return false;
-		}
-		RECT rc;
-		if( !GetWindowRect( m_hwndView, &rc ) ){
-			return false;
-		}
-		int cx = rc.right - rc.left;
-		int cy = rc.bottom - rc.top;
-		if( cx < 120 || cy < 80 ){
-			return false;
-		}
-		// ONE BitBlt into a top-down DIB, then scan the buffer in memory:
-		// per-pixel GetPixel on the screen DC costs ~milliseconds EACH
-		// and the 1440-call grid stalled the first click for seconds
-		BITMAPINFO bmi;
-		ZeroMemory( &bmi, sizeof( bmi ) );
-		bmi.bmiHeader.biSize = sizeof( BITMAPINFOHEADER );
-		bmi.bmiHeader.biWidth = cx;
-		bmi.bmiHeader.biHeight = -cy;	// top-down
-		bmi.bmiHeader.biPlanes = 1;
-		bmi.bmiHeader.biBitCount = 32;
-		bmi.bmiHeader.biCompression = BI_RGB;
-		void* pvBits = NULL;
-		HDC hdcScreen = GetDC( NULL );
-		if( !hdcScreen ){
-			return false;
-		}
-		HBITMAP hbm = CreateDIBSection( hdcScreen, &bmi, DIB_RGB_COLORS, &pvBits, NULL, 0 );
-		if( !hbm ){
-			ReleaseDC( NULL, hdcScreen );
-			return false;
-		}
-		HDC hdcMem = CreateCompatibleDC( hdcScreen );
-		HBITMAP hbmOld = (HBITMAP)SelectObject( hdcMem, hbm );
-		BOOL bBlit = BitBlt( hdcMem, 0, 0, cx, cy, hdcScreen, rc.left, rc.top, SRCCOPY );
-		ReleaseDC( NULL, hdcScreen );
-		bool bResult = false;
-		if( bBlit && pvBits ){
-			COLORREF clrSeen[ 64 ];
-			int nCount[ 64 ] = { 0 };
-			int nFound = 0;
-			const DWORD* pdw = (const DWORD*)pvBits;
-			for( int y = 2; y < cy; y += 4 ){
-				const DWORD* prow = pdw + (size_t)y * cx;
-				for( int x = 2; x < cx; x += 4 ){
-					DWORD dw = prow[ x ] & 0x00FFFFFF;
-					// DIB memory bytes are B,G,R,X: convert to COLORREF
-					COLORREF c = ( ( dw & 0x000000FF ) << 16 ) | ( dw & 0x0000FF00 ) | ( ( dw & 0x00FF0000 ) >> 16 );
-					int k;
-					for( k = 0; k < nFound; k++ ){
-						if( clrSeen[ k ] == c ){
-							nCount[ k ]++;
-							break;
-						}
-					}
-					if( k == nFound && nFound < 64 ){
-						clrSeen[ nFound ] = c;
-						nCount[ nFound ] = 1;
-						nFound++;
-					}
-				}
-			}
-			int nBack = -1;
-			int nBackN = 0;
-			for( int k = 0; k < nFound; k++ ){
-				if( nCount[ k ] > nBackN ){
-					nBackN = nCount[ k ];
-					nBack = k;
-				}
-			}
-			if( nBack >= 0 ){
-				*pcrBack = clrSeen[ nBack ];
-				int nR = GetRValue( *pcrBack ), nG = GetGValue( *pcrBack ), nB = GetBValue( *pcrBack );
-				int nText = -1;
-				int nTextN = 8;
-				for( int k = 0; k < nFound; k++ ){
-					if( k == nBack )  continue;
-					int dR = GetRValue( clrSeen[ k ] ) - nR;
-					int dG = GetGValue( clrSeen[ k ] ) - nG;
-					int dB = GetBValue( clrSeen[ k ] ) - nB;
-					if( dR * dR + dG * dG + dB * dB < 60 * 60 )  continue;
-					if( nCount[ k ] > nTextN ){
-						nTextN = nCount[ k ];
-						nText = k;
-					}
-				}
-				if( nText >= 0 ){
-					*pcrText = clrSeen[ nText ];
-				}
-				bResult = true;
-			}
-		}
-		SelectObject( hdcMem, hbmOld );
-		DeleteDC( hdcMem );
-		DeleteObject( hbm );
-		return true;
-	}
-
 	// render the CURRENT buffer into the stable preview file and navigate
 	// the built-in Web bar to it via the WebBar macro object; the ?t= stamp
 	// makes every URL unique so the browser cannot show a cached page
@@ -3013,22 +2838,30 @@ public:
 		// with its luminance (bar colors stay PINNED until relaunch - the
 		// upstream dark<->light stickiness - so the page matches the
 		// theme as of the render)
-		// left = editor, right = preview: make both sides IDENTICAL by
-		// sampling the edit view itself (view -> toolbar -> bar API)
+		// left = editor, right = preview: identical colors via the official
+		// EE_GET_COLOR query (SMART_COLOR_NORMAL = the view's normal text)
+		// - one fast SendMessage, no pixel sampling
 		COLORREF crBack = CLR_INVALID;
 		COLORREF crText = CLR_INVALID;
-		MeasureViewColors( &crBack, &crText );
-		if( crBack == CLR_INVALID ){
-			crBack = MeasureBarBackColor();
+		{
+			int nAttr = 0;
+			if( Editor_GetColor( m_hWnd, FALSE, SMART_COLOR_NORMAL, &crText, &crBack, &nAttr ) ){
+				if( crBack == DEFAULT_COLOR ){
+					crBack = GetSysColor( COLOR_WINDOW );
+				}
+				if( crText == DEFAULT_COLOR ){
+					crText = GetSysColor( COLOR_WINDOWTEXT );
+				}
+			}
 		}
-		if( crBack == CLR_INVALID ){
-			crBack = GetBarBackColor();	// toolbars hidden: pinned API value
+		if( crBack == CLR_INVALID || crBack == TRANSPARENT_COLOR || crBack == DEFAULT_COLOR ){
+			crBack = GetBarBackColor();	// fallback: the plug-in bar color
 		}
 		bool bLight = ( 299 * GetRValue( crBack ) + 587 * GetGValue( crBack ) + 114 * GetBValue( crBack ) ) / 1000 >= 128;
 		TCHAR szBack[ 12 ];
 		TCHAR szFg[ 12 ];
 		wsprintf( szBack, _T("#%02X%02X%02X"), (unsigned)GetRValue( crBack ), (unsigned)GetGValue( crBack ), (unsigned)GetBValue( crBack ) );
-		if( crText == CLR_INVALID ){
+		if( crText == CLR_INVALID || crText == TRANSPARENT_COLOR || crText == DEFAULT_COLOR ){
 			// no text sampled (empty document): derive from the background
 			wsprintf( szFg, _T("#%02X%02X%02X"), (unsigned)( bLight ? 0x22 : 0xD4 ), (unsigned)( bLight ? 0x22 : 0xD4 ), (unsigned)( bLight ? 0x22 : 0xD4 ) );
 		}
@@ -5388,14 +5221,6 @@ INT_PTR CALLBACK NewProc( HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam )
 				CMyFrame* pFrame = static_cast<CMyFrame*>(GetFrame( hwnd ));
 				if( pFrame ){
 					pFrame->OnWebBarRetryTimer();
-				}
-				return 0;
-			}
-			else if( wParam == IDT_V8_PRIME ){
-				KillTimer( hwnd, IDT_V8_PRIME );
-				CMyFrame* pFrame = static_cast<CMyFrame*>(GetFrame( hwnd ));
-				if( pFrame ){
-					pFrame->OnV8PrimeTimer();
 				}
 				return 0;
 			}

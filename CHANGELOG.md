@@ -15,6 +15,20 @@ this code base:
 | `0.9.0` – `0.17.x` | The HTML + Markdown dual-mode toolbar, heading towards `1.0.0`. |
 
 
+## [0.32.0] - 2026-10-01
+
+### Changed
+
+- **Theme colors now come from the official query instead of pixel
+  sampling**: the preview reads the view's normal text/background colors
+  with one `Editor_GetColor(SMART_COLOR_NORMAL)` call — fast (a single
+  SendMessage) and exact. `DEFAULT_COLOR` resolves to the system window
+  colors, and the plug-in bar color remains the fallback.
+- **Removed the pixel-sampling machinery** (`MeasureViewColors` /
+  `MeasureBarBackColor`): per-pixel screen reads and full-view `BitBlt`
+  captures both stalled the UI — on the preview click and, via the
+  engine warmup, at startup. The V8 warmup timer was removed with it.
+
 ## [0.31.1] - 2026-10-01
 
 ### Fixed
