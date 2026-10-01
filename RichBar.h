@@ -2769,42 +2769,31 @@ public:
 		}
 		if( bInList ){ sHtml += L"</ul>"; }
 		sHtml += L"</body></html>";
-		// write over the NEWEST EEW*.htm (the pane is showing it)
-		TCHAR szTemp[ MAX_PATH ] = { 0 };
-		GetTempPath( MAX_PATH, szTemp );
-		TCHAR szMask[ MAX_PATH ];
-		wsprintf( szMask, _T("%sEEW*.htm"), szTemp );
-		WIN32_FIND_DATA wfd;
-		HANDLE hFind = FindFirstFile( szMask, &wfd );
-		if( hFind == INVALID_HANDLE_VALUE ){
-			RbLogF( "feed: no EEW snapshot" );
+		// write to a STABLE temp file: every refresh rewrites it and
+		// re-navigates the built-in Web bar to it (WebBar.Open) - the
+		// path never changes, only the content does
+		TCHAR szPath[ MAX_PATH ];
+		GetTempPath( MAX_PATH, szPath );
+		StringCat( szPath, MAX_PATH, _T("RichBarPreview.html") );
+		int cb = WideCharToMultiByte( CP_UTF8, 0, sHtml.c_str(), (int)sHtml.size(), NULL, 0, NULL, NULL );
+		HANDLE hFile = CreateFile( szPath, GENERIC_WRITE, 0, NULL, CREATE_ALWAYS, 0, NULL );
+		if( hFile == INVALID_HANDLE_VALUE ){
+			RbLogF( "preview write FAILED (%s)", szPath );
 			return;
 		}
-		FILETIME ftNewest = { 0 };
-		TCHAR szNewest[ MAX_PATH ] = { 0 };
-		do {
-			if( ( wfd.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY ) == 0 ){
-				if( CompareFileTime( &wfd.ftLastWriteTime, &ftNewest ) > 0 ){
-					ftNewest = wfd.ftLastWriteTime;
-					wsprintf( szNewest, _T("%s%s"), szTemp, wfd.cFileName );
-				}
-			}
-		} while( FindNextFile( hFind, &wfd ) );
-		FindClose( hFind );
-		if( szNewest[0] == 0 )  return;
-		int cb = WideCharToMultiByte( CP_UTF8, 0, sHtml.c_str(), (int)sHtml.size(), NULL, 0, NULL, NULL );
-		HANDLE hFile = CreateFile( szNewest, GENERIC_WRITE, 0, NULL, CREATE_ALWAYS, 0, NULL );
-		if( hFile == INVALID_HANDLE_VALUE )  return;
 		DWORD cbW = 0;
-		WriteFile( hFile, "ï»¿", 3, &cbW, NULL );
-		CHAR* psz = (CHAR*)malloc( cb + 1 );
-		if( psz ){
-			WideCharToMultiByte( CP_UTF8, 0, sHtml.c_str(), (int)sHtml.size(), psz, cb, NULL, NULL );
-			WriteFile( hFile, psz, cb, &cbW, NULL );
-			free( psz );
+		const BYTE bom[3] = { 0xEF, 0xBB, 0xBF };
+		WriteFile( hFile, bom, 3, &cbW, NULL );
+		if( cb > 0 ){
+			CHAR* psz = (CHAR*)malloc( cb );
+			if( psz ){
+				WideCharToMultiByte( CP_UTF8, 0, sHtml.c_str(), (int)sHtml.size(), psz, cb, NULL, NULL );
+				WriteFile( hFile, psz, cb, &cbW, NULL );
+				free( psz );
+			}
 		}
 		CloseHandle( hFile );
-		RbLogF( "feed: wrote %u bytes html", cbW );
+		RbLogF( "preview write: %u bytes -> %s", (unsigned)cbW, szPath );
 	}
 	void FeedPreviewSnapshot()
 	{
@@ -4111,22 +4100,33 @@ void OnDlgCommand( WPARAM wParam )
 				}
 			}
 				else if( cmd.m_iCmd == CMD_REFRESH_PREVIEW ){
-				// build the standalone HTML and load it in the built-in Web
-				// Browser pane; navigation is deferred to a timer context
-				WritePreviewHtml();
-				TCHAR szUrl[ MAX_PATH + 16 ];
-				GetTempPath( MAX_PATH - 30, szUrl );
-				StringCat( szUrl, MAX_PATH, _T("RichBarPreview.html") );
-				for( LPTSTR p = szUrl; *p; p++ ){
-					if( *p == _T('/') )  *p = _T('\\');
-				}
-				TCHAR szFinal[ MAX_PATH + 16 ];
-				wsprintf( szFinal, _T("file:///%s"), szUrl );
-				m_sPreviewUrl = szFinal;
-				PostMessage( m_hWnd, WM_COMMAND, MAKEWPARAM( EEID_VIEW_WEB, 0 ), 0 );
-				if( m_hDlg ){
-					SetTimer( m_hDlg, IDT_WEB_NAVIGATE, 300, NULL );
-				}
+					// render the CURRENT buffer into the stable preview file and
+					// re-navigate the built-in Web bar to it through the WebBar
+					// macro object (EE_RUN_MACRO, in-memory JScript): Open()
+					// re-navigates on every click and the ?t= stamp makes each
+					// URL unique so the browser never shows a cached page
+					WritePreviewHtml();
+					TCHAR szPath[ MAX_PATH ];
+					GetTempPath( MAX_PATH, szPath );
+					StringCat( szPath, MAX_PATH, _T("RichBarPreview.html") );
+					for( LPTSTR p = szPath; *p; p++ ){
+						if( *p == _T('\\') )  *p = _T('/');
+					}
+					tstring sUrl = _T("file:///");
+					UrlAppendEncoded( sUrl, szPath, true );
+					TCHAR szTick[ 32 ];
+					wsprintf( szTick, _T("?t=%u"), GetTickCount() );
+					sUrl += szTick;
+					tstring sMacro = _T("WebBar.Visible = true; WebBar.Open( \"");
+					sMacro += sUrl;
+					sMacro += _T("\" );");
+					RUN_MACRO_INFO rmi;
+					ZeroMemory( &rmi, sizeof( rmi ) );
+					rmi.cbSize = sizeof( rmi );
+					rmi.pszText = sMacro.c_str();
+					rmi.nDefMacroLang = MACRO_LANG_JSCRIPT;
+					HRESULT hrMacro = (HRESULT)SendMessage( m_hWnd, EE_RUN_MACRO, 0, (LPARAM)&rmi );
+					RbLogF( "webbar open hr=0x%08X: %s", (unsigned)hrMacro, sUrl.c_str() );
 			}			}
 
 

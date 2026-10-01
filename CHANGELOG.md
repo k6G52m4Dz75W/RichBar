@@ -15,6 +15,25 @@ this code base:
 | `0.9.0` – `0.17.x` | The HTML + Markdown dual-mode toolbar, heading towards `1.0.0`. |
 
 
+## [0.29.0] - 2026-10-01
+
+### Changed
+
+- **Refresh Preview rebuilt on the WebBar macro object** (user-found
+  entry point): the button renders the CURRENT buffer into a stable
+  `%TEMP%\RichBarPreview.html` and runs an in-memory JScript macro
+  (`EE_RUN_MACRO`, no temp macro file) that calls
+  `WebBar.Visible = true; WebBar.Open("file:///…?t=<tick>")`. The
+  built-in Web bar re-navigates on every click, and the unique `?t=`
+  stamp guarantees the browser never shows a cached page.
+- This replaces the broken chain (overwrite-newest-EEW\*.htm +
+  `EEID_VIEW_WEB` + `EI_OPEN_WEB` on a 300 ms timer) that navigated to
+  `RichBarPreview.html` without ever writing it and/or opened an
+  external browser instead of the pane.
+
+*(Entries for 0.25.2 – 0.28.4 were lost during the rapid refresh-button
+iteration rounds; the log resumes here.)*
+
 ## [0.25.1] - 2026-09-26
 
 ### Fixed
