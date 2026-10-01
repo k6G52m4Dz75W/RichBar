@@ -2573,6 +2573,7 @@ public:
 	void SetPreviewDocOn( bool bOn )
 	{
 		tstring sKey = CurrentDocKey();
+		RbLogF( "set preview doc: key=%S on=%d", sKey.c_str(), (int)bOn );
 		for( size_t i = 0; i < m_vPreviewDocs.size(); i++ ){
 			if( m_vPreviewDocs[i] == sKey ){
 				if( bOn ){
@@ -2585,6 +2586,7 @@ public:
 		if( bOn ){
 			m_vPreviewDocs.push_back( sKey );
 		}
+		RbLogF( "preview docs: %u keys", (unsigned)m_vPreviewDocs.size() );
 	}
 
 	bool IsOfficialPaneVisible()
@@ -2890,8 +2892,10 @@ public:
 	// event read the PREVIOUS document - the 0.22.9 lesson)
 	void OnDocSyncTimer()
 	{
+		tstring sSyncKey = CurrentDocKey();
 		bool bWant = IsPreviewDocOn();
 		bool bPane = IsOfficialPaneVisible();
+		RbLogF( "doc sync: key=%S want=%d pane=%d btn=%d settled=%d", sSyncKey.c_str(), (int)bWant, (int)bPane, (int)m_bPreviewOn, (int)m_bStartupSettled );
 		if( m_bPreviewOn != bWant ){
 			m_bPreviewOn = bWant;
 			SaveProfile();

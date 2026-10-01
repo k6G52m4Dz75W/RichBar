@@ -15,6 +15,16 @@ this code base:
 | `0.9.0` – `0.17.x` | The HTML + Markdown dual-mode toolbar, heading towards `1.0.0`. |
 
 
+## [0.36.2] - 2026-10-01
+
+### Changed
+
+- **Diagnostics for the unsaved-document pressed state** (the registry
+  shows the untitled key never landed in `PreviewDocs`): the per-doc
+  store and the doc-switch reconcile now log the exact document key,
+  wanted state, pane presence and button state (`set preview doc:`,
+  `preview docs:`, `doc sync:` lines) to pin down where the key diverges.
+
 ## [0.36.1] - 2026-10-01
 
 ### Fixed
