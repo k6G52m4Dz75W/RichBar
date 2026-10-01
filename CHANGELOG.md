@@ -15,6 +15,20 @@ this code base:
 | `0.9.0` – `0.17.x` | The HTML + Markdown dual-mode toolbar, heading towards `1.0.0`. |
 
 
+## [0.31.1] - 2026-10-01
+
+### Fixed
+
+- **The first preview click stalled for seconds**: the view color sampler
+  issued ~1440 per-pixel `GetPixel` calls on the screen DC, each costing
+  ~milliseconds (a display-driver round trip). The view is now captured
+  with ONE `BitBlt` into a top-down DIB and scanned in memory (stride 4),
+  bringing the whole sampling to a few tens of milliseconds.
+- **The V8 macro engine is primed 3 s after startup** so the first
+  preview click no longer waits for the engine's cold-start spawn (the
+  engine rejects the first macro burst with `0x2000000B`; a failed
+  attempt still triggers the spawn).
+
 ## [0.31.0] - 2026-10-01
 
 ### Added

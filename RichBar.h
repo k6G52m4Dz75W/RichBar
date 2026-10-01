@@ -204,6 +204,7 @@ WCHAR OctToDec( LPWSTR& p )
 #define IDT_EDIT_TEMP			6
 #define IDT_WEB_NAVIGATE		7
 #define IDT_WEBBAR_RETRY		8
+#define IDT_V8_PRIME			9
 // one-shot deferred design-view reconcile (m_hDlg): a 23255 posted during
 // the document-switch event lands before the switch settles and misapplies
 // runtime-drawn glyphs appended to every toolbar image list
@@ -2623,6 +2624,9 @@ public:
 			return;
 		}
 		m_bPanesRestored = true;
+		if( m_hDlg ){
+			SetTimer( m_hDlg, IDT_V8_PRIME, 3000, NULL );	// engine warmup
+		}
 		// preview starts OFF: the Web-bar snapshot is per-click, there is
 		// nothing meaningful to restore across sessions
 		m_bPreviewOn = false;
@@ -2805,6 +2809,15 @@ public:
 		}
 	}
 
+	// warm the V8 macro engine in the background so the FIRST preview
+	// click does not wait for the cold-start spawn (the engine rejects
+	// the first macro burst with 0x2000000B; a failed attempt still
+	// triggers the spawn)
+	void OnV8PrimeTimer()
+	{
+		RunWebBarMacro( _T("var rbPrime = 1;") );
+	}
+
 	// the REAL painted toolbar background: EI_GET_BAR_BACK_COLOR stays
 	// pinned across theme switches until relaunch (upstream), so sample
 	// the actual toolbar pixels and take the most frequent color
@@ -2880,63 +2893,90 @@ public:
 		if( cx < 120 || cy < 80 ){
 			return false;
 		}
-		HDC hdc = GetDC( NULL );
-		if( !hdc ){
+		// ONE BitBlt into a top-down DIB, then scan the buffer in memory:
+		// per-pixel GetPixel on the screen DC costs ~milliseconds EACH
+		// and the 1440-call grid stalled the first click for seconds
+		BITMAPINFO bmi;
+		ZeroMemory( &bmi, sizeof( bmi ) );
+		bmi.bmiHeader.biSize = sizeof( BITMAPINFOHEADER );
+		bmi.bmiHeader.biWidth = cx;
+		bmi.bmiHeader.biHeight = -cy;	// top-down
+		bmi.bmiHeader.biPlanes = 1;
+		bmi.bmiHeader.biBitCount = 32;
+		bmi.bmiHeader.biCompression = BI_RGB;
+		void* pvBits = NULL;
+		HDC hdcScreen = GetDC( NULL );
+		if( !hdcScreen ){
 			return false;
 		}
-		COLORREF clrSeen[ 32 ];
-		int nCount[ 32 ] = { 0 };
-		int nFound = 0;
-		const int nCols = 48;
-		const int nRows = 30;
-		for( int iy = 1; iy <= nRows; iy++ ){
-			int y = rc.top + iy * cy / ( nRows + 1 );
-			for( int ix = 1; ix <= nCols; ix++ ){
-				COLORREF c = GetPixel( hdc, rc.left + ix * cx / ( nCols + 1 ), y );
-				if( c == CLR_INVALID )  continue;
-				int k;
-				for( k = 0; k < nFound; k++ ){
-					if( clrSeen[ k ] == c ){
-						nCount[ k ]++;
-						break;
+		HBITMAP hbm = CreateDIBSection( hdcScreen, &bmi, DIB_RGB_COLORS, &pvBits, NULL, 0 );
+		if( !hbm ){
+			ReleaseDC( NULL, hdcScreen );
+			return false;
+		}
+		HDC hdcMem = CreateCompatibleDC( hdcScreen );
+		HBITMAP hbmOld = (HBITMAP)SelectObject( hdcMem, hbm );
+		BOOL bBlit = BitBlt( hdcMem, 0, 0, cx, cy, hdcScreen, rc.left, rc.top, SRCCOPY );
+		ReleaseDC( NULL, hdcScreen );
+		bool bResult = false;
+		if( bBlit && pvBits ){
+			COLORREF clrSeen[ 64 ];
+			int nCount[ 64 ] = { 0 };
+			int nFound = 0;
+			const DWORD* pdw = (const DWORD*)pvBits;
+			for( int y = 2; y < cy; y += 4 ){
+				const DWORD* prow = pdw + (size_t)y * cx;
+				for( int x = 2; x < cx; x += 4 ){
+					DWORD dw = prow[ x ] & 0x00FFFFFF;
+					// DIB memory bytes are B,G,R,X: convert to COLORREF
+					COLORREF c = ( ( dw & 0x000000FF ) << 16 ) | ( dw & 0x0000FF00 ) | ( ( dw & 0x00FF0000 ) >> 16 );
+					int k;
+					for( k = 0; k < nFound; k++ ){
+						if( clrSeen[ k ] == c ){
+							nCount[ k ]++;
+							break;
+						}
+					}
+					if( k == nFound && nFound < 64 ){
+						clrSeen[ nFound ] = c;
+						nCount[ nFound ] = 1;
+						nFound++;
 					}
 				}
-				if( k == nFound && nFound < 32 ){
-					clrSeen[ nFound ] = c;
-					nCount[ nFound ] = 1;
-					nFound++;
+			}
+			int nBack = -1;
+			int nBackN = 0;
+			for( int k = 0; k < nFound; k++ ){
+				if( nCount[ k ] > nBackN ){
+					nBackN = nCount[ k ];
+					nBack = k;
 				}
 			}
-		}
-		ReleaseDC( NULL, hdc );
-		int nBack = -1;
-		int nBackN = 0;
-		for( int k = 0; k < nFound; k++ ){
-			if( nCount[ k ] > nBackN ){
-				nBackN = nCount[ k ];
-				nBack = k;
+			if( nBack >= 0 ){
+				*pcrBack = clrSeen[ nBack ];
+				int nR = GetRValue( *pcrBack ), nG = GetGValue( *pcrBack ), nB = GetBValue( *pcrBack );
+				int nText = -1;
+				int nTextN = 8;
+				for( int k = 0; k < nFound; k++ ){
+					if( k == nBack )  continue;
+					int dR = GetRValue( clrSeen[ k ] ) - nR;
+					int dG = GetGValue( clrSeen[ k ] ) - nG;
+					int dB = GetBValue( clrSeen[ k ] ) - nB;
+					if( dR * dR + dG * dG + dB * dB < 60 * 60 )  continue;
+					if( nCount[ k ] > nTextN ){
+						nTextN = nCount[ k ];
+						nText = k;
+					}
+				}
+				if( nText >= 0 ){
+					*pcrText = clrSeen[ nText ];
+				}
+				bResult = true;
 			}
 		}
-		if( nBack < 0 )  return false;
-		*pcrBack = clrSeen[ nBack ];
-		// text: the dominant color clearly separated from the background
-		int nR = GetRValue( *pcrBack ), nG = GetGValue( *pcrBack ), nB = GetBValue( *pcrBack );
-		int nText = -1;
-		int nTextN = 8;
-		for( int k = 0; k < nFound; k++ ){
-			if( k == nBack )  continue;
-			int dR = GetRValue( clrSeen[ k ] ) - nR;
-			int dG = GetGValue( clrSeen[ k ] ) - nG;
-			int dB = GetBValue( clrSeen[ k ] ) - nB;
-			if( dR * dR + dG * dG + dB * dB < 60 * 60 )  continue;
-			if( nCount[ k ] > nTextN ){
-				nTextN = nCount[ k ];
-				nText = k;
-			}
-		}
-		if( nText >= 0 ){
-			*pcrText = clrSeen[ nText ];
-		}
+		SelectObject( hdcMem, hbmOld );
+		DeleteDC( hdcMem );
+		DeleteObject( hbm );
 		return true;
 	}
 
@@ -5348,6 +5388,14 @@ INT_PTR CALLBACK NewProc( HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam )
 				CMyFrame* pFrame = static_cast<CMyFrame*>(GetFrame( hwnd ));
 				if( pFrame ){
 					pFrame->OnWebBarRetryTimer();
+				}
+				return 0;
+			}
+			else if( wParam == IDT_V8_PRIME ){
+				KillTimer( hwnd, IDT_V8_PRIME );
+				CMyFrame* pFrame = static_cast<CMyFrame*>(GetFrame( hwnd ));
+				if( pFrame ){
+					pFrame->OnV8PrimeTimer();
 				}
 				return 0;
 			}
