@@ -15,6 +15,28 @@ this code base:
 | `0.9.0` – `0.17.x` | The HTML + Markdown dual-mode toolbar, heading towards `1.0.0`. |
 
 
+## [0.33.0] - 2026-10-01
+
+### Added
+
+- **Auto-refresh**: while the preview pane is open, every buffer edit
+  re-arms a 1-second debounce and the pane re-renders automatically when
+  the typing pauses — the manual Refresh Preview step is gone. Document
+  switches, file opens and configuration changes re-render the pane the
+  same way. The pane-open check makes this self-correcting: a pane closed
+  from its own UI is never re-opened by typing.
+
+### Changed
+
+- **The Refresh Preview button was removed** from the default button
+  layouts (the command handler remains, so a stale persisted layout still
+  routes it; the persisted custom layouts were reset so the defaults
+  rebuild without the button).
+- `GetDocTextAll` now saves and restores the clipboard text: the
+  SelectAll+Copy it uses to read the buffer would otherwise clobber the
+  user's clipboard on every automatic refresh (other clipboard formats
+  are still lost — Copy replaces everything — but text comes back).
+
 ## [0.32.0] - 2026-10-01
 
 ### Changed

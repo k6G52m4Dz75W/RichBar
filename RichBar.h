@@ -303,7 +303,6 @@ static struct CDefCmd DefCmd[] =
 	{ -1, CMD_SEPARATOR, 0, L"", L"" },
 	{ 48, CMD_ICON_COLOR, ID_ICON_COLOR, L"", L"" },
 	{ 49, CMD_PREVIEW, ID_PREVIEW, L"", L"" },
-	{ 50, CMD_REFRESH_PREVIEW, ID_REFRESH_PREVIEW, L"", L"" },
 	{ 24, CMD_CUSTOMIZE, ID_CUSTOMIZE, L"", L"" },
 	{ 25, CMD_TAGS, ID_FORM_FORM, L"<form method=\"post\" action=\"\">\n\t", L"\n<input type=\"submit\"><input type=\"reset\"></form>\n" },
 	{ 26, CMD_TAGS, ID_TEXTBOX, L"<input type=\"text\" id=\"\" />", L"" },
@@ -370,7 +369,6 @@ static struct CDefCmdMd {
 	{ 20, CMD_ICON_COLOR, L"Icon Color", L"", L"", 0, 0 },
 	{ 21, CMD_MD_VIEW, L"Design View", L"", L"", 0, 0 },
 	{ 22, CMD_PREVIEW, L"Preview", L"", L"", 0, 0 },
-	{ 23, CMD_REFRESH_PREVIEW, L"Refresh Preview", L"", L"", 0, 0 },
 	{ 19, CMD_CUSTOMIZE, L"Customize", L"", L"", 0, 0 },
 };
 
@@ -1955,7 +1953,23 @@ public:
 	{
 		// whole-document read via SelectAll + Copy (single-shot; the per-line
 		// EE_GET_LINE loop proved display-indexed in wrapped documents).
-		// The user's selection/caret is saved first and restored at the end
+		// The user's selection/caret is saved first and restored at the end.
+		// The CLIPBOARD text is saved too and restored at the end: the
+		// SelectAll+Copy below clobbers it, and auto-refresh fires while
+		// the user is editing (other clipboard formats are lost either
+		// way - Copy replaces everything - but the text comes back)
+		tstring sClipSave;
+		if( OpenClipboard( m_hWnd ) ){
+			HANDLE hClip = GetClipboardData( CF_UNICODETEXT );
+			if( hClip ){
+				LPCWSTR pClip = (LPCWSTR)GlobalLock( hClip );
+				if( pClip ){
+					sClipSave = pClip;
+					GlobalUnlock( hClip );
+				}
+			}
+			CloseClipboard();
+		}
 		POINT_PTR ptSaveA = { -1, -1 }, ptSaveB = { -1, -1 };
 		POINT_PTR ptA, ptB;
 		Editor_GetSelStart( m_hWnd, POS_LOGICAL_W, &ptA );
@@ -1987,6 +2001,24 @@ public:
 		// restore the user's selection/caret (select-all left it expanded)
 		Editor_SetCaretPosEx( m_hWnd, POS_LOGICAL_W, &ptSaveA, FALSE );
 		Editor_SetCaretPosEx( m_hWnd, POS_LOGICAL_W, &ptSaveB, ( ptSaveB.x != ptSaveA.x || ptSaveB.y != ptSaveA.y ) ? TRUE : FALSE );
+		// restore the user's clipboard text (we are the owner now; other
+		// formats were already destroyed by the Copy above)
+		if( !sClipSave.empty() && OpenClipboard( m_hWnd ) ){
+			EmptyClipboard();
+			HGLOBAL hClipNew = GlobalAlloc( GMEM_MOVEABLE, ( sClipSave.size() + 1 ) * sizeof( WCHAR ) );
+			if( hClipNew ){
+				LPVOID pClipNew = GlobalLock( hClipNew );
+				if( pClipNew ){
+					CopyMemory( pClipNew, sClipSave.c_str(), ( sClipSave.size() + 1 ) * sizeof( WCHAR ) );
+					GlobalUnlock( hClipNew );
+					SetClipboardData( CF_UNICODETEXT, hClipNew );	// system owns it on success
+				}
+				else {
+					GlobalFree( hClipNew );
+				}
+			}
+			CloseClipboard();
+		}
 		return bOK;
 	}
 
@@ -2805,6 +2837,17 @@ public:
 		}
 	}
 
+	// the typing-pause debounce fired: re-render the CURRENT buffer and
+	// re-navigate the Web bar through the proven macro path (the pane
+	// check happens at the event sites - a closed pane is never reopened)
+	void OnPreviewAutoRefresh()
+	{
+		if( !IsOfficialPaneVisible() ){
+			return;
+		}
+		OpenWebBarPreview();
+	}
+
 	// render the CURRENT buffer into the stable preview file and navigate
 	// the built-in Web bar to it via the WebBar macro object; the ?t= stamp
 	// makes every URL unique so the browser cannot show a cached page
@@ -3207,6 +3250,9 @@ public:
 			// any document or configuration change returns the bar to auto detection
 			m_iModeOverride = -1;
 			int iNewMode = DetectMode();
+			if( m_hDlg && IsOfficialPaneVisible() ){
+				SetTimer( m_hDlg, IDT_PREVIEW_REFRESH, 1000, NULL );	// the pane follows the document
+			}
 			// follow the document, exactly like the official button: query the
 			// built-in command's REAL per-document checked state (EE_QUERY_STATUS,
 			// the official status query used by EmEditor's own toolbar buttons)
@@ -3277,10 +3323,12 @@ public:
 			SyncPreviewToPane();	// the official pane may have been closed from its own UI
 		}
 		if( nEvent & EVENT_CHANGE ){
-			// every buffer modification re-arms the debounce; one WebView2
-			// reload fires when the typing pauses (see ReloadLivePreview)
-			if( m_hDlg ){
-				SetTimer( m_hDlg, IDT_PREVIEW_REFRESH, 400, NULL );
+			// every buffer modification re-arms the debounce; one Web-bar
+			// re-navigation fires when the typing pauses. Only while the
+			// pane is REALLY open: a pane closed from its own UI is never
+			// re-opened by typing
+			if( m_hDlg && IsOfficialPaneVisible() ){
+				SetTimer( m_hDlg, IDT_PREVIEW_REFRESH, 1000, NULL );
 			}
 		}
 	}
@@ -5221,6 +5269,14 @@ INT_PTR CALLBACK NewProc( HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam )
 				CMyFrame* pFrame = static_cast<CMyFrame*>(GetFrame( hwnd ));
 				if( pFrame ){
 					pFrame->OnWebBarRetryTimer();
+				}
+				return 0;
+			}
+			else if( wParam == IDT_PREVIEW_REFRESH ){
+				KillTimer( hwnd, IDT_PREVIEW_REFRESH );
+				CMyFrame* pFrame = static_cast<CMyFrame*>(GetFrame( hwnd ));
+				if( pFrame ){
+					pFrame->OnPreviewAutoRefresh();
 				}
 				return 0;
 			}
