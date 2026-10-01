@@ -15,6 +15,18 @@ this code base:
 | `0.9.0` – `0.17.x` | The HTML + Markdown dual-mode toolbar, heading towards `1.0.0`. |
 
 
+## [0.40.1] - 2026-10-01
+
+### Fixed
+
+- **A paragraph following a blockquote was swallowed into the quote**:
+  the newline-normalizer kept any line whose PREVIOUS line was a quote,
+  so prose after `> …` joined the quote block. The previous-line quote
+  check is removed (quote block interiors stay intact via the
+  current-line check). Verified end-to-end with the shipped marked v18:
+  `> quote` / `paragraph` now renders as a quote block plus a free
+  paragraph.
+
 ## [0.40.0] - 2026-10-01
 
 ### Added
