@@ -15,6 +15,17 @@ this code base:
 | `0.9.0` – `0.17.x` | The HTML + Markdown dual-mode toolbar, heading towards `1.0.0`. |
 
 
+## [0.42.1] - 2026-10-01
+
+### Fixed
+
+- **User CSS was scrambled into unreadable wide-character garbage**:
+  `fgetws` reinterpreted each pair of UTF-8 bytes as one wide character
+  (the file was opened binary, no conversion), so the browser received
+  mojibake instead of rules and the preview kept the built-in theme.
+  The sheet is now read as raw BYTES and converted explicitly with
+  `MultiByteToWideChar(CP_UTF8, ...)`.
+
 ## [0.42.0] - 2026-10-01
 
 ### Added

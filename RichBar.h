@@ -3126,17 +3126,29 @@ public:
 					sHtml += L"<style>";
 					FILE* fCss = _wfopen( szCss, L"rb" );
 					if( fCss ){
-						TCHAR szLine[ 2048 ];
-						while( fgetws( szLine, _countof( szLine ), fCss ) ){
-							// escape & and < so raw CSS cannot close the tag
-							for( TCHAR* q = szLine; *q; q++ ){
-								if( *q == L'&' )  sHtml += L"&amp;";
-								else if( *q == L'<' )  sHtml += L"&lt;";
-								else  sHtml += *q;
+						// read BYTES and convert UTF-8 -> UTF-16 explicitly:
+						// fgetws would reinterpret each ANSI byte pair as a wide
+						// character, scrambling the whole sheet (0.42.0 bug)
+						CHAR szBuf[ 8192 ];
+						const int cb = (int)fread( szBuf, 1, sizeof( szBuf ) - 1, fCss );
+						fclose( fCss );
+						if( cb > 0 ){
+							szBuf[ cb ] = 0;
+							int cw = MultiByteToWideChar( CP_UTF8, 0, szBuf, cb, NULL, 0 );
+							if( cw > 0 ){
+								std::vector<WCHAR> vW( cw + 1 );
+								MultiByteToWideChar( CP_UTF8, 0, szBuf, cb, &vW[ 0 ], cw );
+								vW[ cw ] = 0;
+								// escape & and < so raw CSS cannot close the tag
+								for( int k = 0; k < cw; k++ ){
+									WCHAR c = vW[ k ];
+									if( c == L'&' )  sHtml += L"&amp;";
+									else if( c == L'<' )  sHtml += L"&lt;";
+									else  sHtml += c;
+								}
 							}
 						}
-						fclose( fCss );
-						RbLogF( "user css: %S", szCss );
+						RbLogF( "user css: %S (%d bytes)", szCss, cb );
 					}
 					else {
 						RbLogF( "user css: absent" );
