@@ -15,6 +15,17 @@ this code base:
 | `0.9.0` – `0.17.x` | The HTML + Markdown dual-mode toolbar, heading towards `1.0.0`. |
 
 
+## [0.30.0] - 2026-10-01
+
+### Added
+
+- **The preview page follows the editor theme**: the generated HTML takes
+  its background from the plug-in bar color (`GetBarBackColor`, the exact
+  chrome color) and flips the text color with its luminance; code blocks,
+  blockquotes, horizontal rules and links get matching light/dark accents.
+  Caveat: EmEditor pins its bar colors until relaunch (upstream
+  dark↔light stickiness), so the page matches the theme as of the render.
+
 ## [0.29.3] - 2026-10-01
 
 ### Fixed

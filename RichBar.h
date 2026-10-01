@@ -2793,12 +2793,32 @@ public:
 		tstring sText;
 		if( !GetDocTextAll( sText ) )  return;
 		// split into lines and convert
+		// match the page palette to the editor theme: the plug-in bar
+		// background is the exact chrome color and the foreground flips
+		// with its luminance (bar colors stay PINNED until relaunch - the
+		// upstream dark<->light stickiness - so the page matches the
+		// theme as of the render)
+		COLORREF crBack = GetBarBackColor();
+		bool bLight = ( 299 * GetRValue( crBack ) + 587 * GetGValue( crBack ) + 114 * GetBValue( crBack ) ) / 1000 >= 128;
+		TCHAR szBack[ 12 ];
+		wsprintf( szBack, _T("#%02X%02X%02X"), (unsigned)GetRValue( crBack ), (unsigned)GetGValue( crBack ), (unsigned)GetBValue( crBack ) );
+		RbLogF( "theme: back=%S light=%d", szBack, (int)bLight );
 		tstring sHtml = L"<!DOCTYPE html><html><head><meta charset=\"utf-8\"><style>";
-		sHtml += L"body{font-family:Segoe UI,Arial,sans-serif;margin:24px;line-height:1.6;color:#222;background:#fff;}";
+		sHtml += L"body{font-family:Segoe UI,Arial,sans-serif;margin:24px;line-height:1.6;color:";
+		sHtml += bLight ? L"#222222" : L"#D4D4D4";
+		sHtml += L";background:";
+		sHtml += szBack;
+		sHtml += L";}";
 		sHtml += L"h1{font-size:2em;} h2{font-size:1.5em;} h3,h4,h5,h6{font-size:1.2em;}";
-		sHtml += L"pre,code{font-family:Consolas,monospace;} pre{background:#f6f6f6;padding:12px;border-radius:5px;white-space:pre-wrap;}";
-		sHtml += L"blockquote{border-left:4px solid #ddd;margin:8px 0;padding:4px 16px;color:#555;}";
-		sHtml += L"li{margin:2px 0;} hr{border:0;border-top:1px solid #ccc;}";
+		sHtml += bLight
+			? L"pre,code{font-family:Consolas,monospace;} pre{background:#f6f6f6;padding:12px;border-radius:5px;white-space:pre-wrap;}"
+			: L"pre,code{font-family:Consolas,monospace;} pre{background:#2d2d30;padding:12px;border-radius:5px;white-space:pre-wrap;}";
+		sHtml += bLight
+			? L"blockquote{border-left:4px solid #ddd;margin:8px 0;padding:4px 16px;color:#555;}"
+			: L"blockquote{border-left:4px solid #555;margin:8px 0;padding:4px 16px;color:#aaa;}";
+		sHtml += L"li{margin:2px 0;} hr{border:0;border-top:1px solid ";
+		sHtml += bLight ? L"#ccc;}" : L"#555;}";
+		sHtml += bLight ? L"a{color:#0366d6;}" : L"a{color:#4da3ff;}";
 		sHtml += L"</style></head><body>";
 		// per-line conversion with list grouping
 		size_t pos = 0;
