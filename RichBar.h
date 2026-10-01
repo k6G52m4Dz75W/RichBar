@@ -2739,7 +2739,7 @@ public:
 		}
 		ApplyToggleStates();
 		if( m_hDlg ){
-			SetTimer( m_hDlg, IDT_STARTUP_SETTLE, 10000, NULL );
+			SetTimer( m_hDlg, IDT_STARTUP_SETTLE, 5000, NULL );
 		}
 		// EmEditor restores the design view itself; query the command status
 		// and align the button

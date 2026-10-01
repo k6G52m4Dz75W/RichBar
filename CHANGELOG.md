@@ -15,6 +15,14 @@ this code base:
 | `0.9.0` – `0.17.x` | The HTML + Markdown dual-mode toolbar, heading towards `1.0.0`. |
 
 
+## [0.38.2] - 2026-10-01
+
+### Changed
+
+- **The startup settle window is 5 seconds** (was 10): the preview pane
+  for a memory-ON document now appears about 5-7 seconds after launch
+  (the V8 engine's first-run retry adds 1-2 seconds on top).
+
 ## [0.38.1] - 2026-10-01
 
 ### Fixed
