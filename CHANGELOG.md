@@ -15,6 +15,17 @@ this code base:
 | `0.9.0` – `0.17.x` | The HTML + Markdown dual-mode toolbar, heading towards `1.0.0`. |
 
 
+## [0.33.1] - 2026-10-01
+
+### Fixed
+
+- **Auto-refresh never fired**: the pane-presence guard matched the old
+  `EmEditorWebPreview2` window class, which the v26 Web bar pane no
+  longer uses — the walk reported "no pane" even while the pane was
+  open. The walk now accepts any `EmEditorWeb*` class AND any `Chrome_*`
+  (WebView2 browser) descendant, the one signature every EmEditor
+  version shares. A `pane walk after open` log line records the match.
+
 ## [0.33.0] - 2026-10-01
 
 ### Added

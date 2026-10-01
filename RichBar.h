@@ -2515,13 +2515,20 @@ public:
 	// pane can auto-open at startup or be toggled from EmEditor's own UI)
 	static BOOL CALLBACK FindOfficialPaneProc( HWND hwnd, LPARAM lParam )
 	{
-		WCHAR szCls[32];
-		if( GetClassNameW( hwnd, szCls, _countof( szCls ) ) == 0 ||
-			lstrcmpW( szCls, L"EmEditorWebPreview2" ) != 0 ){
+		WCHAR szCls[ 64 ];
+		if( GetClassNameW( hwnd, szCls, _countof( szCls ) ) == 0 ){
 			return TRUE;
 		}
-		*(HWND*)lParam = hwnd;
-		return FALSE;
+		// the class name drifted between EmEditor versions (the old match
+		// was EmEditorWebPreview2 and the v26 Web bar pane no longer uses
+		// it), so accept any EmEditorWeb* class AND any Chrome_* WebView2
+		// window - the browser child is the signature every variant shares
+		if( wcsncmp( szCls, L"EmEditorWeb", 11 ) == 0 ||
+			wcsncmp( szCls, L"Chrome_", 7 ) == 0 ){
+			*(HWND*)lParam = hwnd;
+			return FALSE;
+		}
+		return TRUE;
 	}
 
 	// identity of the active document for per-document button state
@@ -2869,6 +2876,7 @@ public:
 		sMacro += sUrl;
 		sMacro += _T("\" );");
 		RunWebBarMacroStaged( sMacro.c_str() );
+		RbLogF( "pane walk after open: visible=%d", (int)IsOfficialPaneVisible() );
 	}
 
 	void WritePreviewHtml()
