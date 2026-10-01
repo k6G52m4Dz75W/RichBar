@@ -2519,12 +2519,10 @@ public:
 		if( GetClassNameW( hwnd, szCls, _countof( szCls ) ) == 0 ){
 			return TRUE;
 		}
-		// the class name drifted between EmEditor versions (the old match
-		// was EmEditorWebPreview2 and the v26 Web bar pane no longer uses
-		// it), so accept any EmEditorWeb* class AND any Chrome_* WebView2
-		// window - the browser child is the signature every variant shares
-		if( wcsncmp( szCls, L"EmEditorWeb", 11 ) == 0 ||
-			wcsncmp( szCls, L"Chrome_", 7 ) == 0 ){
+		// the pane hosts a WebView2 browser: its Chrome_* windows are the
+		// signature that identifies it, regardless of the host class name
+		// (window class names drift between EmEditor versions)
+		if( wcsncmp( szCls, L"Chrome_", 7 ) != 0 ){
 			*(HWND*)lParam = hwnd;
 			return FALSE;
 		}
@@ -2574,6 +2572,14 @@ public:
 	{
 		HWND hwndPane = NULL;
 		EnumChildWindows( m_hWnd, FindOfficialPaneProc, (LPARAM)&hwndPane );
+		// log the pane's real window class once: pins the actual name
+		static bool s_bWalkLogged = false;
+		if( hwndPane && !s_bWalkLogged ){
+			s_bWalkLogged = true;
+			WCHAR szCls[ 64 ];
+			GetClassNameW( hwndPane, szCls, _countof( szCls ) );
+			RbLogF( "pane walk: hit class %S", szCls );
+		}
 		return hwndPane != NULL;
 	}
 

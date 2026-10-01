@@ -15,6 +15,17 @@ this code base:
 | `0.9.0` – `0.17.x` | The HTML + Markdown dual-mode toolbar, heading towards `1.0.0`. |
 
 
+## [0.33.2] - 2026-10-01
+
+### Changed
+
+- **The pane walk is simplified to a single signature** (user-directed —
+  no legacy class compatibility, the preview only works on current
+  EmEditor anyway): a `Chrome_*` (WebView2 browser) descendant is the
+  pane's identity; the speculative `EmEditorWeb*` prefix match is gone.
+- The pane's real window class is logged once (`pane walk: hit class`)
+  so the actual name is pinned for any future adjustment.
+
 ## [0.33.1] - 2026-10-01
 
 ### Fixed
