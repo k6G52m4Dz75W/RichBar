@@ -2573,28 +2573,28 @@ public:
 		return sLog;
 	}
 
-	bool IsPreviewDocOn()
+	// explicit per-document preview state: true = the key is recorded
+	// and bOn carries it; false = never touched
+	bool GetPreviewDocState( const tstring& sKey, bool& bOn )
 	{
-		tstring sKey = CurrentDocKey();
 		for( size_t i = 0; i < m_vPreviewDocs.size(); i++ ){
-			if( m_vPreviewDocs[i] == sKey ){
+			if( m_vPreviewDocs[ i ] == sKey ){
+				bOn = true;
 				return true;
 			}
 		}
 		for( size_t i = 0; i < m_vPreviewOffDocs.size(); i++ ){
-			if( m_vPreviewOffDocs[i] == sKey ){
-				return false;
+			if( m_vPreviewOffDocs[ i ] == sKey ){
+				bOn = false;
+				return true;
 			}
 		}
-		// never touched: inherit the pane's live state
-		return IsOfficialPaneVisible();
+		return false;
 	}
 
-	void SetPreviewDocOn( bool bOn )
+	// write the explicit state: move the key between the two lists
+	void SetPreviewDocKey( const tstring& sKey, bool bOn )
 	{
-		tstring sKey = CurrentDocKey();
-		RbLogF( "set preview doc: key=%S on=%d", AsciiLogKey( sKey ).c_str(), (int)bOn );
-		// drop the key from the OPPOSITE list first
 		std::vector<tstring>& vFrom = bOn ? m_vPreviewOffDocs : m_vPreviewDocs;
 		for( size_t i = 0; i < vFrom.size(); i++ ){
 			if( vFrom[ i ] == sKey ){
@@ -2605,11 +2605,23 @@ public:
 		std::vector<tstring>& vTo = bOn ? m_vPreviewDocs : m_vPreviewOffDocs;
 		for( size_t i = 0; i < vTo.size(); i++ ){
 			if( vTo[ i ] == sKey ){
-				RbLogF( "preview docs: %u+%u keys", (unsigned)m_vPreviewDocs.size(), (unsigned)m_vPreviewOffDocs.size() );
 				return;	// already recorded
 			}
 		}
 		vTo.push_back( sKey );
+	}
+
+	// click path: only SAVED documents (path keys) get sticky memory;
+	// unsaved documents inherit the pane and are never remembered
+	void SetPreviewDocOn( bool bOn )
+	{
+		tstring sKey = CurrentDocKey();
+		RbLogF( "set preview doc: key=%S on=%d", AsciiLogKey( sKey ).c_str(), (int)bOn );
+		if( sKey.find( _T('\\') ) == tstring::npos ){
+			RbLogF( "preview docs: unsaved - not remembered" );
+			return;
+		}
+		SetPreviewDocKey( sKey, bOn );
 		RbLogF( "preview docs: %u+%u keys", (unsigned)m_vPreviewDocs.size(), (unsigned)m_vPreviewOffDocs.size() );
 	}
 
@@ -2717,7 +2729,11 @@ public:
 		// DISPLACES EmEditor's session-restore panel (user report). The
 		// button follows the per-document memory; the pane is reconciled
 		// once the settle window ends (see IDT_STARTUP_SETTLE)
-		m_bPreviewOn = IsPreviewDocOn();
+		{
+			tstring sKey = CurrentDocKey();
+			bool bState = false;
+			m_bPreviewOn = ( sKey.find( _T('\\') ) != tstring::npos && GetPreviewDocState( sKey, bState ) ) ? bState : IsOfficialPaneVisible();
+		}
 		ApplyToggleStates();
 		if( m_hDlg ){
 			SetTimer( m_hDlg, IDT_STARTUP_SETTLE, 10000, NULL );
@@ -2917,16 +2933,27 @@ public:
 	void OnDocSyncTimer()
 	{
 		tstring sSyncKey = CurrentDocKey();
-		bool bWant = IsPreviewDocOn();
+		const bool bSaved = sSyncKey.find( _T('\\') ) != tstring::npos;
 		bool bPane = IsOfficialPaneVisible();
-		RbLogF( "doc sync: key=%S want=%d pane=%d btn=%d settled=%d", AsciiLogKey( sSyncKey ).c_str(), (int)bWant, (int)bPane, (int)m_bPreviewOn, (int)m_bStartupSettled );
-		// the button follows the DOCUMENT's own state (explicit or
-		// inherited); switching NEVER writes memory - that was the
-		// state-bleeding bug
+		bool bWant;
+		if( bSaved ){
+			// saved documents own a STICKY state: initialize it from the
+			// pane on the first visit, then only clicks change it
+			if( !GetPreviewDocState( sSyncKey, bWant ) ){
+				bWant = bPane;
+				SetPreviewDocKey( sSyncKey, bWant );
+				SaveProfile();
+				RbLogF( "doc sync: initialized sticky %S = %d", AsciiLogKey( sSyncKey ).c_str(), (int)bWant );
+			}
+		}
+		else {
+			bWant = bPane;	// unsaved: inherit the pane (user-directed)
+		}
+		RbLogF( "doc sync: key=%S saved=%d want=%d pane=%d btn=%d settled=%d", AsciiLogKey( sSyncKey ).c_str(), (int)bSaved, (int)bWant, (int)bPane, (int)m_bPreviewOn, (int)m_bStartupSettled );
 		m_bPreviewOn = bWant;
 		ApplyToggleStates();
 		if( !m_bStartupSettled ){
-			return;	// restore window: the pane is never touched
+			return;	// restore window: the pane is never opened/closed by us
 		}
 		if( bWant && !bPane ){
 			OpenWebBarPreview();

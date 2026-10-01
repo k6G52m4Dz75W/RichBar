@@ -15,6 +15,20 @@ this code base:
 | `0.9.0` – `0.17.x` | The HTML + Markdown dual-mode toolbar, heading towards `1.0.0`. |
 
 
+## [0.38.0] - 2026-10-01
+
+### Changed
+
+- **Per-document preview memory refined (user-directed semantics)**:
+  SAVED documents (path key) own a STICKY state — initialized from the
+  pane on the first visit, then changed only by clicking the preview
+  button; switching documents never rewrites it. UNSAVED documents
+  (title-only key) purely inherit the pane's state at switch time and
+  are never remembered (even their clicks only toggle the pane).
+  `GetPreviewDocState`/`SetPreviewDocKey` split out of the old
+  all-in-one helper; the startup button uses the memory for saved
+  documents and the restored pane otherwise.
+
 ## [0.37.0] - 2026-10-01
 
 ### Fixed
