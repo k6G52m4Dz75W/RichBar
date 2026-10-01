@@ -177,6 +177,12 @@ WCHAR OctToDec( LPWSTR& p )
 #define EI_OPEN_WEB			406		// opens a URL in the built-in Web Browser pane
 #define EEID_MARKDOWN_VIEW		23255	// Markdown design view toggle
 #define EEID_MARKDOWN_PREVIEW	23275	// Markdown rendered preview toggle
+#ifndef RUN_TEXT
+#define RUN_TEXT				1		// EE_RUN_MACRO: pszText is the macro source
+#endif
+#ifndef MACRO_SYNC_ONLY
+#define MACRO_SYNC_ONLY			0x00000200	// EE_RUN_MACRO: run synchronously
+#endif
 #define EI_GET_MARKDOWN_PREVIEW	407		// TRUE if the design view is on
 #define EI_SET_MARKDOWN_PREVIEW	408		// sets the design view to (BOOL)lParam (official EE_INFO docs: value-based, not a toggle)
 #define EEID_SHOW_MARKDOWN_BAR	23274		// toggles the built-in markdown toolbar
@@ -2614,11 +2620,10 @@ public:
 			return;
 		}
 		m_bPanesRestored = true;
-		if( m_bPreviewOn && !IsOfficialPaneVisible() ){
-			RbLogF( "startup restore: preview (mode=%d) -> official 23275", m_iMode );
-			PostMessage( m_hWnd, WM_COMMAND, MAKEWPARAM( EEID_MARKDOWN_PREVIEW, 0 ), 0 );
-		}
-		SyncPreviewToPane();	// EmEditor may have restored the pane itself; align the button
+		// preview starts OFF: the Web-bar snapshot is per-click, there is
+		// nothing meaningful to restore across sessions
+		m_bPreviewOn = false;
+		ApplyToggleStates();
 		// EmEditor restores the design view itself; query the command status
 		// and align the button
 		{
@@ -2739,6 +2744,46 @@ public:
 
 	// build the standalone preview document and write it over the pane's
 	// EEW snapshot (the newest EEW*.htm in %TEMP%)
+	// run an in-memory JScript macro through EE_RUN_MACRO (no temp file).
+	// nFlags MUST be RUN_TEXT: 0 selects no source and EmEditor fails the
+	// whole call with E_FAIL (0x80004005 in the 0.29.0 log)
+	HRESULT RunWebBarMacro( const TCHAR* pszMacro )
+	{
+		RUN_MACRO_INFO rmi;
+		ZeroMemory( &rmi, sizeof( rmi ) );
+		rmi.cbSize = sizeof( rmi );
+		rmi.nFlags = RUN_TEXT;
+		rmi.pszText = pszMacro;
+		rmi.nDefMacroLang = MACRO_LANG_JSCRIPT | MACRO_SYNC_ONLY;
+		rmi.ptErrorPos.x = rmi.ptErrorPos.y = -1;
+		HRESULT hr = (HRESULT)SendMessage( m_hWnd, EE_RUN_MACRO, 0, (LPARAM)&rmi );
+		RbLogF( "webbar macro hr=0x%08X: %S", (unsigned)hr, pszMacro );
+		return hr;
+	}
+
+	// render the CURRENT buffer into the stable preview file and navigate
+	// the built-in Web bar to it via the WebBar macro object; the ?t= stamp
+	// makes every URL unique so the browser cannot show a cached page
+	void OpenWebBarPreview()
+	{
+		WritePreviewHtml();
+		TCHAR szPath[ MAX_PATH ];
+		GetTempPath( MAX_PATH, szPath );
+		StringCat( szPath, MAX_PATH, _T("RichBarPreview.html") );
+		for( LPTSTR p = szPath; *p; p++ ){
+			if( *p == _T('\\') )  *p = _T('/');
+		}
+		tstring sUrl = _T("file:///");
+		UrlAppendEncoded( sUrl, szPath, true );
+		TCHAR szTick[ 32 ];
+		wsprintf( szTick, _T("?t=%u"), GetTickCount() );
+		sUrl += szTick;
+		tstring sMacro = _T("WebBar.Visible = true; WebBar.Open( \"");
+		sMacro += sUrl;
+		sMacro += _T("\" );");
+		RunWebBarMacro( sMacro.c_str() );
+	}
+
 	void WritePreviewHtml()
 	{
 		tstring sText;
@@ -2778,7 +2823,7 @@ public:
 		int cb = WideCharToMultiByte( CP_UTF8, 0, sHtml.c_str(), (int)sHtml.size(), NULL, 0, NULL, NULL );
 		HANDLE hFile = CreateFile( szPath, GENERIC_WRITE, 0, NULL, CREATE_ALWAYS, 0, NULL );
 		if( hFile == INVALID_HANDLE_VALUE ){
-			RbLogF( "preview write FAILED (%s)", szPath );
+			RbLogF( "preview write FAILED (%S)", szPath );
 			return;
 		}
 		DWORD cbW = 0;
@@ -2793,7 +2838,7 @@ public:
 			}
 		}
 		CloseHandle( hFile );
-		RbLogF( "preview write: %u bytes -> %s", (unsigned)cbW, szPath );
+		RbLogF( "preview write: %u bytes -> %S", (unsigned)cbW, szPath );
 	}
 	void FeedPreviewSnapshot()
 	{
@@ -3081,15 +3126,8 @@ public:
 				m_bDesignViewOn = bChecked != FALSE;
 				ApplyToggleStates();
 			}
-			{
-				bool bWant = IsPreviewDocOn();
-				bool bPane = IsOfficialPaneVisible();
-				m_bPreviewOn = bWant;
-				if( bWant != bPane ){
-					RbLogF( "doc switch: preview want=%d pane=%d -> 23275", (int)bWant, (int)bPane );
-					PostMessage( m_hWnd, WM_COMMAND, MAKEWPARAM( EEID_MARKDOWN_PREVIEW, 0 ), 0 );
-				}
-			}
+			// preview is a manual snapshot in the Web bar now: a doc switch
+			// leaves the pane content until the next refresh/preview click
 			if( m_hwndToolbar ){
 				ApplyToggleStates();
 			}
@@ -4039,94 +4077,26 @@ void OnDlgCommand( WPARAM wParam )
 				}
 			}
 			else if( cmd.m_iCmd == CMD_PREVIEW ){
-				// OUR web view preview: open/close our own bar (the WebView2
-				// pane hosting the rendered buffer), not the official plugin
+				// preview = the built-in Web bar showing OUR rendered snapshot.
+				// our own WebView2 pane never rendered inside EmEditor's
+				// process, and the official pane only shows saved-file
+				// snapshots - the WebBar macro object drives the built-in pane
 				bool bWant = ( SendMessage( m_hwndToolbar, TB_GETSTATE, wParam, 0 ) & TBSTATE_CHECKED ) != 0;
-				bool bPane = IsLivePreviewOpen();
 				m_bPreviewOn = bWant;
 				SaveProfile();
 				ApplyToggleStates();
-				if( bWant != bPane ){
-					RbLogF( "preview click: want=%d -> our webview", (int)bWant );
-					if( bWant ){
-						OpenLivePreview();
-					}
-					else {
-						CloseLivePreview();
-					}
+				RbLogF( "preview click: want=%d -> webbar", (int)bWant );
+				if( bWant ){
+					OpenWebBarPreview();
 				}
-			}
-			else if( cmd.m_iCmd == CMD_PREVIEW ){
-				// OUR web view preview: open/close our own bar (the WebView2
-				// pane hosting the rendered buffer), not the official plugin
-				bool bWant = ( SendMessage( m_hwndToolbar, TB_GETSTATE, wParam, 0 ) & TBSTATE_CHECKED ) != 0;
-				bool bPane = IsLivePreviewOpen();
-				m_bPreviewOn = bWant;
-				SaveProfile();
-				ApplyToggleStates();
-				if( bWant != bPane ){
-					RbLogF( "preview click: want=%d -> our webview", (int)bWant );
-					if( bWant ){
-						OpenLivePreview();
-					}
-					else {
-						CloseLivePreview();
-					}
-				}
-			}
-			else if( cmd.m_iCmd == CMD_PREVIEW ){
-				// our own live preview pane: the control state IS the wanted
-				// state and the bar follows it directly
-				bool bWant = ( SendMessage( m_hwndToolbar, TB_GETSTATE, wParam, 0 ) & TBSTATE_CHECKED ) != 0;
-				bool bPane = IsOfficialPaneVisible();
-				SetPreviewDocOn( bWant );	// per-document memory (follows the doc)
-				m_bPreviewOn = bWant;
-				SaveProfile();
-				ApplyToggleStates();
-				if( bWant != bPane ){
-					RbLogF( "preview click: want=%d pane=%d -> official 23275", (int)bWant, (int)bPane );
-					// unsaved documents: the official snapshot pipeline keys the
-					// markdown-vs-html choice off the temp file extension, which
-					// follows the document CONFIG - align it with our mode so
-					// unsaved Markdown previews convert (saved files already
-					// carry the right config and extension)
-					TCHAR szFile[ MAX_PATH ] = { 0 };
-					Editor_Info( m_hWnd, EI_GET_FILE_NAMEW, (LPARAM)szFile );
-					if( szFile[0] == 0 || _tcschr( szFile, _T('\\') ) == NULL ){
-						Editor_SetConfigW( m_hWnd, ( m_iMode == MODE_MD ) ? L"Markdown" : L"HTML" );
-						RbLogF( "preview: unsaved -> config=%s", ( m_iMode == MODE_MD ) ? "Markdown" : "HTML" );
-					}
-					PostMessage( m_hWnd, WM_COMMAND, MAKEWPARAM( EEID_MARKDOWN_PREVIEW, 0 ), 0 );
+				else {
+					RunWebBarMacro( _T("WebBar.Visible = false;") );
 				}
 			}
 				else if( cmd.m_iCmd == CMD_REFRESH_PREVIEW ){
-					// render the CURRENT buffer into the stable preview file and
-					// re-navigate the built-in Web bar to it through the WebBar
-					// macro object (EE_RUN_MACRO, in-memory JScript): Open()
-					// re-navigates on every click and the ?t= stamp makes each
-					// URL unique so the browser never shows a cached page
-					WritePreviewHtml();
-					TCHAR szPath[ MAX_PATH ];
-					GetTempPath( MAX_PATH, szPath );
-					StringCat( szPath, MAX_PATH, _T("RichBarPreview.html") );
-					for( LPTSTR p = szPath; *p; p++ ){
-						if( *p == _T('\\') )  *p = _T('/');
-					}
-					tstring sUrl = _T("file:///");
-					UrlAppendEncoded( sUrl, szPath, true );
-					TCHAR szTick[ 32 ];
-					wsprintf( szTick, _T("?t=%u"), GetTickCount() );
-					sUrl += szTick;
-					tstring sMacro = _T("WebBar.Visible = true; WebBar.Open( \"");
-					sMacro += sUrl;
-					sMacro += _T("\" );");
-					RUN_MACRO_INFO rmi;
-					ZeroMemory( &rmi, sizeof( rmi ) );
-					rmi.cbSize = sizeof( rmi );
-					rmi.pszText = sMacro.c_str();
-					rmi.nDefMacroLang = MACRO_LANG_JSCRIPT;
-					HRESULT hrMacro = (HRESULT)SendMessage( m_hWnd, EE_RUN_MACRO, 0, (LPARAM)&rmi );
-					RbLogF( "webbar open hr=0x%08X: %s", (unsigned)hrMacro, sUrl.c_str() );
+					// same path as the preview-on click: re-render the buffer
+					// and re-navigate the built-in Web bar (fresh content)
+					OpenWebBarPreview();
 			}			}
 
 

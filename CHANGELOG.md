@@ -15,6 +15,27 @@ this code base:
 | `0.9.0` – `0.17.x` | The HTML + Markdown dual-mode toolbar, heading towards `1.0.0`. |
 
 
+## [0.29.1] - 2026-10-01
+
+### Fixed
+
+- **The WebBar macro never ran**: `EE_RUN_MACRO` was invoked with
+  `nFlags = 0`, which selects no macro source, and EmEditor failed the
+  whole call with `E_FAIL` (0x80004005). It now passes
+  `nFlags = RUN_TEXT` (the in-memory JScript source) plus
+  `MACRO_SYNC_ONLY`.
+- **Preview button rewired to the same Web-bar mechanism**: it no longer
+  opens the own-WebView2 pane (which never renders inside EmEditor's
+  process). Preview-on renders the current buffer into
+  `%TEMP%\RichBarPreview.html` and opens the built-in Web bar on it;
+  preview-off hides the bar. Three stacked duplicate `CMD_PREVIEW`
+  dispatch branches were collapsed into one.
+- Startup no longer auto-opens the preview and document switches no
+  longer post the official 23275 toggle: the Web-bar snapshot shows the
+  buffer as of the last preview/refresh click.
+- Log lines printing wide paths with `%s` now use `%S` (they truncated
+  to a single character: "bytes -> C", ": f").
+
 ## [0.29.0] - 2026-10-01
 
 ### Changed
