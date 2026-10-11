@@ -139,11 +139,10 @@ plug-in:
   startup never displaces EmEditor's session-restore panel.
 - **User CSS themes**: the properties dialog's *Markdown Preview CSS*
   dropdown lists the built-in themes from the distribution's `themes\`
-  folder (`paper-serif.css`, `emeditor-template.css`, and **VS Code's
-  own Markdown preview theme** — `vscode-markdown.css` — which picks up
-  the editor's colors and font through the injected CSS variables), plus
-  a *Custom CSS...* entry with a file browser for any other stylesheet.
-  Leave it on
+  folder (`paper-serif.css`, and **VS Code's own Markdown preview
+  theme** — `vscode-markdown.css` — which picks up the editor's colors
+  and font through the injected CSS variables), plus a *Custom CSS...*
+  entry with a file browser for any other stylesheet. Leave it on
   *(Built-in theme)* to use the default location
   (`%APPDATA%\Emurasoft\EmEditor\RichBar\preview.css`), and delete the
   file to return to the built-in theme.
