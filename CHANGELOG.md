@@ -15,6 +15,15 @@ this code base:
 | `0.9.0` – `0.17.x` | The HTML + Markdown dual-mode toolbar, heading towards `1.0.0`. |
 
 
+## [0.43.1] - 2026-10-01
+
+### Fixed
+
+- **The properties dialog's bottom row overlapped**: the new *Default*
+  button (x=60, width 50) collided with *Customize Buttons...*
+  (x=28, width 98). Rearranged without overlap: Default at x=8,
+  Customize at x=58 (narrowed to 68), OK/Cancel unchanged.
+
 ## [0.43.0] - 2026-10-01
 
 ### Added
