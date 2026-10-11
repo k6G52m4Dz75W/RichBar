@@ -28,6 +28,16 @@ this code base:
   vanished theme falls back to no override); `PreviewCss` persists
   either form.
 
+## [0.50.1] - 2026-10-01
+
+### Fixed
+
+- **Preview scroll sync never ran**: the injected
+  `window.__scrollRatio=…` statement landed INSIDE the still-open
+  `window.__md` string literal (it became markdown text), so the
+  variable was never a number. The emission order is fixed: close
+  `__md`, then set the ratio, then render, then restore the scroll.
+
 ## [0.50.0] - 2026-10-01
 
 ### Added

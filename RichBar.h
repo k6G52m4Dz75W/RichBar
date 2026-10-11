@@ -3340,8 +3340,9 @@ public:
 				TCHAR szRatio[ 64 ];
 				StringPrintf( szRatio, _countof( szRatio ), _T("%.4f"), dScrollRatio );
 				tstring sRatio = szRatio;
+				sHtml += L"\";";
 				sHtml += L"window.__scrollRatio=" + sRatio + L";";
-				sHtml += L"\";document.getElementById('content').innerHTML=marked.parse(NormalizeSingleNewlines(window.__md),{breaks:true,gfm:true});";
+				sHtml += L"document.getElementById('content').innerHTML=marked.parse(NormalizeSingleNewlines(window.__md),{breaks:true,gfm:true});";
 				sHtml += L"if(typeof window.__scrollRatio==='number'){var h=document.body.scrollHeight-window.innerHeight;window.scrollTo(0,window.__scrollRatio*h);}";
 				sHtml += L"</script>";
 				sHtml += L"</body></html>";
