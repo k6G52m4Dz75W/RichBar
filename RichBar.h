@@ -3840,6 +3840,11 @@ public:
 				_tcsicmp( pszExt, _T(".xhtml") ) == 0 || _tcsicmp( pszExt, _T(".shtml") ) == 0 ){
 				return MODE_HTML;
 			}
+			// plain text: render as Markdown (single-newline paragraphs are the
+			// norm there, and the .txt note is prose far more often than HTML)
+			if( _tcsicmp( pszExt, _T(".txt") ) == 0 ){
+				return MODE_MD;
+			}
 		}
 		return m_iMode;
 	}

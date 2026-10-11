@@ -28,6 +28,14 @@ this code base:
   vanished theme falls back to no override); `PreviewCss` persists
   either form.
 
+## [0.47.0] - 2026-10-01
+
+### Changed
+
+- **Plain-text files render as Markdown**: `.txt` now maps to the
+  Markdown mode in `DetectMode` (the previous fallback kept whatever
+  mode was active, so a `.txt` opened from HTML mode previewed as raw
+  HTML). Note: the toolbar button group follows the mode.
 ## [0.46.0] - 2026-10-01
 
 ### Changed
