@@ -28,6 +28,18 @@ this code base:
   vanished theme falls back to no override); `PreviewCss` persists
   either form.
 
+## [0.45.0] - 2026-10-01
+
+### Added
+
+- **pandoc theme** (`themespandoc-default.css`): the pandoc default
+  stylesheet (from `data/templates/styles.html`, resolved to standalone
+  CSS) — the signature paper-like academic layout with a 36em centered
+  column, hyphenation, light-dark() pairs following the browser
+  preference, and refined table/quote/code styling. The theme list is
+  discovered dynamically, so it appears in the properties dropdown
+  without a code change. GPL-2.0-or-later attribution added to
+  LICENSE.third-party.
 ## [0.44.2] - 2026-10-01
 
 ### Removed

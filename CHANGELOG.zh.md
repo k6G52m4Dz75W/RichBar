@@ -22,6 +22,15 @@
   `themes\<name>.css`（主题文件消失则回退为不覆盖）；`PreviewCss`
   两种形式均可持久化。
 
+## [0.45.0] - 2026-10-01
+
+### 新增
+
+- **pandoc 主题**（`themespandoc-default.css`）：取 pandoc 默认样式
+  （源码 `data/templates/styles.html`，解析为独立 CSS）——标志性学术
+  纸张排版：36em 居中栏、连字符断行、light-dark() 自动深浅适配、
+  精致的表格/引用/代码样式。主题列表为动态发现，属性下拉即刻出现，
+  无需改代码。GPL-2.0-or-later 署名已加入 LICENSE.third-party。
 ## [0.44.2] - 2026-10-01
 
 ### 移除
