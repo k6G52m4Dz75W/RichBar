@@ -28,6 +28,25 @@ this code base:
   vanished theme falls back to no override); `PreviewCss` persists
   either form.
 
+## [0.50.0] - 2026-10-01
+
+### Added
+
+- **EmEditor 26.3.0 modernization with full fallback** (older versions
+  keep every existing behavior):
+  - **Clipboard-free buffer reads**: on 26.3+ the buffer is fetched via
+    an in-memory macro (`return document.Text;` through
+    `EE_RUN_MACRO`) — no more SelectAll+Copy, no clipboard churn, no
+    selection flicker. The clipboard-based path remains as the
+    fallback for older versions (and if the macro fails).
+  - **Huge-file support**: read-only properties work in the new Fast
+    View mode, so the preview can render documents that are not fully
+    loaded.
+  - **Preview scroll sync**: every render injects the editor scroll
+    position (line / total lines via `EE_GET_SCROLL_POS` +
+    `EE_GET_LINES`) and the preview restores it after render — the
+    right pane follows where you are in the text.
+
 ## [0.47.0] - 2026-10-01
 
 ### Changed

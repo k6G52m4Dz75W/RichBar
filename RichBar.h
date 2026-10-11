@@ -465,6 +465,7 @@ public:
 	tstring m_sPendingMacro;	// WebBar macro awaiting retry (V8 engine not ready)
 	int m_nMacroRetries = 0;
 	bool m_bStartupSettled = false;	// pane open/close suppressed until the session restore finishes
+	bool m_bNewApi = false;		// cached: EmEditor >= 26.3.0 (document.Text macro, WebBar scroll)
 	HWND m_hwndView;				// the EmEditor VIEW window (plug-in OnCommand contract)
 	bool m_bPanesRestored;		// startup pane restore done (first state-sync tick)
 	UINT m_nPreviewBarID;		// custom-bar id of the live preview pane
@@ -1957,9 +1958,48 @@ public:
 		}
 	}
 
+	// EmEditor 26.3.0+ gate: macros run in Fast View mode and the
+	// Document object gained Text/TextLength; WebBar gained scrollBy/
+	// scrollTo/scrollX/scrollY. EE_GET_VERSION encodes major*1000+
+	// minor*100+build (26.3.0 = 26300).
+	bool HasNewApi()
+	{
+		if( !m_bNewApi ){
+			m_bNewApi = ( Editor_GetVersion( m_hWnd ) >= 26300 );
+			RbLogF( "new api gate: %d (version %u)", (int)m_bNewApi, Editor_GetVersion( m_hWnd ) );
+		}
+		return m_bNewApi;
+	}
 	// the whole document text, line by line (the SDK has no whole-text API)
 	bool GetDocTextAll( tstring& sText )
 	{
+		if( HasNewApi() ){
+			// 26.3+: document.Text via EE_RUN_MACRO — no clipboard, no
+			// selection dance, and it works in Fast View mode. The macro's
+			// return string arrives in rmi.hstrResult (GlobalFree by us).
+			RUN_MACRO_INFO rmi;
+			ZeroMemory( &rmi, sizeof( rmi ) );
+			rmi.cbSize = sizeof( rmi );
+			rmi.nFlags = RUN_TEXT;
+			rmi.pszText = L"#language=\"V8\"\nreturn document.Text;";
+			rmi.nDefMacroLang = MACRO_LANG_V8 | MACRO_SYNC_ONLY;
+			rmi.ptErrorPos.x = rmi.ptErrorPos.y = -1;
+			HGLOBAL hText = NULL;
+			HRESULT hr = (HRESULT)SendMessage( m_hWnd, EE_RUN_MACRO, 0, (LPARAM)&rmi );
+			if( hr == S_OK && rmi.hstrResult ){
+				LPCWSTR pText = (LPCWSTR)GlobalLock( rmi.hstrResult );
+				if( pText ){
+					sText = pText;
+					GlobalUnlock( rmi.hstrResult );
+					GlobalFree( rmi.hstrResult );
+					RbLogF( "text via document.Text: %u chars", (unsigned)sText.size() );
+					return true;
+				}
+				GlobalFree( rmi.hstrResult );
+			}
+			RbLogF( "document.Text failed hr=0x%08X - clipboard fallback", (unsigned)hr );
+			return false;	// do NOT touch the clipboard when the new API failed
+			}
 		// whole-document read via SelectAll + Copy (single-shot; the per-line
 		// EE_GET_LINE loop proved display-indexed in wrapped documents).
 		// The user's selection/caret is saved first and restored at the end.
@@ -3084,6 +3124,18 @@ public:
 		// upstream dark<->light stickiness - so the page matches the
 		// theme as of the render)
 		tstring sHtml;
+		// editor scroll ratio (0..1) for preview sync
+		double dScrollRatio = 0.0;
+		{
+			POINT_PTR ptScroll = { 0, 0 };
+			Editor_GetScrollPos( m_hWnd, &ptScroll );
+			UINT_PTR nLines = Editor_GetLines( m_hWnd, TRUE );	// logical lines
+			if( nLines > 1 ){
+				dScrollRatio = (double)ptScroll.y / (double)( nLines - 1 );
+				if( dScrollRatio < 0 )  dScrollRatio = 0;
+				if( dScrollRatio > 1 )  dScrollRatio = 1;
+			}
+		}
 		if( m_iMode == MODE_MD ){
 			// markdown: convert the buffer per line, themed like the view
 			// left = editor, right = preview: identical colors via the official
@@ -3285,7 +3337,13 @@ public:
 				sHtml += L"function NormalizeSingleNewlines(s){var L=s.split(NL),o=[];for(var i=0;i<L.length;i++){var t=L[i],keep=false;if(i>0){var pr=L[i-1];if(isQuote.test(t)||isTable.test(t)||isHr.test(t)||isHead.test(t)||isCode.test(t)||isList.test(t)||isCode.test(pr)||isList.test(pr)||isTable.test(pr)||isHr.test(pr)||isSetextH.test(pr)){keep=true;}}if(!keep)o.push(NL);o.push(t);}return o.join(NL);}";
 				sHtml += L"window.__md=\"";
 				sHtml += JsEscape( sText );
-				sHtml += L"\";document.getElementById('content').innerHTML=marked.parse(NormalizeSingleNewlines(window.__md),{breaks:true,gfm:true});</script>";
+				TCHAR szRatio[ 64 ];
+				StringPrintf( szRatio, _countof( szRatio ), _T("%.4f"), dScrollRatio );
+				tstring sRatio = szRatio;
+				sHtml += L"window.__scrollRatio=" + sRatio + L";";
+				sHtml += L"\";document.getElementById('content').innerHTML=marked.parse(NormalizeSingleNewlines(window.__md),{breaks:true,gfm:true});";
+				sHtml += L"if(typeof window.__scrollRatio==='number'){var h=document.body.scrollHeight-window.innerHeight;window.scrollTo(0,window.__scrollRatio*h);}";
+				sHtml += L"</script>";
 				sHtml += L"</body></html>";
 			}
 			else {
