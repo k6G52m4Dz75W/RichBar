@@ -28,6 +28,18 @@ this code base:
   vanished theme falls back to no override); `PreviewCss` persists
   either form.
 
+## [0.44.1] - 2026-10-01
+
+### Changed
+
+- **The Markdown Preview CSS row is a plain dropdown** (label + combo, no
+  browse button — choosing *Custom CSS...* opens the file browser
+  immediately; canceling restores the previous selection). The
+  overlapping layout is fixed (the label had widened under the combo).
+- **vscode-highlight.css removed from the themes** — it styles
+  highlight.js token classes, which plain marked output does not emit,
+  so it was not a complete Markdown theme.
+
 ## [0.43.1] - 2026-10-01
 
 ### Fixed

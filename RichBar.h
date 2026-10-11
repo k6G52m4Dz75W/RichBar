@@ -4005,28 +4005,42 @@ public:
 				DisplayBar( true );
 			}
 		}
-		else if( wParam == IDC_CSS_BROWSE ){
-			TCHAR szCssPath[ MAX_PATH ] = { 0 };
-			// pre-fill with the current custom path, if one is set
-			if( !m_sPreviewCss.empty() && m_sPreviewCss.find( L'\\' ) != tstring::npos ){
-				lstrcpyn( szCssPath, m_sPreviewCss.c_str(), MAX_PATH );
-			}
-			OPENFILENAMEW ofn;
-			ZeroMemory( &ofn, sizeof( ofn ) );
-			ofn.lStructSize = sizeof( ofn );
-			ofn.hwndOwner = hDlg;
-			ofn.lpstrFilter = L"CSS files (*.css)\0*.css\0All files (*.*)\0*.*\0";
-			ofn.lpstrFile = szCssPath;
-			ofn.nMaxFile = MAX_PATH;
-			ofn.Flags = OFN_FILEMUSTEXIST | OFN_HIDEREADONLY;
-			ofn.lpstrDefExt = L"css";
-			if( GetOpenFileNameW( &ofn ) ){
-				m_sPreviewCss = szCssPath;	// remembered now; OK persists it
-				HWND hwndCss = GetDlgItem( hDlg, IDC_CSS_COMBO );
-				int nCustom = (int)m_vPreviewThemes.size() + 1;
-				ComboBox_DeleteString( hwndCss, nCustom );
-				ComboBox_InsertString( hwndCss, nCustom, szCssPath );
-				ComboBox_SetCurSel( hwndCss, nCustom );
+		else if( wParam == IDC_CSS_COMBO && HIWORD( wParam ) == CBN_SELCHANGE ){
+			int nSel = (int)SendMessage( GetDlgItem( hDlg, IDC_CSS_COMBO ), CB_GETCURSEL, 0, 0 );
+			const int nCustom = (int)m_vPreviewThemes.size() + 1;
+			if( nSel == nCustom ){
+				// Custom picked: open the file browser immediately
+				TCHAR szCssPath[ MAX_PATH ] = { 0 };
+				if( !m_sPreviewCss.empty() && m_sPreviewCss.find( L'\\' ) != tstring::npos ){
+					lstrcpyn( szCssPath, m_sPreviewCss.c_str(), MAX_PATH );
+				}
+				OPENFILENAMEW ofn;
+				ZeroMemory( &ofn, sizeof( ofn ) );
+				ofn.lStructSize = sizeof( ofn );
+				ofn.hwndOwner = hDlg;
+				ofn.lpstrFilter = L"CSS files (*.css)\0*.css\0All files (*.*)\0*.*\0";
+				ofn.lpstrFile = szCssPath;
+				ofn.nMaxFile = MAX_PATH;
+				ofn.Flags = OFN_FILEMUSTEXIST | OFN_HIDEREADONLY;
+				ofn.lpstrDefExt = L"css";
+				if( GetOpenFileNameW( &ofn ) ){
+					m_sPreviewCss = szCssPath;	// remembered now; OK persists it
+					HWND hwndCss = GetDlgItem( hDlg, IDC_CSS_COMBO );
+					ComboBox_DeleteString( hwndCss, nCustom );
+					ComboBox_InsertString( hwndCss, nCustom, szCssPath );
+					ComboBox_SetCurSel( hwndCss, nCustom );
+				}
+				else {
+					// canceled: restore the selection the current setting implies
+					int nBack = 0;
+					if( !m_sPreviewCss.empty() ){
+						nBack = (int)m_vPreviewThemes.size() + 1;
+						for( size_t i = 0; i < m_vPreviewThemes.size(); i++ ){
+							if( m_vPreviewThemes[ i ] == m_sPreviewCss ){ nBack = (int)i + 1; break; }
+						}
+					}
+					ComboBox_SetCurSel( GetDlgItem( hDlg, IDC_CSS_COMBO ), nBack );
+				}
 			}
 		}
 		else if( wParam == IDC_CSS_DEFAULT ){

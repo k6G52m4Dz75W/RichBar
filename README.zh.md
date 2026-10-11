@@ -7,7 +7,7 @@
 它旨在替代 EmEditor v26 内置的 HTML/Markdown 工具栏（闭源、大部分标签
 藏在下拉菜单里）。
 
-当前版本：**0.44.0 — 2026-10-01**。
+当前版本：**0.44.1 — 2026-10-01**。
 
 ## 功能
 
@@ -120,7 +120,7 @@ WebPreview 插件：
 - **用户自定义 CSS 主题**：插件属性的 *Markdown Preview CSS* 下拉
   列表列出发行包 `themes\` 目录的内置主题（`paper-serif.css`、
   `emeditor-template.css`，以及 **VS Code 自家的 Markdown 预览主题**
-  ——`vscode-markdown.css` + `vscode-highlight.css`，通过注入的 CSS
+  ——`vscode-markdown.css`，通过注入的 CSS
   变量自动获得编辑器的颜色与字体），另有 *Custom CSS...* 项带文件
   浏览器可选任意其他样式表。选 *(Built-in theme)* 时使用默认位置
   （`%APPDATA%\Emurasoft\EmEditor\RichBar\preview.css`），删除该文件
