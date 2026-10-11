@@ -28,6 +28,16 @@ this code base:
   vanished theme falls back to no override); `PreviewCss` persists
   either form.
 
+## [0.44.2] - 2026-10-01
+
+### Removed
+
+- **`emeditor-template.css` is no longer distributed**: it is not a
+  Markdown theme (an HTML-export template from the EmEditor install
+  root), and redistributing files belonging to the host application is
+  not appropriate. `themes\` now contains only our own
+  `paper-serif.css` and the MIT-licensed `vscode-markdown.css`.
+
 ## [0.44.1] - 2026-10-01
 
 ### Changed

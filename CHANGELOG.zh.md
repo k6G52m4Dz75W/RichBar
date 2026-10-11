@@ -22,6 +22,15 @@
   `themes\<name>.css`（主题文件消失则回退为不覆盖）；`PreviewCss`
   两种形式均可持久化。
 
+## [0.44.2] - 2026-10-01
+
+### 移除
+
+- **不再分发 `emeditor-template.css`**：它不是 Markdown 主题（是
+  EmEditor 安装根目录的 HTML 导出模板），且不应再分发宿主程序自身
+  的文件。`themes\` 现在只含我们自己的 `paper-serif.css` 与 MIT 许可
+  的 `vscode-markdown.css`。
+
 ## [0.44.1] - 2026-10-01
 
 ### 变更
