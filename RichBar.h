@@ -477,6 +477,7 @@ public:
 	bool m_bWV2InitFailed;		// loader/runtime missing: Preview falls back to the official command
 	vector<tstring> m_vPreviewDocs;	// documents (by name key) whose preview the user turned ON
 	vector<tstring> m_vPreviewOffDocs;	// documents whose preview the user explicitly turned OFF
+	vector<tstring> m_vPreviewThemes;	// discovered built-in themes (basenames, no extension)
 	bool m_bWV2InitPending;		// environment creation in flight
 	UINT m_nHoverMenuCmd;		// dropdown command waiting for the hover-open timer
 	UINT m_nLastMenuCmd;		// dropdown whose menu closed last; reopen only after the mouse leaves it
@@ -3000,6 +3001,56 @@ public:
 		RbLogF( "pane walk after open: visible=%d", (int)IsOfficialPaneVisible() );
 	}
 
+	// the DLL folder + subpath helper (themes\xxx.css lives beside us)
+	bool MakeThemePath( const tstring& sName, tstring& sPath )
+	{
+		TCHAR szDll[ MAX_PATH ];
+		if( GetModuleFileName( EEGetInstanceHandle(), szDll, MAX_PATH ) == 0 ){
+			return false;
+		}
+		LPTSTR pEnd = szDll + lstrlen( szDll );
+		while( pEnd > szDll && pEnd[-1] != _T('\\') )  pEnd--;
+		*pEnd = 0;
+		StringCat( szDll, MAX_PATH, _T("themes\\") );
+		StringCat( szDll, MAX_PATH, sName.c_str() );
+		StringCat( szDll, MAX_PATH, _T(".css") );
+		if( GetFileAttributes( szDll ) == INVALID_FILE_ATTRIBUTES ){
+			return false;
+		}
+		sPath = szDll;
+		return true;
+	}
+
+	// discover the built-in themes: basenames of themes\*.css
+	void LoadPreviewThemes()
+	{
+		m_vPreviewThemes.clear();
+		TCHAR szDll[ MAX_PATH ];
+		if( GetModuleFileName( EEGetInstanceHandle(), szDll, MAX_PATH ) == 0 ){
+			return;
+		}
+		LPTSTR pEnd = szDll + lstrlen( szDll );
+		while( pEnd > szDll && pEnd[-1] != _T('\\') )  pEnd--;
+		*pEnd = 0;
+		StringCat( szDll, MAX_PATH, _T("themes\\*.css") );
+		WIN32_FIND_DATA wfd;
+		HANDLE hFind = FindFirstFile( szDll, &wfd );
+		if( hFind == INVALID_HANDLE_VALUE ){
+			return;
+		}
+		do {
+			if( ( wfd.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY ) == 0 && wfd.cFileName[ 0 ] ){
+				tstring sName( wfd.cFileName );
+				tstring sExt = _T(".css");
+				if( sName.size() > sExt.size() && sName.compare( sName.size() - sExt.size(), sExt.size(), sExt ) == 0 ){
+					sName.erase( sName.size() - sExt.size() );
+					m_vPreviewThemes.push_back( sName );
+				}
+			}
+		} while( FindNextFile( hFind, &wfd ) );
+		FindClose( hFind );
+	}
+
 	// JSON/JS string escape for embedding the markdown source into the
 	// preview page: < and > become \u003c/\u003e so a literal
 	// "</script>" inside the text cannot terminate the script tag
@@ -3116,8 +3167,21 @@ public:
 			// them; absent file -> the built-in theme stands alone
 			{
 				TCHAR szCss[ MAX_PATH ];
+				// resolve the selection: bare NAME -> themes\<name>.css;
+				// absolute path -> as-is; empty -> the default preview.css
 				if( !m_sPreviewCss.empty() ){
-					lstrcpyn( szCss, m_sPreviewCss.c_str(), MAX_PATH );
+					if( m_sPreviewCss.find( _T('\\') ) == tstring::npos && m_sPreviewCss.find( _T(':') ) == tstring::npos ){
+						tstring sThemePath;
+						if( MakeThemePath( m_sPreviewCss, sThemePath ) ){
+							lstrcpyn( szCss, sThemePath.c_str(), MAX_PATH );
+						}
+						else {
+							szCss[ 0 ] = 0;	// theme vanished: no override
+						}
+					}
+					else {
+						lstrcpyn( szCss, m_sPreviewCss.c_str(), MAX_PATH );
+					}
 				}
 				else if( SUCCEEDED( SHGetFolderPathW( NULL, CSIDL_APPDATA, NULL, 0, szCss ) ) ){
 					wcscat_s( szCss, MAX_PATH, L"\\Emurasoft\\EmEditor\\RichBar" );
@@ -3806,7 +3870,28 @@ public:
 			GetRValue( m_crCustomIcon ), GetGValue( m_crCustomIcon ), GetBValue( m_crCustomIcon ) );
 		SetDlgItemText( hDlg, IDC_BTN_ICON_COLOR, szColor );
 
-		SetDlgItemText( hDlg, IDC_CSS_EDIT, m_sPreviewCss.c_str() );
+		LoadPreviewThemes();
+		HWND hwndCss = GetDlgItem( hDlg, IDC_CSS_COMBO );
+		ComboBox_ResetContent( hwndCss );
+		ComboBox_AddString( hwndCss, _T("(Built-in theme)") );
+		for( size_t i = 0; i < m_vPreviewThemes.size(); i++ ){
+			ComboBox_AddString( hwndCss, m_vPreviewThemes[ i ].c_str() );
+		}
+		ComboBox_AddString( hwndCss, _T("Custom CSS...") );
+		// select the current entry
+		int nSel = 0;
+		if( m_sPreviewCss.empty() ){
+			nSel = 0;
+		}
+		else if( m_sPreviewCss.find( _T('\\') ) == tstring::npos && m_sPreviewCss.find( _T(':') ) == tstring::npos ){
+			for( size_t i = 0; i < m_vPreviewThemes.size(); i++ ){
+				if( m_vPreviewThemes[ i ] == m_sPreviewCss ){ nSel = (int)i + 1; break; }
+			}
+		}
+		else {
+			nSel = (int)m_vPreviewThemes.size() + 1;	// Custom CSS...
+		}
+		ComboBox_SetCurSel( hwndCss, nSel );
 		TCHAR szText[40];
 		LoadString( EEGetLocaleInstanceHandle(), IDS_CONFIGS, szText, _countof( szText ) );
 
@@ -3884,25 +3969,27 @@ public:
 		if( wParam == IDOK ){
 			m_bAutoDisplay = !!IsDlgButtonChecked( hDlg, IDC_AUTO_DISPLAY );
 			m_bCustomIconColor = IsDlgButtonChecked( hDlg, IDC_RADIO_ICON_CUSTOM ) ? true : false;
+			// the Markdown preview theme: (Built-in) = no override, a
+			// discovered theme name = themes\<name>.css, Custom = a full path
 			{
-				TCHAR szCssPath[ MAX_PATH ];
-				GetDlgItemText( hDlg, IDC_CSS_EDIT, szCssPath, MAX_PATH );
-				// trim quotes (Explorer "Copy as path") and spaces
-				TCHAR* a = szCssPath;
-				while( *a == _T(' ') || *a == _T('"') )  a++;
-				TCHAR* b = a + lstrlen( a );
-				while( b > a && ( b[-1] == _T(' ') || b[-1] == _T('"') ) )  b--;
-				*b = 0;
-				m_sPreviewCss = a;
+				int nSel = (int)SendMessage( GetDlgItem( hDlg, IDC_CSS_COMBO ), CB_GETCURSEL, 0, 0 );
+				if( nSel <= 0 ){
+					m_sPreviewCss.clear();	// built-in theme
+				}
+				else if( nSel <= (int)m_vPreviewThemes.size() ){
+					m_sPreviewCss = m_vPreviewThemes[ nSel - 1 ];	// bare theme name
+				}
+				else {
+					// custom path: already stored by the Browse handler
+				}
 			}
-
 			m_AutoConfigArray.clear();
 			HWND hwndList = GetDlgItem( hDlg, IDC_LIST );
 			int nCount = ListView_GetItemCount( hwndList );
 			for( int i = 0; i < nCount; i++ ){
 				if( ListView_GetCheckState( hwndList, i ) ){
 					TCHAR szName[ MAX_CONFIG_NAME ];
-					szName[0] = 0;
+					szName[ 0 ] = 0;
 					ListView_GetItemText( hwndList, i, 0, szName, _countof( szName ) );
 					m_AutoConfigArray.push_back( szName );
 				}
@@ -3919,8 +4006,11 @@ public:
 			}
 		}
 		else if( wParam == IDC_CSS_BROWSE ){
-			TCHAR szCssPath[ MAX_PATH ];
-			GetDlgItemText( hDlg, IDC_CSS_EDIT, szCssPath, MAX_PATH );
+			TCHAR szCssPath[ MAX_PATH ] = { 0 };
+			// pre-fill with the current custom path, if one is set
+			if( !m_sPreviewCss.empty() && m_sPreviewCss.find( L'\\' ) != tstring::npos ){
+				lstrcpyn( szCssPath, m_sPreviewCss.c_str(), MAX_PATH );
+			}
 			OPENFILENAMEW ofn;
 			ZeroMemory( &ofn, sizeof( ofn ) );
 			ofn.lStructSize = sizeof( ofn );
@@ -3931,11 +4021,16 @@ public:
 			ofn.Flags = OFN_FILEMUSTEXIST | OFN_HIDEREADONLY;
 			ofn.lpstrDefExt = L"css";
 			if( GetOpenFileNameW( &ofn ) ){
-				SetDlgItemText( hDlg, IDC_CSS_EDIT, szCssPath );
+				m_sPreviewCss = szCssPath;	// remembered now; OK persists it
+				HWND hwndCss = GetDlgItem( hDlg, IDC_CSS_COMBO );
+				int nCustom = (int)m_vPreviewThemes.size() + 1;
+				ComboBox_DeleteString( hwndCss, nCustom );
+				ComboBox_InsertString( hwndCss, nCustom, szCssPath );
+				ComboBox_SetCurSel( hwndCss, nCustom );
 			}
 		}
 		else if( wParam == IDC_CSS_DEFAULT ){
-			SetDlgItemText( hDlg, IDC_CSS_EDIT, _T("") );
+			ComboBox_SetCurSel( GetDlgItem( hDlg, IDC_CSS_COMBO ), 0 );
 		}
 		else if( wParam == IDCANCEL ){
 			EndDialog( hDlg, IDCANCEL );
@@ -3949,7 +4044,7 @@ public:
 		}
 		else if( wParam == IDC_BTN_ICON_COLOR ){
 			CHOOSECOLOR cc = {};
-			static COLORREF acrCust[16] = {};
+			static COLORREF acrCust[ 16 ] = {};
 			cc.lStructSize = sizeof( cc );
 			cc.hwndOwner = hDlg;
 			cc.rgbResult = m_crCustomIcon;
@@ -3966,8 +4061,7 @@ public:
 			OnCustomize( hDlg );
 		}
 	}
-
-	void LoadConfigArray( LPCTSTR pszKey, LPCTSTR pszSizeKey, vector<tstring>& arrConfig, LPCTSTR pszDefault )
+void LoadConfigArray( LPCTSTR pszKey, LPCTSTR pszSizeKey, vector<tstring>& arrConfig, LPCTSTR pszDefault )
 	{
 		bool bSuccess = false;
 		arrConfig.clear();

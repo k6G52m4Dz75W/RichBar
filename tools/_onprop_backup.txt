@@ -1,0 +1,2008 @@
+void OnPropCommand( HWND hDlg, WPARAM wParam )
+	{
+		if( wParam == IDOK ){
+			m_bAutoDisplay = !!IsDlgButtonChecked( hDlg, IDC_AUTO_DISPLAY );
+			m_bCustomIconColor = IsDlgButtonChecked( hDlg, IDC_RADIO_ICON_CUSTOM ) ? true : false;
+			{
+				int nSel = (int)SendMessage( GetDlgItem( hDlg, IDC_CSS_COMBO ), CB_GETCURSEL, 0, 0 );
+				if( nSel <= 0 ){
+					m_sPreviewCss.clear();	// built-in theme
+				}
+				else if( nSel <= (int)m_vPreviewThemes.size() ){
+					m_sPreviewCss = m_vPreviewThemes[ nSel - 1 ];	// bare theme name
+				}
+				else {
+					TCHAR szCssPath[ MAX_PATH ];
+					GetDlgItemText( hDlg, IDC_CSS_EDIT, szCssPath, MAX_PATH );
+					m_sPreviewCss = szCssPath;	// custom path
+				}
+			}
+				// trim quotes (Explorer "Copy as path") and spaces
+				TCHAR* a = szCssPath;
+				while( *a == _T(' ') || *a == _T('"') )  a++;
+				TCHAR* b = a + lstrlen( a );
+				while( b > a && ( b[-1] == _T(' ') || b[-1] == _T('"') ) )  b--;
+				*b = 0;
+				m_sPreviewCss = a;
+			}
+
+			m_AutoConfigArray.clear();
+			HWND hwndList = GetDlgItem( hDlg, IDC_LIST );
+			int nCount = ListView_GetItemCount( hwndList );
+			for( int i = 0; i < nCount; i++ ){
+				if( ListView_GetCheckState( hwndList, i ) ){
+					TCHAR szName[ MAX_CONFIG_NAME ];
+					szName[0] = 0;
+					ListView_GetItemText( hwndList, i, 0, szName, _countof( szName ) );
+					m_AutoConfigArray.push_back( szName );
+				}
+			}
+			SaveProfile();
+			EndDialog( hDlg, IDOK );
+
+			// the icon color changed: the bar must be re-created so the
+			// glyph color and the dark copies match the new setting
+			if( m_bIconColorDirty && m_hwndToolbar && m_bVisible ){
+				Editor_ToolbarClose( m_hWnd, m_nClientID );
+				CustomBarClosed();
+				DisplayBar( true );
+			}
+		}
+		else if( wParam == IDC_CSS_BROWSE ){
+			TCHAR szCssPath[ MAX_PATH ];
+			TCHAR szCssPath[ MAX_PATH ];
+			GetDlgItemText( hDlg, IDC_CSS_EDIT, szCssPath, MAX_PATH );
+			OPENFILENAMEW ofn;
+			ZeroMemory( &ofn, sizeof( ofn ) );
+			ofn.lStructSize = sizeof( ofn );
+			ofn.hwndOwner = hDlg;
+			ofn.lpstrFilter = L"CSS files (*.css)\0*.css\0All files (*.*)\0*.*\0";
+			ofn.lpstrFile = szCssPath;
+			ofn.nMaxFile = MAX_PATH;
+			ofn.Flags = OFN_FILEMUSTEXIST | OFN_HIDEREADONLY;
+			ofn.lpstrDefExt = L"css";
+			if( GetOpenFileNameW( &ofn ) ){
+				HWND hwndCss = GetDlgItem( hDlg, IDC_CSS_COMBO );
+				int nCustom = (int)m_vPreviewThemes.size() + 1;
+				ComboBox_DeleteString( hwndCss, nCustom );
+				ComboBox_InsertString( hwndCss, nCustom, szCssPath );
+				ComboBox_SetCurSel( hwndCss, nCustom );
+			}
+		}
+		else if( wParam == IDC_CSS_DEFAULT ){
+			ComboBox_SetCurSel( GetDlgItem( hDlg, IDC_CSS_COMBO ), 0 );
+		}
+		else if( wParam == IDCANCEL ){
+			EndDialog( hDlg, IDCANCEL );
+		}
+		else if( wParam == IDC_AUTO_DISPLAY ){
+			BOOL bEnabled = IsDlgButtonChecked( hDlg, IDC_AUTO_DISPLAY );
+			EnableWindow( GetDlgItem( hDlg, IDC_LIST ), bEnabled );
+		}
+		else if( wParam == IDC_RADIO_ICON_AUTO || wParam == IDC_RADIO_ICON_CUSTOM ){
+			m_bIconColorDirty = true;
+		}
+		else if( wParam == IDC_BTN_ICON_COLOR ){
+			CHOOSECOLOR cc = {};
+			static COLORREF acrCust[16] = {};
+			cc.lStructSize = sizeof( cc );
+			cc.hwndOwner = hDlg;
+			cc.rgbResult = m_crCustomIcon;
+			cc.lpCustColors = acrCust;
+			cc.Flags = CC_FULLOPEN | CC_RGBINIT;
+			if( ChooseColor( &cc ) ){
+				m_crCustomIcon = cc.rgbResult;
+				CheckRadioButton( hDlg, IDC_RADIO_ICON_AUTO, IDC_RADIO_ICON_CUSTOM, IDC_RADIO_ICON_CUSTOM );
+				UpdateIconColorButton( hDlg );
+				m_bIconColorDirty = true;
+			}
+		}
+		else if( wParam == IDC_CUSTOMIZE ){
+			OnCustomize( hDlg );
+		}
+	}
+
+	void LoadConfigArray( LPCTSTR pszKey, LPCTSTR pszSizeKey, vector<tstring>& arrConfig, LPCTSTR pszDefault )
+	{
+		bool bSuccess = false;
+		arrConfig.clear();
+
+		int cchSize = GetProfileInt( pszSizeKey, 0 );
+		if( cchSize > 2 ){
+			LPTSTR pBuf = new TCHAR[ cchSize ];
+			if( pBuf ){
+				*pBuf = 0;
+				GetProfileString( pszKey, pBuf, cchSize, _T("") );
+				if( *pBuf ){
+					LPTSTR p = pBuf;
+					for( ;; ){
+						LPTSTR p0 = p;
+						p = _tcschr( p, '\\' );
+						if( !p )  break;
+						*p = 0;
+						if( !*p0 )  break;
+						arrConfig.push_back( p0 );
+						p++;
+					}
+					bSuccess = true;
+				}
+				delete [] pBuf;
+			}
+		}
+		if( !bSuccess && pszDefault && pszDefault[0] ){
+			arrConfig.push_back( pszDefault );
+		}
+	}
+
+	void SaveConfigArray( LPCTSTR pszKey, LPCTSTR pszSizeKey, vector<tstring>& arrConfig )
+	{
+		int cchBuf = 2;
+		for( vector<tstring>::iterator it = arrConfig.begin(); it != arrConfig.end(); it++ ){
+			cchBuf += (int)it->length() + 1;
+		}
+		LPTSTR pBuf = new TCHAR[ cchBuf ];
+		LPTSTR p = pBuf;
+		int cch = cchBuf;
+		for( vector<tstring>::iterator it = arrConfig.begin(); it != arrConfig.end(); it++ ){
+			StringCopy( p, cch, it->c_str() );
+			p += it->length();
+			*p++ = _T('\\');
+			cch -= (int)it->length() + 1;
+		}
+		*p++ = _T('\\');
+		*p = 0;
+		_ASSERT( lstrlen( pBuf ) + 1 == cchBuf );
+		WriteProfileString( pszKey, pBuf );
+		delete [] pBuf;
+		WriteProfileInt( pszSizeKey, cchBuf );
+	}
+
+	void LoadProfile()
+	{
+		if( !m_bProfileLoaded ){
+			m_bProfileLoaded = true;
+			m_bOpenStartup = !!GetProfileInt( _T("OpenStartup"), FALSE );
+			m_bAutoDisplay = !!GetProfileInt( _T("AutoDisplay"), FALSE );
+			m_bDesignViewOn = !!GetProfileInt( _T("DesignViewOn"), FALSE );
+			m_bPreviewOn = !!GetProfileInt( _T("PreviewOn"), FALSE );
+			{				TCHAR szCssPath[ MAX_PATH ];
+				GetProfileString( _T("PreviewCss"), szCssPath, _countof( szCssPath ), _T("") );
+				m_sPreviewCss = szCssPath;
+			}
+			{
+				// per-document preview memory (path keys AND untitled title
+				// keys: EmEditor restores untitled docs reusing their titles,
+				// so the pressed state follows them across sessions)
+				TCHAR szDocs[ 4096 ];
+				GetProfileString( _T("PreviewDocs"), szDocs, _countof( szDocs ), _T("") );
+				TCHAR* pszCtx = NULL;
+				TCHAR* pszTok = wcstok_s( szDocs, _T("\n"), &pszCtx );
+				while( pszTok ){
+					m_vPreviewDocs.push_back( pszTok );
+					pszTok = wcstok_s( NULL, _T("\n"), &pszCtx );
+				}
+				GetProfileString( _T("PreviewDocsOff"), szDocs, _countof( szDocs ), _T("") );
+				pszCtx = NULL;
+				pszTok = wcstok_s( szDocs, _T("\n"), &pszCtx );
+				while( pszTok ){
+					m_vPreviewOffDocs.push_back( pszTok );
+					pszTok = wcstok_s( NULL, _T("\n"), &pszCtx );
+				}
+			}
+			m_bCustomIconColor = !!GetProfileInt( _T("IconColorMode"), FALSE );
+			m_crCustomIcon = (COLORREF)GetProfileInt( _T("IconColor"), (int)RGB( 224, 224, 224 ) );
+			m_cx = GetProfileInt( _T("cx"), 0 );
+			m_fStyle = GetProfileInt( _T("Style"), 0 );
+			m_wRows = (WORD)GetProfileInt( _T("Rows"), 3 );
+			m_wColumns = (WORD)GetProfileInt( _T("Columns"), 2 );
+
+			LoadConfigArray( _T("Configs"), _T("Configs-Size"), m_AutoConfigArray, _T("HTML") );
+			LoadConfigArray( _T("MdConfigs"), _T("MdConfigs-Size"), m_MdConfigArray, _T("Markdown") );
+		}
+	}
+
+	void SaveProfile()
+	{
+		if( m_bUninstalling )  return;
+//		WriteProfileInt( _T("OpenStartup"), m_bOpenStartup );
+		WriteProfileInt( _T("AutoDisplay"), !!m_bAutoDisplay );
+		WriteProfileInt( _T("DesignViewOn"), !!m_bDesignViewOn );
+		WriteProfileInt( _T("PreviewOn"), !!m_bPreviewOn );
+		{
+			// persist the per-document preview memory (path keys AND
+			// untitled title keys - see LoadProfile)
+			tstring sDocs;
+			for( size_t i = 0; i < m_vPreviewDocs.size(); i++ ){
+				if( !sDocs.empty() ){
+					sDocs += _T("\n");
+				}
+				sDocs += m_vPreviewDocs[ i ];
+			}
+			WriteProfileString( _T("PreviewDocs"), sDocs.c_str() );
+			tstring sOff;
+			for( size_t i = 0; i < m_vPreviewOffDocs.size(); i++ ){
+				if( !sOff.empty() ){
+					sOff += _T("\n");
+				}
+				sOff += m_vPreviewOffDocs[ i ];
+			}
+			WriteProfileString( _T("PreviewDocsOff"), sOff.c_str() );
+			WriteProfileString( _T("PreviewCss"), m_sPreviewCss.c_str() );
+		}
+		WriteProfileInt( _T("IconColorMode"), !!m_bCustomIconColor );
+		WriteProfileInt( _T("IconColorMode"), !!m_bCustomIconColor );
+		WriteProfileInt( _T("IconColor"), (int)m_crCustomIcon );
+		WriteProfileInt( _T("cx"), m_cx );
+		WriteProfileInt( _T("Style"), m_fStyle );
+
+		SaveConfigArray( _T("Configs"), _T("Configs-Size"), m_AutoConfigArray );
+		SaveConfigArray( _T("MdConfigs"), _T("MdConfigs-Size"), m_MdConfigArray );
+	}
+
+	int PopupMenuSub( UINT nIDCommand, UINT nIDMenu )
+	{
+		_ASSERT( m_hwndToolbar != NULL );
+		if( m_hwndToolbar == NULL )  return 0;
+		RECT rect = { 0 };
+		int nIndex = (int)SendMessage( m_hwndToolbar, TB_COMMANDTOINDEX, nIDCommand, 0L );
+		_ASSERT( nIndex >= 0 );
+		if( nIndex != -1 ){
+			SendMessage( m_hwndToolbar, TB_GETITEMRECT, nIndex, (LPARAM)&rect );
+//			rect.top = rect.bottom;
+		}
+	//if( nIndex == -1 ){
+	//	::ClientToScreen( m_hwndToolbar, (LPPOINT)&rect );
+	//}
+		::ClientToScreen( m_hwndToolbar, (LPPOINT)&rect.left );
+		::ClientToScreen( m_hwndToolbar, (LPPOINT)&rect.right );
+
+		HMENU hMainMenu = LoadMenu( EEGetLocaleInstanceHandle(), MAKEINTRESOURCE(nIDMenu) );
+		HMENU hMenu = GetSubMenu( hMainMenu, 0 );
+
+		if( nIDMenu == IDR_POPUP_FONT ){
+			int i = 1;
+			for( vector<tstring>::iterator it = m_RecentFontArray.begin(); it != m_RecentFontArray.end(); it++ ){
+				InsertMenu( hMenu, 0, MF_BYPOSITION, i++, it->c_str() );
+			}
+		}
+
+		//TPMPARAMS tpmp;
+		//ZeroMemory( &tpmp, sizeof( tpmp ) );
+		//tpmp.cbSize = sizeof( tpmp );
+		//tpmp.rcExclude.right = rect.left;
+		//tpmp.rcExclude.left = INT_MIN;
+		//tpmp.rcExclude.top = INT_MIN;
+		//tpmp.rcExclude.bottom = INT_MAX;
+
+		BOOL bRightAlign = GetSystemMetrics( SM_MENUDROPALIGNMENT );
+		int nResult = TrackPopupMenuEx( hMenu, (bRightAlign ? TPM_RIGHTALIGN : TPM_LEFTALIGN) | TPM_RIGHTBUTTON | TPM_RETURNCMD, bRightAlign ? rect.right : rect.left, rect.bottom, m_hDlg, NULL );
+		DestroyMenu( hMainMenu );
+		return nResult;
+	}
+
+
+
+	void InsertTag( LPCTSTR pszTagBegin, LPCTSTR pszTagEnd, bool bToggle = false )
+	{
+		int nSelType = Editor_GetSelTypeEx( m_hWnd, TRUE );
+		int nTagBeginLen = (int)_tcslen( pszTagBegin );
+		int nTagEndLen = (int)_tcslen( pszTagEnd );
+		if( nSelType & SEL_TYPE_SELECTED ){
+			UINT_PTR nBufSize = Editor_GetSelTextW( m_hWnd, 0, NULL );
+			nBufSize += nTagBeginLen + nTagEndLen + 8;
+			LPWSTR pBuf = new WCHAR[ nBufSize ];
+			if( pBuf ){
+				POINT_PTR ptSelStart;
+				POINT_PTR ptSelEnd;
+				Editor_GetSelStart( m_hWnd, POS_LOGICAL_W, &ptSelStart );
+				Editor_GetSelEnd( m_hWnd, POS_LOGICAL_W, &ptSelEnd );
+				if( ptSelStart.y > ptSelEnd.y || (ptSelStart.y == ptSelEnd.y && ptSelStart.x > ptSelEnd.x) ){
+					POINT_PTR pt;
+					pt.x = ptSelStart.x;
+					pt.y = ptSelStart.y;
+					ptSelStart.x = ptSelEnd.x;
+					ptSelStart.y = ptSelEnd.y;
+					ptSelEnd.x = pt.x;
+					ptSelEnd.y = pt.y;
+				}
+
+				bool bUnwrap = false;
+				LPWSTR pszSel = new WCHAR[ nBufSize ];
+				if( pszSel ){
+					Editor_GetSelTextW( m_hWnd, (UINT)nBufSize, pszSel );
+					int nSelLen = (int)wcslen( pszSel );
+					bUnwrap = bToggle && nTagBeginLen > 0 && nTagEndLen > 0 && nSelLen >= nTagBeginLen + nTagEndLen &&
+						_tcsnicmp( pszSel, pszTagBegin, nTagBeginLen ) == 0 &&
+						_tcsnicmp( pszSel + nSelLen - nTagEndLen, pszTagEnd, nTagEndLen ) == 0;
+					if( bUnwrap ){
+						// the selection is already wrapped: replace it with the inner text only
+						int nInnerLen = nSelLen - nTagBeginLen - nTagEndLen;
+						wmemmove( pszSel, pszSel + nTagBeginLen, nInnerLen );
+						pszSel[nInnerLen] = L'\0';
+						Editor_SetCaretPosEx( m_hWnd, POS_LOGICAL_W, &ptSelStart, FALSE );
+						Editor_SetCaretPosEx( m_hWnd, POS_LOGICAL_W, &ptSelEnd, TRUE );
+						Editor_InsertW( m_hWnd, pszSel, true );
+					}
+					delete [] pszSel;
+				}
+
+				if( bUnwrap ){
+					delete [] pBuf;
+					return;
+				}
+
+				StringCopy( pBuf, nBufSize, pszTagBegin );
+				Editor_GetSelTextW( m_hWnd, (UINT)( nBufSize - nTagBeginLen ), pBuf + nTagBeginLen );
+				StringCat( pBuf, nBufSize, pszTagEnd );
+
+				bool bNL = _tcschr( pBuf, '\r' ) || _tcschr( pBuf, '\n' );
+
+				Editor_InsertW( m_hWnd, pBuf, true );
+				Editor_SetCaretPosEx( m_hWnd, POS_LOGICAL_W, &ptSelStart, FALSE );
+				ptSelEnd.x += nTagEndLen;
+				if( !bNL ) {
+					ptSelEnd.x += nTagBeginLen;
+				}
+				Editor_SetCaretPosEx( m_hWnd, POS_LOGICAL_W, &ptSelEnd, TRUE );
+				delete [] pBuf;
+			}
+		}
+		else {
+			if( pszTagBegin[0] ){
+				Editor_InsertW( m_hWnd, pszTagBegin, true );
+			}
+			if( pszTagEnd[0] ){
+				Editor_InsertW( m_hWnd, pszTagEnd, true );
+			}
+			for( int i = 0; i < nTagEndLen; i++ ){
+				Editor_ExecCommand( m_hWnd, EEID_LEFT );
+			}
+		}
+	}
+
+	static int MdPrefixMatch( LPCWSTR pszLine, LPCWSTR pszPrefix )
+	{
+		// length of pszPrefix found at the start of pszLine, 0 if none;
+		// for the numbered list prefix, any "N. " counts as "1. "
+		size_t nLen = wcslen( pszPrefix );
+		if( _wcsnicmp( pszLine, pszPrefix, nLen ) == 0 ){
+			return (int)nLen;
+		}
+		if( wcscmp( pszPrefix, L"1. " ) == 0 ){
+			int i = 0;
+			while( pszLine[i] >= L'0' && pszLine[i] <= L'9' )  i++;
+			if( i > 0 && pszLine[i] == L'.' && pszLine[i+1] == L' ' ){
+				return i + 2;
+			}
+		}
+		return 0;
+	}
+
+	static int MdStripLen( LPCWSTR pszLine )
+	{
+		// length of any existing Markdown line prefix to strip before applying a new one
+		if( pszLine[0] == L'#' ){
+			int i = 0;
+			while( pszLine[i] == L'#' )  i++;
+			if( i >= 1 && i <= 6 && pszLine[i] == L' ' )  return i + 1;
+			return 0;
+		}
+		if( _wcsnicmp( pszLine, L"- [ ] ", 6 ) == 0 || _wcsnicmp( pszLine, L"- [x] ", 6 ) == 0 ||
+			_wcsnicmp( pszLine, L"- [X] ", 6 ) == 0 ){
+			return 6;
+		}
+		if( ( pszLine[0] == L'-' || pszLine[0] == L'*' || pszLine[0] == L'+' ) && pszLine[1] == L' ' ){
+			return 2;
+		}
+		if( pszLine[0] == L'>' && pszLine[1] == L' ' ){
+			int i = 2;
+			while( pszLine[i] == L'>' && pszLine[i+1] == L' ' )  i += 2;
+			return i;	// normalize repeated prefixes ("> > text")
+		}
+		{
+			int i = 0;
+			while( pszLine[i] >= L'0' && pszLine[i] <= L'9' )  i++;
+			if( i > 0 && pszLine[i] == L'.' && pszLine[i+1] == L' ' ){
+				return i + 2;
+			}
+		}
+		return 0;
+	}
+
+	void InsertLinePrefix( LPCWSTR pszPrefix )
+	{
+		int nSelType = Editor_GetSelTypeEx( m_hWnd, TRUE );
+		POINT_PTR ptStart, ptEnd;
+		POINT_PTR ptSaveA, ptSaveB;
+		bool bSaveSel = false;
+		if( nSelType & SEL_TYPE_SELECTED ){
+			Editor_GetSelStart( m_hWnd, POS_LOGICAL_W, &ptStart );
+			Editor_GetSelEnd( m_hWnd, POS_LOGICAL_W, &ptEnd );
+			bSaveSel = true;
+			if( ptStart.y > ptEnd.y || ( ptStart.y == ptEnd.y && ptStart.x > ptEnd.x ) ){
+				POINT_PTR pt = ptStart;
+				ptStart = ptEnd;
+				ptEnd = pt;
+			}
+			ptSaveA = ptStart;
+			ptSaveB = ptEnd;
+		}
+		else {
+			Editor_GetCaretPos( m_hWnd, POS_LOGICAL_W, &ptStart );
+			ptEnd = ptStart;
+			ptSaveA = ptStart;
+			ptSaveB = ptEnd;
+		}
+
+		int nLines = (int)( ptEnd.y - ptStart.y ) + 1;
+		LPWSTR* apszLines = new LPWSTR[ nLines ];
+		bool* abHas = new bool[ nLines ];
+		for( int i = 0; i < nLines; i++ ){
+			// read the line via a SELECTION in the same logical coordinates as
+			// the caret: EE_GET_LINE's yLine proved display-indexed in wrapped
+			// documents, reading the WRONG row and breaking the prefix check
+			POINT_PTR ptCur;
+			ptCur.x = 0;
+			ptCur.y = ptStart.y + i;
+			Editor_SetCaretPosEx( m_hWnd, POS_LOGICAL_W, &ptCur, FALSE );
+			POINT_PTR ptRowEnd;
+			ptRowEnd.x = 0x7FFFFFFF;
+			ptRowEnd.y = ptCur.y;
+			Editor_SetCaretPosEx( m_hWnd, POS_LOGICAL_W, &ptRowEnd, TRUE );
+			UINT_PTR cch = Editor_GetSelTextW( m_hWnd, 0, NULL );
+			apszLines[i] = new WCHAR[ cch + 1 ];
+			Editor_GetSelTextW( m_hWnd, cch + 1, apszLines[i] );
+			int nL = (int)cch;
+			while( nL > 0 && ( apszLines[i][nL-1] == L'\r' || apszLines[i][nL-1] == L'\n' ) )  apszLines[i][--nL] = L'\0';
+			abHas[i] = MdPrefixMatch( apszLines[i], pszPrefix ) != 0 || apszLines[i][0] == L'\0';
+		}
+
+		bool bRemove = true;
+		for( int i = 0; i < nLines; i++ ){
+			if( !abHas[i] ){
+				bRemove = false;
+				break;
+			}
+		}
+
+		WCHAR szNum[16];
+		int nNum = 1;
+		for( int i = 0; i < nLines; i++ ){
+			POINT_PTR ptCur;
+			ptCur.x = 0;
+			ptCur.y = ptStart.y + i;
+			int nStrip = 0;
+			if( bRemove ){
+				nStrip = MdPrefixMatch( apszLines[i], pszPrefix );
+			}
+			else {
+				nStrip = MdStripLen( apszLines[i] );
+			}
+			if( nStrip > 0 ){
+				Editor_SetCaretPosEx( m_hWnd, POS_LOGICAL_W, &ptCur, FALSE );
+				POINT_PTR ptTo = ptCur;
+				ptTo.x = nStrip;
+				Editor_SetCaretPosEx( m_hWnd, POS_LOGICAL_W, &ptTo, TRUE );
+				Editor_ExecCommand( m_hWnd, EEID_DELETE );
+			}
+			if( !bRemove && ( apszLines[i][0] != L'\0' || nLines == 1 ) ){
+				LPCWSTR pszUse = pszPrefix;
+				if( wcscmp( pszPrefix, L"1. " ) == 0 ){
+					StringPrintf( szNum, _countof( szNum ), L"%d. ", nNum );
+					pszUse = szNum;
+				}
+				Editor_SetCaretPosEx( m_hWnd, POS_LOGICAL_W, &ptCur, FALSE );
+				Editor_InsertW( m_hWnd, pszUse, false );
+				nNum++;
+			}
+			delete [] apszLines[i];
+		}
+		// restore the user's caret/selection (the reads moved it)
+		if( bSaveSel ){
+			Editor_SetCaretPosEx( m_hWnd, POS_LOGICAL_W, &ptSaveA, FALSE );
+			Editor_SetCaretPosEx( m_hWnd, POS_LOGICAL_W, &ptSaveB, TRUE );
+		}
+		else {
+			Editor_SetCaretPosEx( m_hWnd, POS_LOGICAL_W, &ptSaveA, FALSE );
+		}
+		delete [] apszLines;
+		delete [] abHas;
+	}
+
+	void InsertTagFont( LPCTSTR szFaceName )
+	{
+		TCHAR szTagBegin[80];
+		StringPrintf( szTagBegin, _countof( szTagBegin ), _T("<font face=\"%s\">"), szFaceName );
+		InsertTag( szTagBegin, _T("</font>") );
+
+		for( vector<tstring>::iterator it = m_RecentFontArray.begin(); it != m_RecentFontArray.end(); it++ ){
+			if( lstrcmp( it->c_str(), szFaceName ) == 0 ){
+				m_RecentFontArray.erase( it );
+				break;
+			}
+		}
+		m_RecentFontArray.push_back( szFaceName );
+		if( m_RecentFontArray.size() >= MAX_RECENT_FONT ){
+			m_RecentFontArray.erase( m_RecentFontArray.begin() );
+		}
+	}
+
+	void Unindent()
+	{
+		int nSelType = Editor_GetSelTypeEx( m_hWnd, TRUE );
+		if( nSelType & SEL_TYPE_SELECTED ){
+			UINT_PTR nBufSize = Editor_GetSelTextW( m_hWnd, 0, NULL );
+
+			LPWSTR pBuf = new WCHAR[ nBufSize ];
+			if( pBuf ){
+				Editor_GetSelTextW( m_hWnd, nBufSize, pBuf );
+				LPCTSTR pszBegin = _T("<blockquote>");
+				int nBeginLen = lstrlen( pszBegin );
+				LPCTSTR pszEnd = _T("</blockquote>");
+				int nEndLen = lstrlen( pszEnd );
+				LPTSTR p1 = StrStrI( pBuf, pszBegin );
+				if( p1 ){
+					wmemmove( p1, p1 + nBeginLen, lstrlen( p1 + nBeginLen ) + 1 );
+					LPTSTR p2 = StrStrI( p1, pszEnd );
+					if( p2 ){
+						wmemmove( p2, p2 + nEndLen, lstrlen( p2 + nEndLen ) + 1 );
+						Editor_InsertW( m_hWnd, pBuf, false );
+					}
+				}
+				delete [] pBuf;
+			}
+		}
+	}
+
+	void OnFont()
+	{
+		LOGFONT lf = { 0 };
+		HFONT hFont = (HFONT)GetStockObject( DEFAULT_GUI_FONT );
+		if( hFont ){
+			GetObject( hFont, sizeof( lf ), &lf );
+		}
+		CHOOSEFONT cf = { 0 };
+		cf.lStructSize = sizeof( cf );
+		cf.hwndOwner = m_hDlg;
+		cf.lpLogFont = &lf;
+		cf.hInstance = EEGetLocaleInstanceHandle();
+		cf.lpTemplateName = MAKEINTRESOURCE( IDD_FONT );
+		cf.Flags = CF_SCREENFONTS | CF_NOVERTFONTS | CF_ENABLETEMPLATE | CF_INITTOLOGFONTSTRUCT;
+		if( ChooseFont( &cf ) ) {
+			InsertTagFont( lf.lfFaceName );
+		}
+	}
+
+
+	void OnModeSwitch( int iMode )
+	{
+		// manual override: sticks until the document or configuration changes
+		m_iModeOverride = iMode;
+		// NOTE: the document configuration is deliberately NOT touched here.
+		// Switching the config re-evaluates EmEditor's per-config toolbar
+		// visibility, which resurrects the OFFICIAL toolbar the user hid and
+		// can drop our custom bar during the relayout. Saved .md/.html files
+		// already sit on the right config via associations; the preview
+		// pipeline cost for mismatched unsaved docs is the lesser evil.
+		if( m_iMode != iMode ){
+			m_iMode = iMode;
+			if( IsLivePreviewOpen() ){
+				NavigateLivePreview();	// retarget the pane to the new mode
+			}
+			if( m_hwndToolbar && m_bVisible ){
+				// re-create the custom bar so it shows the other mode's button set
+				Editor_ToolbarClose( m_hWnd, m_nClientID );
+				CustomBarClosed();
+				DisplayBar( true );
+			}
+		}
+		else {
+			SyncModeSwitchCheck();
+		}
+	}
+
+	void SyncModeSwitchCheck()
+	{
+		if( m_hwndToolbar && IsWindow( m_hwndToolbar ) ){
+			SendMessage( m_hwndToolbar, TB_CHECKBUTTON, ID_MODE_HTML, MAKELPARAM( m_iMode == MODE_HTML, 0 ) );
+			SendMessage( m_hwndToolbar, TB_CHECKBUTTON, ID_MODE_MD, MAKELPARAM( m_iMode == MODE_MD, 0 ) );
+		}
+	}
+
+	HBRUSH GetVeryDarkBrush( HWND hwnd, HDC hdc )
+	{
+		// official Very Dark adaptation: EmEditor hands out its dark background
+		// brush so the plug-in's dialog blends into the black band area
+		if( IsVeryDark() ){
+			return (HBRUSH)Editor_Info( hwnd, EI_WM_CTLCOLOR, (LPARAM)hdc );
+		}
+		return NULL;
+	}
+
+	void OnThemeChanged( HWND hwnd )
+	{
+		Editor_Info( hwnd, EI_WM_THEMECHANGED, (LPARAM)hwnd );
+		// re-create the bar when the glyph color flipped with the theme.
+		// Leaving Very Dark never updates the queryable scheme state before
+		// relaunch — confirmed upstream: EI_IS_VERY_DARK and
+		// EI_GET_BAR_BACK_COLOR stay pinned, so nothing a plug-in polls,
+		// rechecks or gets notified with can see that switch; the flip takes
+		// a relaunch until fixed in EmEditor itself
+		if( m_hwndToolbar ){
+			COLORREF crFg = GetBarGlyphColor();
+			if( crFg != m_crGlyphFg ){
+				Editor_ToolbarClose( m_hWnd, m_nClientID );
+				CustomBarClosed();
+				DisplayBar( m_bVisible );
+			}
+		}
+	}
+
+		// EE_EDIT_TEMP from plugin context trips a non-fatal AV inside EmEditor
+	// 26.2.8's handler (read at NULL) — catch it here: the operation still
+	// completes and the refresh works (user-verified via the ignore button)
+	UINT EditTempGuarded( HWND hwnd, LPCWSTR pszText )
+	{
+		__try {
+			return (UINT)Editor_EditTemp( hwnd, pszText, L"Preview Snapshot", L"", NULL, 65001, NULL, 0 );
+		}
+		__except( EXCEPTION_EXECUTE_HANDLER ) {
+			RbLogF( "EditTemp FAULTED 0x%08X (suppressed)", (unsigned)GetExceptionCode() );
+			return 0;
+		}
+	}
+void OnDlgCommand( WPARAM wParam )
+	{
+		if( wParam == ID_MODE_HTML || wParam == ID_MODE_MD ){
+			OnModeSwitch( ( wParam == ID_MODE_MD ) ? MODE_MD : MODE_HTML );
+			return;
+		}
+		if( wParam >= ID_COMMAND_BASE && wParam < ID_COMMAND_BASE + Cmds().size() ) {
+			CCmd& cmd = Cmds()[wParam - ID_COMMAND_BASE];
+			RbLogF( "cmd: id=%d -> cmd=%d", (int)wParam, (int)cmd.m_iCmd );
+			if( cmd.m_iCmd == CMD_TAGS ){
+				BOOL bResult;
+				wstring sTagBegin = UnescapeString( cmd.m_sTagBegin.c_str(), &bResult );
+				if( bResult ){
+					wstring sTagEnd = UnescapeString( cmd.m_sTagEnd.c_str(), &bResult );
+					if( bResult ){
+						InsertTag( sTagBegin.c_str(), sTagEnd.c_str(), true );
+					}
+				}
+			}
+			else if( cmd.m_iCmd == CMD_INSERT_TABLE ){
+				if( DialogBox( EEGetLocaleInstanceHandle(), MAKEINTRESOURCE( IDD_TABLE ), m_hDlg, TableDlg ) == IDOK ){
+					if( m_iMode == MODE_MD ){
+						wstring sTable = L"|";
+						for( WORD j = 0; j < m_wColumns; j++ ){
+							sTable += L" |";
+						}
+						sTable += L"\n|";
+						for( WORD j = 0; j < m_wColumns; j++ ){
+							sTable += L" --- |";
+						}
+						sTable += L"\n";
+						for( WORD i = 0; i < m_wRows; i++ ){
+							sTable += L"|";
+							for( WORD j = 0; j < m_wColumns; j++ ){
+								sTable += L" |";
+							}
+							sTable += L"\n";
+						}
+						Editor_InsertW( m_hWnd, sTable.c_str(), true );
+					}
+					else {
+						Editor_InsertW( m_hWnd, _T("<table>\n"), true );
+						for( WORD i = 0; i < m_wRows; i++ ){
+							Editor_InsertW( m_hWnd, _T("\t<tr>\n"), true );
+							for( WORD j = 0; j < m_wColumns; j++ ){
+								Editor_InsertW( m_hWnd, _T("\t\t<td></td>\n"), true );
+							}
+							Editor_InsertW( m_hWnd, _T("\t</tr>\n"), true );
+						}
+						Editor_InsertW( m_hWnd, _T("</table>\n"), true );
+					}
+				}
+			}
+			else if( cmd.m_iCmd == CMD_LINE_PREFIX ){
+				InsertLinePrefix( cmd.m_sTagBegin.c_str() );
+			}
+			else if( cmd.m_iCmd == CMD_FONT ){
+				OnFont();
+			}
+			else if( cmd.m_iCmd == CMD_UNINDENT ){
+				Unindent();
+			}
+			else if( cmd.m_iCmd == CMD_CUSTOMIZE ){
+				OnCustomize( m_hWnd );
+			}
+			else if( cmd.m_iCmd == CMD_MD_VIEW ){
+				// BTNS_CHECK toggled the control state before this command
+				// arrived: that is the WANTED state. The design view is toggled
+				// with 23255 (the only command that drives it); 23255 auto-shows
+				// the built-in markdown bar, so the deferred timer queries the
+				// bar's own EE_QUERY_STATUS and hides it back if it came up
+				m_bDesignViewOn = ( SendMessage( m_hwndToolbar, TB_GETSTATE, wParam, 0 ) & TBSTATE_CHECKED ) != 0;
+								SaveProfile();				// persists the global flag for cross-session restore
+				ApplyToggleStates();
+				RbLogF( "design click: want=%d -> 23255", (int)m_bDesignViewOn );
+				PostMessage( m_hWnd, WM_COMMAND, MAKEWPARAM( EEID_MARKDOWN_VIEW, 0 ), 0 );
+				if( m_hDlg ){
+					SetTimer( m_hDlg, IDT_DESIGN_SYNC, 200, NULL );
+				}
+			}
+			else if( cmd.m_iCmd == CMD_PREVIEW ){
+				// preview = the built-in Web bar showing OUR rendered snapshot.
+				// our own WebView2 pane never rendered inside EmEditor's
+				// process, and the official pane only shows saved-file
+				// snapshots - the WebBar macro object drives the built-in pane
+				bool bWant = ( SendMessage( m_hwndToolbar, TB_GETSTATE, wParam, 0 ) & TBSTATE_CHECKED ) != 0;
+				m_bPreviewOn = bWant;
+				SetPreviewDocOn( bWant );	// per-document pressed-state memory
+				SaveProfile();
+				ApplyToggleStates();
+				RbLogF( "preview click: want=%d -> webbar", (int)bWant );
+				if( bWant ){
+					OpenWebBarPreview();
+				}
+				else {
+					RunWebBarMacroStaged( _T("WebBar.Visible = false;") );
+				}
+			}
+				else if( cmd.m_iCmd == CMD_REFRESH_PREVIEW ){
+					// same path as the preview-on click: re-render the buffer
+					// and re-navigate the built-in Web bar (fresh content)
+					OpenWebBarPreview();
+			}			}
+
+
+		//switch( wParam ){
+		//case ID_PARAGRAPH:
+		//	InsertTag( L"<p>", L"</p>" );
+		//	break;
+		//case ID_BREAK:
+		//	InsertTag( L"<br />", L"" );
+		//	break;
+		//case ID_BOLD:
+		//	InsertTag( L"<strong>", L"</strong>" );
+		//	break;
+		//case ID_ITALIC:
+		//	InsertTag( L"<em>", L"</em>" );
+		//	break;
+		//case ID_UNDERLINE:
+		//	InsertTag( L"<u>", L"</u>" );
+		//	break;
+		//case ID_FONT:
+		//	{
+		//		LOGFONT lf = { 0 };
+		//		HFONT hFont = (HFONT)GetStockObject( DEFAULT_GUI_FONT );
+		//		if( hFont ){
+		//			GetObject( hFont, sizeof( lf ), &lf );
+		//		}
+		//		CHOOSEFONT cf = { 0 };
+		//		cf.lStructSize = sizeof( cf );
+		//		cf.hwndOwner = m_hDlg;
+		//		cf.lpLogFont = &lf;
+		//		cf.hInstance = EEGetInstanceHandle();
+		//		cf.lpTemplateName = MAKEINTRESOURCE( IDD_FONT );
+		//		cf.Flags = CF_SCREENFONTS | CF_NOVERTFONTS | CF_ENABLETEMPLATE | CF_INITTOLOGFONTSTRUCT;
+		//		if( ChooseFont( &cf ) ) {
+		//			InsertTagFont( lf.lfFaceName );
+		//		}
+		//	}
+		//	break;
+		//case ID_COLOR:
+		//	{
+		//		CHOOSECOLOR cc = { 0 };
+		//		cc.lStructSize = sizeof( cc );
+		//		cc.hwndOwner = m_hDlg;
+		//		cc.lpCustColors = m_crCustClr;
+		//		if( ChooseColor( &cc ) ){
+		//			m_dwDefColor = cc.rgbResult;
+		//			TCHAR sz[16];
+		//			StringPrintf( sz, _countof( sz ), _T("#%02x%02x%02x"), GetRValue( cc.rgbResult ), GetGValue( cc.rgbResult ), GetBValue( cc.rgbResult ) );
+		//			InsertTag( sz, _T("") );
+		//		}
+		//	}
+		//	break;
+		//case ID_PICTURE:
+		//	{
+		//		TCHAR szRelativePath[MAX_PATH];
+		//		if( ChooseFile( szRelativePath, IDS_PICTURE, IDS_FILTER_IMAGE ) ){
+		//			TCHAR szTag[MAX_PATH+40];
+		//			StringPrintf( szTag, _countof( szTag ), _T("<img src=\"%s\" width=\"\" height=\"\" alt=\"\" />"), szRelativePath );
+		//			InsertTag( szTag, _T("") );
+		//		}
+		//	}
+		//	break;
+		//case ID_HYPERLINK:
+		//	{
+		//		TCHAR szRelativePath[MAX_PATH];
+		//		if( ChooseFile( szRelativePath, IDS_HYPERLINK, IDS_FILTER_HYPERLINK ) ){
+		//			TCHAR szTag[MAX_PATH+40];
+		//			StringPrintf( szTag, _countof( szTag ), _T("<a href=\"%s\">"), szRelativePath );
+		//			InsertTag( szTag, _T("</a>") );
+		//		}
+		//	}
+		//	break;
+		//case ID_TABLE:
+		//	{
+		//		if( DialogBox( EEGetInstanceHandle(), MAKEINTRESOURCE( IDD_TABLE ), m_hDlg, TableDlg ) == IDOK ){
+		//			Editor_InsertW( m_hWnd, _T("<table>\n"), true );
+		//			for( WORD i = 0; i < m_wRows; i++ ){
+		//				Editor_InsertW( m_hWnd, _T("\t<tr>\n"), true );
+		//				for( WORD j = 0; j < m_wColumns; j++ ){
+		//					Editor_InsertW( m_hWnd, _T("\t\t<td></td>\n"), true );
+		//				}
+		//				Editor_InsertW( m_hWnd, _T("\t</tr>\n"), true );
+		//			}
+		//			Editor_InsertW( m_hWnd, _T("</table>\n"), true );
+		//		}
+		//	}
+		//	break;
+		//case ID_HORZ_LINE:
+		//	{
+		//		InsertTag( _T("<hr />"), _T("") );
+		//	}
+		//	break;
+		//case ID_COMMENT:
+		//	{
+		//		InsertTag( _T("<!-- "), _T(" -->") );
+		//	}
+		//	break;
+		//case ID_ALIGN_LEFT:
+		//	{
+		//		InsertTag( _T("<p align=\"left\">"), _T("</p>") );
+		//	}
+		//	break;
+		//case ID_CENTER:
+		//	{
+		//		InsertTag( _T("<p align=\"center\">"), _T("</p>") );
+		//	}
+		//	break;
+		//case ID_ALIGN_RIGHT:
+		//	{
+		//		InsertTag( _T("<p align=\"right\">"), _T("</p>") );
+		//	}
+		//	break;
+		//case ID_JUSTIFY:
+		//	{
+		//		InsertTag( _T("<p align=\"justify\">"), _T("</p>") );
+		//	}
+		//	break;
+		//case ID_NUMBERING:
+		//	{
+		//		InsertTag( _T("<ol>\n\t<li>"), _T("</li>\n</ol>") );
+		//	}
+		//	break;
+		//case ID_BULLETS:
+		//	{
+		//		InsertTag( _T("<ul>\n\t<li>"), _T("</li>\n</ul>") );
+		//	}
+		//	break;
+		//case ID_UNINDENT:
+		//	{
+		//		Unindent();
+		//	}
+		//	break;
+		//case ID_INDENT:
+		//	{
+		//		InsertTag( _T("<blockquote>"), _T("</blockquote>") );
+		//	}
+		//	break;
+		//case ID_HIGHLIGHT:
+		//	{
+		//		TCHAR sz[260];
+		//		StringPrintf( sz, _countof( sz ), _T("<span style=\"background-color: #%02x%02x%02x\">"), GetRValue( m_dwDefColor ), GetGValue( m_dwDefColor ), GetBValue( m_dwDefColor ) );
+		//		InsertTag( sz, _T("</span>") );
+		//	}
+		//	break;
+		//case ID_FONT_COLOR:
+		//	{
+		//		TCHAR sz[260];
+		//		StringPrintf( sz, _countof( sz ), _T("<font color=\"#%02x%02x%02x\">"), GetRValue( m_dwDefColor ), GetGValue( m_dwDefColor ), GetBValue( m_dwDefColor ) );
+		//		InsertTag( sz, _T("</font>") );
+		//	}
+		//	break;
+		//}
+	}
+
+	bool IsDropdownCmdCode( int iCmd )
+	{
+		switch( iCmd ){
+		case CMD_FONT:
+		case CMD_DROPDOWN_HEADER:
+		case CMD_DROPDOWN_FORM:
+		case CMD_ICON_COLOR:
+			return true;
+		}
+		return false;
+	}
+
+	bool IsDropdownCommand( UINT nIDCommand )
+	{
+		if( nIDCommand < ID_COMMAND_BASE || nIDCommand >= ID_COMMAND_BASE + Cmds().size() ){
+			return false;
+		}
+		return IsDropdownCmdCode( Cmds()[nIDCommand - ID_COMMAND_BASE].m_iCmd );
+	}
+
+	void ShowDropdownMenu( UINT nIDCommand, bool bPressedByMouse )
+	{
+		CCmd& cmd = Cmds()[nIDCommand - ID_COMMAND_BASE];
+		// Pressed buttons draw from the normal list, whose light glyphs wash
+		// out on the light pressed fill on a dark band. That list carries
+		// dark copies of every image after m_nLightIcons (mirroring the hot
+		// list), so point just this button at its dark variant. A menu opened
+		// by hovering never presses the button: while the menu tracks we
+		// swallow the toolbar's WM_MOUSELEAVE (see ToolbarProc), so the hot
+		// look simply never fades and the glyph never shifts.
+		// The tooltip has had its time by now (the menu delay is the tooltip
+		// delay plus a margin); retire it so the menu owns the spot below
+		// the button instead of the two popups overlapping.
+		HWND hwndTips = m_hwndToolbar ? (HWND)SendMessage( m_hwndToolbar, TB_GETTOOLTIPS, 0, 0 ) : NULL;
+		if( hwndTips ){
+			SendMessage( hwndTips, TTM_POP, 0, 0 );
+		}
+		m_bInDropdownMenu = true;
+		switch( cmd.m_iCmd ){
+		case CMD_FONT:
+			{
+				int n = PopupMenuSub( nIDCommand, IDR_POPUP_FONT );
+				if( n == 999 ){
+					OnFont();
+				}
+				else if( n > 0 ){
+					_ASSERT( n - 1 < (int)m_RecentFontArray.size() );
+					TCHAR sz[LF_FACESIZE];
+					StringCopy( sz, _countof( sz ), m_RecentFontArray[n - 1].c_str() );
+					InsertTagFont( sz );
+				}
+			}
+			break;
+
+		case CMD_DROPDOWN_HEADER:
+			{
+				int n = PopupMenuSub( nIDCommand, IDR_POPUP_HEADER );
+				if( n > 0 ){
+					TCHAR szTagBegin[8], szTagEnd[8];
+					StringPrintf( szTagBegin, _countof( szTagBegin ), _T("<h%d>"), n );
+					StringPrintf( szTagEnd, _countof( szTagEnd ), _T("</h%d>"), n );
+					InsertTag( szTagBegin, szTagEnd );
+				}
+			}
+			break;
+
+		case CMD_DROPDOWN_FORM:
+			{
+				int n = PopupMenuSub( nIDCommand, IDR_POPUP_FORM );
+				switch( n )	{
+				case 1:
+					InsertTag( _T("<form method=\"post\" action=\"\">\n\t"), _T("\n<input type=\"submit\"><input type=\"reset\"></form>\n") );
+					break;
+				case 2:
+					InsertTag( _T("<input type=\"text\" id=\"\" />"), _T("") );
+					break;
+				case 3:
+					InsertTag( _T("<textarea id=\"\" rows=\"3\" cols=\"30\">"), _T("</textarea>") );
+					break;
+				case 4:
+					InsertTag( _T("<input type=\"checkbox\" id=\"\" />"), _T("") );
+					break;
+				case 5:
+					InsertTag( _T("<input type=\"radio\" id=\"\" />"), _T("") );
+					break;
+				case 6:
+					InsertTag( _T("<fieldset style=\"padding: 2\">\n<legend>Group Box"), _T("</legend></fieldset>") );
+					break;
+				case 7:
+					InsertTag( _T("<select size=\"1\" id=\"\">"), _T("</select>") );
+					break;
+				case 8:
+					InsertTag( _T("<input type=\"button\" value=\"Button\" id=\"\">"), _T("") );
+					break;
+				case 9:
+					InsertTag( _T("<button id=\"\">Type Here"), _T("</button>") );
+					break;
+				}
+			}
+			break;
+
+		case CMD_ICON_COLOR:
+			{
+				int n = PopupMenuSub( nIDCommand, IDR_POPUP_ICONCOLOR );
+				bool bChanged = false;
+				if( n == 1 ){	// Automatic
+					if( m_bCustomIconColor ){
+						m_bCustomIconColor = false;
+						bChanged = true;
+					}
+				}
+				else if( n == 2 ){	// Custom color
+					CHOOSECOLOR cc = {};
+					static COLORREF acrCust[16] = {};
+					cc.lStructSize = sizeof( cc );
+					cc.hwndOwner = m_hDlg;
+					cc.rgbResult = m_crCustomIcon;
+					cc.lpCustColors = acrCust;
+					cc.Flags = CC_FULLOPEN | CC_RGBINIT;
+					if( ChooseColor( &cc ) ){
+						m_crCustomIcon = cc.rgbResult;
+						m_bCustomIconColor = true;
+						bChanged = true;
+					}
+				}
+				if( bChanged ){
+					SaveProfile();
+					RebuildToolbarImages();
+				}
+			}
+			break;
+
+		}
+		m_bInDropdownMenu = false;
+		// A menu just opened here stays quiet until the mouse has actually
+		// left the button, tracked deterministically in the mouse handlers.
+		m_nLastMenuCmd = nIDCommand;
+		m_bLastMenuLeft = false;
+		// The menu loop consumed the mouse; if the cursor ended up outside
+		// the toolbar, let the button's hot look clear right away.
+		POINT pt = { 0, 0 };
+		RECT rc = { 0, 0, 0, 0 };
+		if( GetCursorPos( &pt ) && GetWindowRect( m_hwndToolbar, &rc ) && !PtInRect( &rc, pt ) ){
+			SendMessage( m_hwndToolbar, WM_MOUSELEAVE, 0, 0 );
+		}
+	}
+
+	void OnHoverMenuTimer()
+	{
+		KillTimer( m_hDlg, IDT_HOVER_MENU );
+		UINT nCmd = m_nHoverMenuCmd;
+		m_nHoverMenuCmd = 0;
+		if( !nCmd || !m_hwndToolbar || m_bInDropdownMenu ){
+			return;
+		}
+		// the mouse may have moved on while the delay ran: the cursor must
+		// still sit inside the button's rect
+		int nIndex = (int)SendMessage( m_hwndToolbar, TB_COMMANDTOINDEX, nCmd, 0L );
+		if( nIndex < 0 ){
+			return;
+		}
+		RECT rc = { 0, 0, 0, 0 };
+		if( !SendMessage( m_hwndToolbar, TB_GETITEMRECT, nIndex, (LPARAM)&rc ) ){
+			return;
+		}
+		MapWindowPoints( m_hwndToolbar, NULL, (POINT*)&rc, 2 );
+		POINT pt = { 0, 0 };
+		if( !GetCursorPos( &pt ) || !PtInRect( &rc, pt ) ){
+			return;
+		}
+		ShowDropdownMenu( nCmd, false );
+	}
+
+	// Runs inside the toolbar subclass. Returns true when the message is
+	// swallowed.
+	bool OnToolbarMessage( HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam )
+	{
+		if( msg == WM_MOUSELEAVE && m_bInDropdownMenu ){
+			// the menu loop captured the mouse; the button must keep its hot
+			// look for as long as its menu stays open, so the leave event is
+			// quietly dropped instead of being forwarded to the toolbar
+			return true;
+		}
+		if( msg == WM_MOUSEMOVE ){
+			OnToolbarMouseMove( hwnd, lParam );
+		}
+		else if( msg == WM_MOUSELEAVE ){
+			OnToolbarMouseLeave();
+		}
+		return false;
+	}
+
+	void OnToolbarMouseMove( HWND hwnd, LPARAM lParam )
+	{
+		POINT pt = { (short)LOWORD( lParam ), (short)HIWORD( lParam ) };
+		UINT nCmd = 0;
+		int nHit = (int)SendMessage( hwnd, TB_HITTEST, 0, (LPARAM)&pt );
+		TBBUTTON tb = {};
+		if( nHit >= 0 && SendMessage( hwnd, TB_GETBUTTON, nHit, (LPARAM)&tb ) && tb.idCommand >= ID_COMMAND_BASE ){
+			nCmd = (UINT)tb.idCommand;
+		}
+		// deterministic leave tracking: any move onto another item or blank
+		// space frees the last served button for a fresh hover-open
+		if( m_nLastMenuCmd != 0 && nCmd != m_nLastMenuCmd ){
+			m_bLastMenuLeft = true;
+		}
+		if( m_bInDropdownMenu ){
+			return;
+		}
+		if( !IsDropdownCommand( nCmd ) ){
+			if( m_nHoverMenuCmd != 0 ){
+				KillTimer( m_hDlg, IDT_HOVER_MENU );
+				m_nHoverMenuCmd = 0;
+			}
+			return;
+		}
+		if( nCmd == m_nLastMenuCmd && !m_bLastMenuLeft ){
+			return;	// menu closed here moments ago; the mouse never left
+		}
+		if( nCmd == m_nHoverMenuCmd ){
+			return;
+		}
+		KillTimer( m_hDlg, IDT_HOVER_MENU );
+		m_nHoverMenuCmd = nCmd;
+		// Word-style sequencing: the tooltip shows first, and only if the
+		// mouse keeps resting on the button does the menu take over. So the
+		// menu waits for the tooltip's own initial delay plus a reading
+		// margin; ShowDropdownMenu then retires the tip via TTM_POP.
+		DWORD dwDelay = 1000;
+		HWND hwndTips = (HWND)SendMessage( hwnd, TB_GETTOOLTIPS, 0, 0 );
+		if( hwndTips ){
+			DWORD dwTip = (DWORD)SendMessage( hwndTips, TTM_GETDELAYTIME, TTDT_INITIAL, 0 );
+			if( dwTip > 0 && dwTip < 3000 ){
+				dwDelay = dwTip + 500;
+			}
+		}
+		SetTimer( m_hDlg, IDT_HOVER_MENU, dwDelay, NULL );
+	}
+
+	void OnToolbarMouseLeave()
+	{
+		m_bLastMenuLeft = true;
+		if( m_nHoverMenuCmd != 0 ){
+			KillTimer( m_hDlg, IDT_HOVER_MENU );
+			m_nHoverMenuCmd = 0;
+		}
+	}
+
+	LRESULT OnDlgNotify( NMHDR* pnmh )
+	{
+		switch( pnmh->code ){
+		case NM_CUSTOMDRAW:
+			{
+				// let the control paint everything, then draw the dropdown
+				// arrow anchored to the item's real rect
+				LPNMTBCUSTOMDRAW pTBCD = (LPNMTBCUSTOMDRAW)pnmh;
+				if( pTBCD->nmcd.dwDrawStage == CDDS_PREPAINT ){
+					return CDRF_NOTIFYITEMDRAW | TBCDRF_NOOFFSET;
+				}
+				if( pTBCD->nmcd.dwDrawStage == CDDS_ITEMPREPAINT ){
+					return CDRF_NOTIFYPOSTPAINT;
+				}
+				if( pTBCD->nmcd.dwDrawStage == CDDS_ITEMPOSTPAINT ){
+					UINT uID = (UINT)pTBCD->nmcd.dwItemSpec;
+					// with the press offset suppressed, the control's normal
+					// image sits exactly where we would place it: overdraw
+					// the dark copy on hover/pressed, then the arrow
+					DrawButtonStateImage( pTBCD->nmcd.hdc, pTBCD->nmcd.rc, uID );
+					if( IsDropdownCommand( uID ) ){
+						DrawDropdownArrow( pTBCD->nmcd.hdc, pTBCD->nmcd.rc, uID );
+					}
+				}
+				return CDRF_DODEFAULT;
+			}
+		case TTN_GETDISPINFO:
+			{
+				NMTTDISPINFO* pDispInfo = (NMTTDISPINFO*)pnmh;
+				if( pDispInfo->hdr.idFrom >= ID_COMMAND_BASE && pDispInfo->hdr.idFrom < ID_COMMAND_BASE + Cmds().size() ) {
+					CCmd& cmd = Cmds()[ pDispInfo->hdr.idFrom - ID_COMMAND_BASE];
+					StringCopyN( pDispInfo->szText, _countof( pDispInfo->szText ), cmd.m_sTitle.c_str(), _countof( pDispInfo->szText ) - 1 );
+				}
+			}
+			break;
+		case TBN_DROPDOWN:
+			{
+				NMTOOLBAR* pToolbar = (NMTOOLBAR*)pnmh;
+				if( pToolbar->iItem >= ID_COMMAND_BASE && pToolbar->iItem < ID_COMMAND_BASE + (int)Cmds().size() ) {
+					// clicked: the button is pressed, so pass the pressed-swap flag
+					ShowDropdownMenu( (UINT)pToolbar->iItem, true );
+				}
+			}
+			break;
+		}
+		return 0;
+	}
+
+	void OnTableInitDialog( HWND hDlg )
+	{
+		CenterWindow( hDlg );
+		SetDlgItemInt( hDlg, IDC_ROWS, (UINT)m_wRows, FALSE );
+		SetDlgItemInt( hDlg, IDC_COLUMNS, (UINT)m_wColumns, FALSE );
+	}
+
+	void OnTableCommand( HWND hDlg, WPARAM wParam )
+	{
+		if( wParam == IDOK ){
+			BOOL bTranslated = FALSE;
+			WORD w = (WORD)GetDlgItemInt( hDlg, IDC_ROWS, &bTranslated, FALSE );
+			if( bTranslated ){
+				m_wRows = w;
+			}
+			w = (WORD)GetDlgItemInt( hDlg, IDC_COLUMNS, &bTranslated, FALSE );
+			if( bTranslated ){
+				m_wColumns = w;
+			}
+			EndDialog( hDlg, IDOK );
+		}
+		else if( wParam == IDCANCEL ){
+			EndDialog( hDlg, IDCANCEL );
+		}
+	}
+
+	void CustomizeShowHide( HWND hDlg )
+	{
+		bool bTags = false;
+		bool bSpecial = false;
+		if( IsDlgButtonChecked( hDlg, IDC_SEPARATOR ) ) {
+		}
+		else if( IsDlgButtonChecked( hDlg, IDC_TAGS ) ) {
+			bTags = true;
+		}
+		else {
+			bSpecial = true;
+		}
+		EnableWindow( GetDlgItem( hDlg, IDC_TAG_BEGIN ), bTags );
+		EnableWindow( GetDlgItem( hDlg, IDC_TAG_END ), bTags );
+		EnableWindow( GetDlgItem( hDlg, IDC_BROWSE_BEGIN ), bTags );
+		EnableWindow( GetDlgItem( hDlg, IDC_BROWSE_END ), bTags );
+		EnableWindow( GetDlgItem( hDlg, IDC_COMBO_SPECIAL ), bSpecial );
+	}
+
+	void CustomizeRefreshList( HWND hDlg, int iSel )
+	{
+		HWND hwndList = GetDlgItem( hDlg, IDC_LIST );
+		if( !hwndList )  return;
+		ListView_DeleteAllItems( hwndList );
+		for( int i = 0; i < (int)Cmds().size(); i++ ) {
+			LV_ITEM item;
+			ZeroMemory( &item, sizeof(item) );
+			item.mask = LVIF_TEXT | LVIF_IMAGE;
+			item.iItem = i+1;
+			item.pszText = LPSTR_TEXTCALLBACK;
+			item.iImage = I_IMAGECALLBACK;
+			ListView_InsertItem( hwndList, &item );
+		}
+		ListView_SetItemState( hwndList, iSel, LVIS_SELECTED | LVIS_FOCUSED, LVIS_SELECTED | LVIS_FOCUSED );
+		ListView_EnsureVisible( hwndList, iSel, TRUE );
+	}
+
+	void OnCustomizeProp( HWND hDlg )
+	{
+		HWND hwndList = GetDlgItem( hDlg, IDC_LIST );
+		if( !hwndList )  return;
+		int iItem = ListView_GetNextItem( hwndList, -1, LVNI_SELECTED );
+		if( iItem >= 0 ){
+			m_pcmdProp = &Cmds()[ iItem ];
+			if( DialogBox( EEGetLocaleInstanceHandle(), MAKEINTRESOURCE( IDD_CUST_PROP ), hDlg, CustPropDlg ) == IDOK ){
+				CustomizeRefreshList( hDlg, iItem );
+				AddButtons( m_hwndToolbar );
+				m_bCmdArrayModified = true;
+			}
+		}
+	}
+
+	void OnCustomizeNew( HWND hDlg )
+	{
+		HWND hwndList = GetDlgItem( hDlg, IDC_LIST );
+		if( !hwndList )  return;
+		int iItem = ListView_GetNextItem( hwndList, -1, LVNI_SELECTED );
+		CCmd cmd( -1, CMD_SEPARATOR, NULL, NULL, NULL );
+		m_pcmdProp = &cmd;
+		if( DialogBox( EEGetLocaleInstanceHandle(), MAKEINTRESOURCE( IDD_CUST_PROP ), hDlg, CustPropDlg ) == IDOK ){
+			if( iItem >= 0 ){
+				Cmds().insert( Cmds().begin() + iItem, cmd );
+			}
+			else {
+				Cmds().push_back( cmd );
+			}
+
+			CustomizeRefreshList( hDlg, iItem );
+			AddButtons( m_hwndToolbar );
+			m_bCmdArrayModified = true;
+		}
+	}
+
+	void OnCustomizeDelete( HWND hDlg )
+	{
+		HWND hwndList = GetDlgItem( hDlg, IDC_LIST );
+		if( !hwndList )  return;
+		int iItem = ListView_GetNextItem( hwndList, -1, LVNI_SELECTED );
+		if( iItem >= 0 ){
+			Cmds().erase( Cmds().begin() + iItem );
+			if( iItem == (int)Cmds().size() ){
+				iItem--;
+			}
+			CustomizeRefreshList( hDlg, iItem );
+			AddButtons( m_hwndToolbar );
+			m_bCmdArrayModified = true;
+		}
+	}
+
+	void OnCustomizeCopy( HWND hDlg )
+	{
+		HWND hwndList = GetDlgItem( hDlg, IDC_LIST );
+		if( !hwndList )  return;
+		int iItem = ListView_GetNextItem( hwndList, -1, LVNI_SELECTED );
+
+		CCmd cmd = Cmds()[ iItem ];
+
+		m_pcmdProp = &cmd;
+		if( DialogBox( EEGetLocaleInstanceHandle(), MAKEINTRESOURCE( IDD_CUST_PROP ), hDlg, CustPropDlg ) == IDOK ){
+			if( iItem >= 0 ){
+				Cmds().insert( Cmds().begin() + iItem + 1, cmd );
+			}
+			else {
+				Cmds().push_back( cmd );
+			}
+
+			CustomizeRefreshList( hDlg, iItem + 1 );
+			AddButtons( m_hwndToolbar );
+			m_bCmdArrayModified = true;
+		}
+	}
+
+	void OnCustomizeUpDown( HWND hDlg, int nDir )
+	{
+		_ASSERT( nDir == 1 || nDir == -1 );
+		HWND hwndList = GetDlgItem( hDlg, IDC_LIST );
+		if( !hwndList )  return;
+		int iItem = ListView_GetNextItem( hwndList, -1, LVNI_SELECTED );
+
+		int iNextItem = iItem + nDir;
+		if( iNextItem < 0 || iNextItem >= (int)Cmds().size() ){
+			return;
+		}
+		CCmd cmd = Cmds()[ iItem ];
+		Cmds()[ iItem ] = Cmds()[ iNextItem ];
+		Cmds()[ iNextItem ] = cmd;
+		CustomizeRefreshList( hDlg, iNextItem );
+		AddButtons( m_hwndToolbar );
+		m_bCmdArrayModified = true;
+	}
+
+	void OnCustomizeInitDialog( HWND hDlg )
+	{
+		CenterWindow( hDlg );
+		HWND hwndList = GetDlgItem( hDlg, IDC_LIST );
+		if( !hwndList )  return;
+		ListView_SetExtendedListViewStyleEx( hwndList, LVS_EX_FULLROWSELECT, LVS_EX_FULLROWSELECT );
+		ListView_SetImageList( hwndList, m_himageToolbar, LVSIL_SMALL );
+
+		TCHAR sz[80];
+		LV_COLUMN lvC = { 0 };
+		lvC.mask = LVCF_FMT | LVCF_WIDTH | LVCF_TEXT | LVCF_SUBITEM;
+		lvC.pszText = sz;
+		RECT rc;
+		GetWindowRect( hwndList, &rc );
+		lvC.cx = rc.right - rc.left - GetSystemMetrics( SM_CXVSCROLL ) - GetSystemMetrics( SM_CXEDGE ) * 2;
+//		LoadString( EEGetInstanceHandle(), IDS_VALUE, sz, _countof( sz ) );
+		GetWindowText( hDlg, sz, _countof( sz ) );
+		VERIFY( ListView_InsertColumn( hwndList, 0, &lvC ) != -1 );
+
+		CustomizeRefreshList( hDlg, 0 );
+
+	}
+
+	void OnCustomizeCommand( HWND hDlg, WPARAM wParam )
+	{
+		if( wParam == IDCANCEL ){
+			EndDialog( hDlg, IDCANCEL );
+			SaveCmdArray();
+		}
+		else if( wParam == IDC_PROP ){
+			OnCustomizeProp( hDlg );
+		}
+		else if( wParam == IDC_NEW ){
+			OnCustomizeNew( hDlg );
+		}
+		else if( wParam == IDC_COPY ){
+			OnCustomizeCopy( hDlg );
+		}
+		else if( wParam == IDC_DELETE ){
+			OnCustomizeDelete( hDlg );
+		}
+		else if( wParam == IDC_UP ){
+			OnCustomizeUpDown( hDlg, -1 );
+		}
+		else if( wParam == IDC_DOWN ){
+			OnCustomizeUpDown( hDlg, 1 );
+		}
+		else if( wParam == IDC_RESET ){
+			TCHAR sz[260], szAppName[80];
+			LoadString( EEGetLocaleInstanceHandle(), IDS_SURE_RESET, sz, _countof( sz ) );
+			LoadString( EEGetLocaleInstanceHandle(), IDS_MENU_TEXT, szAppName, sizeof( szAppName ) / sizeof( TCHAR ) );
+			if( MessageBox( hDlg, sz, szAppName, MB_YESNO | MB_ICONEXCLAMATION ) == IDYES ){
+				ResetCmdArray( m_iMode );
+				CustomizeRefreshList( hDlg, 0 );
+				AddButtons( m_hwndToolbar );
+			}
+		}
+	}
+
+	BOOL OnCustomizeNotify( HWND hDlg, int idCtrl, LPNMHDR pnmh )
+	{
+		BOOL bResult = FALSE;
+		if( idCtrl == IDC_LIST ){
+			switch( pnmh->code ){
+			case LVN_GETDISPINFO:
+				{
+					LV_DISPINFO* pDispInfo = (LV_DISPINFO*)pnmh;
+					if( pDispInfo->item.iItem < (int)Cmds().size() ) {
+						_ASSERT( pDispInfo->item.iItem >= 0 && pDispInfo->item.iItem < (int)Cmds().size() );
+						CCmd& cmd = Cmds()[pDispInfo->item.iItem];
+						if( pDispInfo->item.mask & LVIF_TEXT ){
+							if( cmd.m_iCmd == CMD_SEPARATOR ){
+								StringCopy( pDispInfo->item.pszText, pDispInfo->item.cchTextMax, L"----------" );
+							}
+							else {
+								StringCopyN( pDispInfo->item.pszText, pDispInfo->item.cchTextMax, cmd.m_sTitle.c_str(), pDispInfo->item.cchTextMax-1 );
+							}
+						}
+						if( pDispInfo->item.mask & LVIF_IMAGE ){
+							if( cmd.m_iCmd == CMD_SEPARATOR ){
+								pDispInfo->item.iImage = -1;
+							}
+							else {
+								pDispInfo->item.iImage = cmd.m_iIcon;
+							}
+						}	
+					}
+				}
+				break;
+			case NM_DBLCLK:
+				{
+					OnCustomizeProp( hDlg );
+				}
+				break;
+			}
+		}
+		return bResult;
+	}
+
+	void OnCustPropInitDialog( HWND hDlg )
+	{
+		CenterWindow( hDlg );
+		m_bPropInitialized = false;
+		SendDlgItemMessage( hDlg, IDC_TITLE, EM_LIMITTEXT, MAX_BUTTON_TITLE - 1, 0 );
+		SendDlgItemMessage( hDlg, IDC_TAG_BEGIN, EM_LIMITTEXT, MAX_TAG_FIELD - 1, 0 );
+		SendDlgItemMessage( hDlg, IDC_TAG_END, EM_LIMITTEXT, MAX_TAG_FIELD - 1, 0 );
+		SetDlgItemText( hDlg, IDC_TITLE, m_pcmdProp->m_sTitle.c_str() );
+
+		HWND hwndComboSpecial = GetDlgItem( hDlg, IDC_COMBO_SPECIAL );
+		if( !hwndComboSpecial )  return;
+		for( int i = 0; i < (int)_countof( SpecialStringID ); i++ ) {
+			COMBOBOXEXITEM item = { 0 };
+			item.mask = CBEIF_TEXT;
+			item.iItem = -1;
+			item.pszText = LPSTR_TEXTCALLBACK;
+			SendMessage( hwndComboSpecial, CBEM_INSERTITEM, 0, (LPARAM)&item );
+		}
+
+		HWND hwndCombo = GetDlgItem( hDlg, IDC_COMBO_ICON );
+		if( !hwndCombo )  return;
+	    SendMessage( hwndCombo, CBEM_SETIMAGELIST, 0, (LPARAM)m_himageToolbar );
+		// enumerate light icons only; the tail of the list holds the
+		// pressed-state dark copies, and the last two light images are the
+		// [H][M] mode-switch glyphs — neither is user-assignable
+		int nCount = ( m_nLightIcons > 0 ) ? m_nLightIcons : ImageList_GetImageCount( m_himageToolbar );
+		nCount -= 2;
+		if( nCount < 0 )  nCount = 0;
+		for( int i = -1; i < nCount; i++ ) {
+			COMBOBOXEXITEM item = { 0 };
+			item.mask = CBEIF_IMAGE | CBEIF_SELECTEDIMAGE | CBEIF_TEXT;
+			item.iItem = -1;
+			item.iImage = i;
+			item.iSelectedImage = i;
+			item.pszText = LPSTR_TEXTCALLBACK;
+			SendMessage( hwndCombo, CBEM_INSERTITEM, 0, (LPARAM)&item );
+		}
+
+		SendMessage( hwndCombo, CB_SETCURSEL, m_pcmdProp->m_iCmd == CMD_SEPARATOR ? 0 : m_pcmdProp->m_iIcon + 1, 0 );
+
+		SendMessage( hwndComboSpecial, CB_SETCURSEL, max( 0, (m_pcmdProp->m_iCmd - CMD_INSERT_TABLE) ), 0 );
+
+		int nID;
+		if( m_pcmdProp->m_iCmd == CMD_SEPARATOR ){
+			nID = IDC_SEPARATOR;
+			m_bPropModified = false;
+		}
+		else if( m_pcmdProp->m_iCmd == CMD_TAGS ){
+			nID = IDC_TAGS;
+			m_bPropModified = true;
+		}
+		else {
+			nID = IDC_SPECIAL;
+			m_bPropModified = true;
+		}
+		VERIFY( CheckRadioButton( hDlg, IDC_TAGS, IDC_SEPARATOR, nID ) );
+
+		SetDlgItemText( hDlg, IDC_TAG_BEGIN, m_pcmdProp->m_sTagBegin.c_str() );
+		SetDlgItemText( hDlg, IDC_TAG_END, m_pcmdProp->m_sTagEnd.c_str() );
+
+		CustomizeShowHide( hDlg );
+		m_bPropInitialized = true;
+
+	}
+
+	void OnCustPropCommand( HWND hDlg, WPARAM wParam )
+	{
+		if( wParam == IDOK ){
+			TCHAR sz[MAX_BUTTON_TITLE];
+			GetDlgItemText( hDlg, IDC_TITLE, sz, _countof( sz ) );
+			m_pcmdProp->m_sTitle = sz;
+
+			if( IsDlgButtonChecked( hDlg, IDC_SEPARATOR ) ) {
+				m_pcmdProp->m_iIcon = -1;
+				m_pcmdProp->m_iCmd = CMD_SEPARATOR;
+			}
+			else if( IsDlgButtonChecked( hDlg, IDC_TAGS ) ) {
+				m_pcmdProp->m_iCmd = CMD_TAGS;
+				GetDlgItemText( hDlg, IDC_TAG_BEGIN, sz, _countof( sz ) );
+				m_pcmdProp->m_sTagBegin = sz;
+				GetDlgItemText( hDlg, IDC_TAG_END, sz, _countof( sz ) );
+				m_pcmdProp->m_sTagEnd = sz;
+			}
+			else if( m_pcmdProp->m_iCmd == CMD_ICON_COLOR || m_pcmdProp->m_iCmd == CMD_MD_VIEW || m_pcmdProp->m_iCmd == CMD_PREVIEW ){
+				// functional buttons, not editable special commands:
+				// keep their code and apply only the title/icon changes
+				;	// m_iCmd unchanged
+			}
+			else {
+				int iSpecial = (int)SendDlgItemMessage( hDlg, IDC_COMBO_SPECIAL, CB_GETCURSEL, 0, 0 );
+				_ASSERT( iSpecial >= 0 && iSpecial < MAX_CMD - CMD_INSERT_TABLE );
+				m_pcmdProp->m_iCmd = iSpecial + CMD_INSERT_TABLE;
+			}
+
+			if( m_pcmdProp->m_iCmd != CMD_SEPARATOR ){
+				m_pcmdProp->m_iIcon = (int)SendDlgItemMessage( hDlg, IDC_COMBO_ICON, CB_GETCURSEL, 0, 0 ) - 1;
+			}
+
+			EndDialog( hDlg, IDOK );
+		}
+		else if( wParam == IDCANCEL ){
+			EndDialog( hDlg, IDCANCEL );
+		}
+		else if( wParam == IDC_SEPARATOR || wParam == IDC_TAGS || wParam == IDC_SPECIAL ){
+			if( wParam == IDC_SEPARATOR ){
+				SendDlgItemMessage( hDlg, IDC_COMBO_ICON, CB_SETCURSEL, 0, 0 );
+			}
+			CustomizeShowHide( hDlg );
+			m_bPropModified = true;
+		}
+		else if( wParam == MAKEWPARAM( IDC_COMBO_ICON, CBN_SELENDOK ) ){
+			int iIcon = (int)SendDlgItemMessage( hDlg, IDC_COMBO_ICON, CB_GETCURSEL, 0, 0 );
+			if( iIcon == 0 ){
+				VERIFY( CheckRadioButton( hDlg, IDC_TAGS, IDC_SEPARATOR, IDC_SEPARATOR ) );
+				SetDlgItemText( hDlg, IDC_TAG_BEGIN, L"" );
+				SetDlgItemText( hDlg, IDC_TAG_END, L"" );
+			}
+			else if( !m_bPropModified ){
+				TCHAR sz[MAX_BUTTON_TITLE];
+				LoadString( EEGetLocaleInstanceHandle(), ID_HEADER + iIcon - 1, sz, _countof( sz ) );
+				SetDlgItemText( hDlg, IDC_TITLE, sz );
+				for( int i = 0; i < _countof( DefCmd ); i++ ){
+					if( DefCmd[i].m_iIcon == iIcon - 1 ){
+						int nID = IDC_TAGS;
+						if( DefCmd[i].m_iCmd != CMD_TAGS ){
+							nID = IDC_SPECIAL;
+							int iSpecial = DefCmd[i].m_iCmd - CMD_INSERT_TABLE;
+							SendDlgItemMessage( hDlg, IDC_COMBO_SPECIAL, CB_SETCURSEL, iSpecial, 0 );
+						}
+						VERIFY( CheckRadioButton( hDlg, IDC_TAGS, IDC_SEPARATOR, nID ) );
+						SetDlgItemText( hDlg, IDC_TAG_BEGIN, DefCmd[i].m_pszTagBegin );
+						SetDlgItemText( hDlg, IDC_TAG_END, DefCmd[i].m_pszTagEnd );
+						CustomizeShowHide( hDlg );
+						break;
+					}
+				}
+			}
+		}
+		else if( wParam == MAKEWPARAM( IDC_COMBO_SPECIAL, CBN_SELENDOK ) ){
+			m_bPropModified = true;
+		}
+		else if( wParam == MAKEWPARAM( IDC_TAG_BEGIN, EN_CHANGE ) || wParam == MAKEWPARAM( IDC_TAG_END, EN_CHANGE )
+			|| wParam == MAKEWPARAM( IDC_TITLE, EN_CHANGE ) ){
+//			if( m_bPropInitialized ){
+			if( GetFocus() == GetDlgItem( hDlg, LOWORD( wParam ) ) ) {
+				m_bPropModified = true;
+			}
+		}
+		else if( wParam == IDC_BROWSE_BEGIN || wParam == IDC_BROWSE_END ){
+			HWND hwndButton = (HWND)GetDlgItem( hDlg, (int)wParam );
+			RECT rect;
+			GetWindowRect( hwndButton, &rect );
+			BOOL bRightAlign = GetSystemMetrics( SM_MENUDROPALIGNMENT );
+			HMENU hMenu = LoadMenu( EEGetLocaleInstanceHandle(), MAKEINTRESOURCE( IDR_ARG_POPUP ) );
+			HMENU hSubMenu = GetSubMenu( hMenu, 0 );
+			UINT uID = TrackPopupMenu( hSubMenu, (bRightAlign ? TPM_RIGHTALIGN : TPM_LEFTALIGN) | TPM_RIGHTBUTTON | TPM_NONOTIFY | TPM_RETURNCMD, bRightAlign ? rect.right : rect.left, rect.bottom, 0, hDlg, NULL );
+			DestroyMenu( hMenu );
+			if( uID != 0 ){
+				TCHAR sz[80];
+				StringPrintf( sz, _countof( sz ), _T("\\{%s}"), szToolArgs[uID-1] );
+				SendDlgItemMessage( hDlg, wParam == IDC_BROWSE_BEGIN ? IDC_TAG_BEGIN : IDC_TAG_END, EM_REPLACESEL, TRUE, (LPARAM)sz );
+			}
+		}
+	}
+
+	BOOL OnCustPropNotify( HWND /* hDlg */, int idCtrl, LPNMHDR pnmh )
+	{
+		BOOL bResult = FALSE;
+		if( idCtrl == IDC_COMBO_ICON ){
+			switch( pnmh->code ){
+			case CBEN_GETDISPINFO:
+				{
+					NMCOMBOBOXEX* pComboBoxEx = (NMCOMBOBOXEX*)pnmh;
+					COMBOBOXEXITEM& item = pComboBoxEx->ceItem;
+					_ASSERT( item.iItem >= 0 && item.iItem < (int)ImageList_GetImageCount( m_himageToolbar ) + 1 );
+					if( item.mask & CBEIF_TEXT ){
+						if( item.iItem == 0 ){
+							StringCopy( item.pszText, item.cchTextMax, L"----------" );
+						}
+						else {
+							// label each icon slot with the title of the
+							// command that uses it in the CURRENT mode: the
+							// old fixed ID_HEADER+slot mapping silently
+							// assumed HTML slots and mislabeled every icon
+							// in Markdown mode
+							const int iSlot = item.iItem - 1;
+							bool bFound = false;
+							for( const auto& cmd : Cmds() ){
+								if( cmd.m_iCmd != CMD_SEPARATOR && cmd.m_iIcon == iSlot && !cmd.m_sTitle.empty() ){
+									StringCopyN( item.pszText, item.cchTextMax, cmd.m_sTitle.c_str(), item.cchTextMax - 1 );
+									bFound = true;
+									break;
+								}
+							}
+							if( !bFound ){
+								// unassigned HTML slot: keep the default
+								// command name for that slot when defined
+								item.pszText[0] = 0;
+								LoadString( EEGetLocaleInstanceHandle(), ID_HEADER + iSlot, item.pszText, item.cchTextMax );
+							}
+						}
+					}
+				}
+				break;
+			}
+		}
+		else if( idCtrl == IDC_COMBO_SPECIAL ){
+			switch( pnmh->code ){
+			case CBEN_GETDISPINFO:
+				{
+					NMCOMBOBOXEX* pComboBoxEx = (NMCOMBOBOXEX*)pnmh;
+					COMBOBOXEXITEM& item = pComboBoxEx->ceItem;
+					_ASSERT( item.iItem >= 0 && item.iItem < _countof( SpecialStringID ) );
+					if( item.mask & CBEIF_TEXT ){
+						int nID = SpecialStringID[ item.iItem ];
+						LoadString( EEGetLocaleInstanceHandle(), nID, item.pszText, item.cchTextMax );
+					}	
+				}
+				break;
+			}
+		}
+		return bResult;
+	}
+
+
+};
+
+LRESULT CALLBACK ToolbarProc( HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam )
+{
+	CMyFrame* pFrame = (CMyFrame*)GetWindowLongPtr( hwnd, GWLP_USERDATA );
+	if( pFrame && pFrame->OnToolbarMessage( hwnd, msg, wParam, lParam ) ){
+		return 0;	// swallowed: e.g. WM_MOUSELEAVE while our menu tracks
+	}
+	WNDPROC wpOld = pFrame ? pFrame->m_wpOldToolbarProc : NULL;
+	return wpOld ? CallWindowProc( wpOld, hwnd, msg, wParam, lParam )
+	             : DefWindowProc( hwnd, msg, wParam, lParam );
+}
+
+
+INT_PTR CALLBACK NewProc( HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam )
+{
+	LRESULT nResult = 0;
+	switch( msg ){
+	case WM_CTLCOLORDLG:
+	case WM_CTLCOLORSTATIC:
+	case WM_CTLCOLORBTN:
+		{
+			// official Very Dark adaptation: return EmEditor's dark brush
+			CMyFrame* pFrame = static_cast<CMyFrame*>(GetFrame( hwnd ));
+			HBRUSH hbr = pFrame ? pFrame->GetVeryDarkBrush( hwnd, (HDC)wParam ) : NULL;
+			if( hbr ){
+				return (INT_PTR)hbr;
+			}
+		}
+		break;
+
+	case WM_THEMECHANGED:
+		{
+			CMyFrame* pFrame = static_cast<CMyFrame*>(GetFrame( hwnd ));
+			if( pFrame ){
+				pFrame->OnThemeChanged( hwnd );
+			}
+		}
+		break;
+
+	case WM_COMMAND:
+		{
+			TRACE( _T("WM_COMMAND: wParam = %x, lParam = %x.\n"), wParam, lParam );
+			CMyFrame* pFrame = static_cast<CMyFrame*>(GetFrame( hwnd ));
+			pFrame->OnDlgCommand( wParam );
+		}
+		break;
+
+	case WM_NOTIFY:
+		{
+			CMyFrame* pFrame = static_cast<CMyFrame*>(GetFrame( hwnd ));
+			// this window is a dialog: notification results (the CDRF_*
+			// replies NM_CUSTOMDRAW depends on) go back via DWLP_MSGRESULT,
+			// the dialog proc's own return value is ignored for them
+			SetWindowLongPtr( hwnd, DWLP_MSGRESULT, pFrame->OnDlgNotify( (NMHDR*)lParam ) );
+			nResult = TRUE;
+		}
+		break;
+	case WM_TIMER:
+		if( wParam == IDT_HOVER_MENU ){
+			CMyFrame* pFrame = static_cast<CMyFrame*>(GetFrame( hwnd ));
+			if( pFrame ){
+				pFrame->OnHoverMenuTimer();
+			}
+			return 0;
+		}
+			else if( wParam == IDT_STARTUP_RESTORE ){
+				KillTimer( hwnd, IDT_STARTUP_RESTORE );
+				CMyFrame* pFrame = static_cast<CMyFrame*>(GetFrame( hwnd ));
+				if( pFrame ){
+					pFrame->OnStartupRestore();
+				}
+				return 0;
+			}
+			else if( wParam == IDT_DESIGN_SYNC ){
+				KillTimer( hwnd, IDT_DESIGN_SYNC );
+				CMyFrame* pFrame = static_cast<CMyFrame*>(GetFrame( hwnd ));
+				if( pFrame ){
+					pFrame->OnDesignSyncTimer();
+				}
+				return 0;
+			}
+						
+			else if( wParam == IDT_EDIT_TEMP ){
+				KillTimer( hwnd, IDT_EDIT_TEMP );
+				CMyFrame* pFrame = static_cast<CMyFrame*>(GetFrame( hwnd ));
+				if( pFrame ){
+					pFrame->OnEditTempTimer();
+				}
+				return 0;
+			}
+			else if( wParam == IDT_WEB_NAVIGATE ){
+				KillTimer( hwnd, IDT_WEB_NAVIGATE );
+				CMyFrame* pFrame = static_cast<CMyFrame*>(GetFrame( hwnd ));
+				if( pFrame ){
+					pFrame->OnWebNavigateTimer();
+				}
+				return 0;
+			}
+			else if( wParam == IDT_WEBBAR_RETRY ){
+				CMyFrame* pFrame = static_cast<CMyFrame*>(GetFrame( hwnd ));
+				if( pFrame ){
+					pFrame->OnWebBarRetryTimer();
+				}
+				return 0;
+			}
+			else if( wParam == IDT_PREVIEW_REFRESH ){
+				KillTimer( hwnd, IDT_PREVIEW_REFRESH );
+				CMyFrame* pFrame = static_cast<CMyFrame*>(GetFrame( hwnd ));
+				if( pFrame ){
+					pFrame->OnPreviewAutoRefresh();
+				}
+				return 0;
+			}
+			else if( wParam == IDT_DOC_SYNC ){
+				KillTimer( hwnd, IDT_DOC_SYNC );
+				CMyFrame* pFrame = static_cast<CMyFrame*>(GetFrame( hwnd ));
+				if( pFrame ){
+					pFrame->OnDocSyncTimer();
+				}
+				return 0;
+			}
+			else if( wParam == IDT_STARTUP_SETTLE ){
+				KillTimer( hwnd, IDT_STARTUP_SETTLE );
+				CMyFrame* pFrame = static_cast<CMyFrame*>(GetFrame( hwnd ));
+				if( pFrame ){
+					pFrame->OnStartupSettle();
+				}
+				return 0;
+			}
+			else if( wParam == IDT_EDIT_TEMP ){
+				KillTimer( hwnd, IDT_EDIT_TEMP );
+				CMyFrame* pFrame = static_cast<CMyFrame*>(GetFrame( hwnd ));
+				if( pFrame ){
+					pFrame->OnEditTempTimer();
+				}
+				return 0;
+			}
+			else if( wParam == IDT_WEB_NAVIGATE ){
+				KillTimer( hwnd, IDT_WEB_NAVIGATE );
+				CMyFrame* pFrame = static_cast<CMyFrame*>(GetFrame( hwnd ));
+				if( pFrame ){
+					pFrame->OnWebNavigateTimer();
+				}
+				return 0;
+			}
+		break;
+
+	}
+	return (BOOL)nResult;
+}
+
+
+INT_PTR CALLBACK TableDlg( HWND hwnd, UINT msg, WPARAM wParam, LPARAM /*lParam*/ )
+{
+	LRESULT nResult = 0;
+	switch( msg ){
+	case WM_INITDIALOG:
+		{
+			CMyFrame* pFrame = static_cast<CMyFrame*>(GetFrame( hwnd ));
+			if( pFrame ){
+				pFrame->OnTableInitDialog( hwnd );
+			}
+		}
+		break;
+
+	case WM_COMMAND:
+		{
+			CMyFrame* pFrame = static_cast<CMyFrame*>(GetFrame( hwnd ));
+			pFrame->OnTableCommand( hwnd, wParam );
+		}
+		break;
+	}
+	return (BOOL)nResult;
+}
+
+INT_PTR CALLBACK PropDlg( HWND hwnd, UINT msg, WPARAM wParam, LPARAM /*lParam*/ )
+{
+	LRESULT nResult = 0;
+	switch( msg ){
+	case WM_INITDIALOG:
+		{
+			CMyFrame* pFrame = static_cast<CMyFrame*>(GetFrame( hwnd ));
+			if( pFrame ){
+				pFrame->OnPropInitDialog( hwnd );
+			}
+		}
+		break;
+
+	case WM_COMMAND:
+		{
+			CMyFrame* pFrame = static_cast<CMyFrame*>(GetFrame( hwnd ));
+			pFrame->OnPropCommand( hwnd, wParam );
+		}
+		break;
+	}
+	return (BOOL)nResult;
+}
+
+
+INT_PTR CALLBACK InputParamsDlg( HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam )
+{
+	BOOL bResult = FALSE;
+	switch( msg ){
+	case WM_INITDIALOG:
+		{
+			CMyFrame* pFrame = static_cast<CMyFrame*>(GetFrameFromDlg( hwnd ));
+			_ASSERTE( pFrame );
+			bResult = pFrame->OnInputInitDialog( hwnd );
+		}
+		break;
+	case WM_COMMAND:
+		{
+			CMyFrame* pFrame = static_cast<CMyFrame*>(GetFrameFromDlg( hwnd ));
+			_ASSERTE( pFrame );
+			pFrame->OnInputDlgCommand( hwnd, wParam );
+		}
+		break;
+	case WM_NOTIFY:
+		{
+			CMyFrame* pFrame = static_cast<CMyFrame*>(GetFrameFromDlg( hwnd ));
+			_ASSERTE( pFrame );
+			bResult = pFrame->OnInputDlgNotify( hwnd, (int)wParam, (LPNMHDR)lParam );
+		}
+		break;
+	}
+	return bResult;
+}
+
+LRESULT CALLBACK EditProc( HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam )
+{
+	switch( msg ){
+
+	case WM_KEYDOWN:
+		{
+			CMyFrame* pFrame = (CMyFrame*)GetFrameFromDlg( hwnd );
+			if( pFrame != NULL ){
+				pFrame->OnEditKeyDown( hwnd, wParam, lParam );
+			}
+		}
+		break;
+	}
+
+	HWND hwndFrame = GetAncestor( hwnd, GA_ROOTOWNER );
+	if( IsWindow( hwndFrame ) ){
+		CMyFrame* pFrame = (CMyFrame*)GetFrameFromFrame( hwndFrame );
+//	CMyFrame* pFrame = (CMyFrame*)GetFrameFromDlg( hwnd );
+		if( pFrame != NULL && pFrame->m_lpOldEditProc != NULL ){
+			return CallWindowProc( pFrame->m_lpOldEditProc, hwnd, msg, wParam, lParam);
+		}
+	}
+	return 0;
+}
+
+INT_PTR CALLBACK CustomizeDlg( HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam )
+{
+	LRESULT nResult = 0;
+	switch( msg ){
+	case WM_INITDIALOG:
+		{
+			CMyFrame* pFrame = static_cast<CMyFrame*>(GetFrame( hwnd ));
+			if( pFrame ){
+				pFrame->OnCustomizeInitDialog( hwnd );
+			}
+		}
+		break;
+
+	case WM_COMMAND:
+		{
+			CMyFrame* pFrame = static_cast<CMyFrame*>(GetFrame( hwnd ));
+			pFrame->OnCustomizeCommand( hwnd, wParam );
+		}
+		break;
+
+	case WM_NOTIFY:
+		{
+			CMyFrame* pFrame = static_cast<CMyFrame*>(GetFrame( hwnd ));
+			_ASSERTE( pFrame );
+			nResult = pFrame->OnCustomizeNotify( hwnd, (int)wParam, (LPNMHDR)lParam );
+		}
+		break;
+	}
+	return (BOOL)nResult;
+}
+
+
+INT_PTR CALLBACK CustPropDlg( HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam )
+{
+	LRESULT nResult = 0;
+	switch( msg ){
+	case WM_INITDIALOG:
+		{
+			CMyFrame* pFrame = static_cast<CMyFrame*>(GetFrame( hwnd ));
+			if( pFrame ){
+				pFrame->OnCustPropInitDialog( hwnd );
+			}
+		}
+		break;
+
+	case WM_COMMAND:
+		{
+			CMyFrame* pFrame = static_cast<CMyFrame*>(GetFrame( hwnd ));
+			pFrame->OnCustPropCommand( hwnd, wParam );
+		}
+		break;
+
+	case WM_NOTIFY:
+		{
+			CMyFrame* pFrame = static_cast<CMyFrame*>(GetFrame( hwnd ));
+			_ASSERTE( pFrame );
+			nResult = pFrame->OnCustPropNotify( hwnd, (int)wParam, (LPNMHDR)lParam );
+
+		}
+		break;
+	}
+	return (BOOL)nResult;
+}
+
+
+// the following line is needed after CMyFrame definition
+_ETL_IMPLEMENT
+

@@ -15,6 +15,19 @@ this code base:
 | `0.9.0` – `0.17.x` | The HTML + Markdown dual-mode toolbar, heading towards `1.0.0`. |
 
 
+## [0.44.0] - 2026-10-01
+
+### Changed
+
+- **The preview CSS choice is now a dropdown, not a file path box** (the
+  label is "Markdown Preview CSS:" — HTML preview has its own styles).
+  The combo lists "(Built-in theme)", every `*.css` discovered in the
+  `themes\` folder beside the DLL, and "Custom CSS..." — choosing the
+  latter opens the file browser and remembers the absolute path.
+  Bare theme names resolve to `themes\<name>.css` at render time (a
+  vanished theme falls back to no override); `PreviewCss` persists
+  either form.
+
 ## [0.43.1] - 2026-10-01
 
 ### Fixed
