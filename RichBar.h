@@ -3132,6 +3132,7 @@ public:
 			UINT_PTR nLines = Editor_GetLines( m_hWnd, TRUE );	// logical lines
 			if( nLines > 1 ){
 				dScrollRatio = (double)ptScroll.y / (double)( nLines - 1 );
+					RbLogF( "scroll sync: y=%u lines=%u ratio=%.4f", (unsigned)ptScroll.y, (unsigned)nLines, dScrollRatio );
 				if( dScrollRatio < 0 )  dScrollRatio = 0;
 				if( dScrollRatio > 1 )  dScrollRatio = 1;
 			}
@@ -3343,7 +3344,9 @@ public:
 				sHtml += L"\";";
 				sHtml += L"window.__scrollRatio=" + sRatio + L";";
 				sHtml += L"document.getElementById('content').innerHTML=marked.parse(NormalizeSingleNewlines(window.__md),{breaks:true,gfm:true});";
-				sHtml += L"if(typeof window.__scrollRatio==='number'){var h=document.body.scrollHeight-window.innerHeight;window.scrollTo(0,window.__scrollRatio*h);}";
+				sHtml += L"function __rbRestore(){if(typeof window.__scrollRatio==='number'){var h=document.body.scrollHeight-window.innerHeight;if(h>0){window.scrollTo(0,window.__scrollRatio*h);}}}";
+				sHtml += L"window.addEventListener('load',function(){__rbRestore();setTimeout(__rbRestore,100);setTimeout(__rbRestore,400);});";
+				sHtml += L"__rbRestore();";
 				sHtml += L"</script>";
 				sHtml += L"</body></html>";
 			}
