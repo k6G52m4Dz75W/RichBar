@@ -7,7 +7,7 @@ toolbar, forked from the official Emurasoft HTMLBar plug-in source
 (`19.5.0`). It is meant to replace the HTML/Markdown toolbar built into
 EmEditor v26 (closed source, with most tags hidden inside dropdown menus).
 
-Current release: **0.42.1 — 2026-10-01**.
+Current release: **0.43.0 — 2026-10-01**.
 
 ## Features
 
@@ -140,9 +140,12 @@ plug-in:
 - **User CSS themes**: point the properties dialog's *Preview CSS* box at
   any stylesheet — GitHub/serif/dark themes all work. Ready-made samples
   ship in the distribution's `themes\` folder (`paper-serif.css`,
-  `emeditor-template.css`). Leave the box empty to use the default
-  location (`%APPDATA%\Emurasoft\EmEditor\RichBar\preview.css`), and
-  delete the file to return to the built-in theme.
+  `emeditor-template.css`, and **VS Code's own Markdown preview theme** —
+  `vscode-markdown.css` + `vscode-highlight.css` — which picks up the
+  editor's colors and font through the injected CSS variables). Leave
+  the box empty to use the default location
+  (`%APPDATA%\Emurasoft\EmEditor\RichBar\preview.css`), and delete the
+  file to return to the built-in theme.
 - The **legacy colored HTML BMPs are no longer loaded** (their resources
   remain in the DLL, and the plug-in entry icon still uses its own bitmap).
   Because both modes draw monochrome glyphs, the **hover (hot) image list

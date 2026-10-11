@@ -3156,6 +3156,30 @@ public:
 					sHtml += L"</style>";
 				}
 			}
+			// bridge: CSS variables consumed by the shipped VS Code themes
+			// (themes\vscode-markdown.css), mapped to the editor theme -
+			// other/user themes simply ignore them
+			sHtml += L"<style>:root{";
+			if( bFont ){
+				int nHeight = lfView.lfHeight;
+				if( nHeight < 0 )  nHeight = -nHeight;
+				else if( nHeight > 0 )  nHeight = MulDiv( nHeight, 4, 5 );
+				int nDpi = (int)Editor_DocInfo( m_hWnd, 0, EI_GET_DPI, 0 );
+				if( nDpi <= 0 )  nDpi = 96;
+				int nPx = MulDiv( nHeight, 96, nDpi );
+				if( nPx < 9 )  nPx = 9;
+				TCHAR szVar[ 384 ];
+				wsprintf( szVar, L"--markdown-font-family:'%s','Microsoft YaHei',Segoe UI,Arial,sans-serif;--markdown-font-size:%dpx;", (LPCWSTR)lfView.lfFaceName, (unsigned)nPx );
+				sHtml += szVar;
+			}
+			sHtml += L"--markdown-line-height:1.6;";
+			TCHAR szThemeVar[ 192 ];
+			wsprintf( szThemeVar, L"--vscode-editor-background:%s;--vscode-editor-foreground:%s;", szBack, szFg );
+			sHtml += szThemeVar;
+			sHtml += bLight
+				? L"--vscode-textCodeBlock-background:#f6f6f6;--vscode-widget-border:#ccc;--vscode-editor-font-family:Consolas,monospace;}"
+				: L"--vscode-textCodeBlock-background:#2d2d30;--vscode-widget-border:#555;--vscode-editor-font-family:Consolas,monospace;}";
+			sHtml += L"</style>";
 			sHtml += L"</head><body>";
 			// marked.js v18 (the same engine the official preview uses,
 			// latest version): the library file sits beside our DLL; the

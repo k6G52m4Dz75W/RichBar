@@ -15,6 +15,20 @@ this code base:
 | `0.9.0` – `0.17.x` | The HTML + Markdown dual-mode toolbar, heading towards `1.0.0`. |
 
 
+## [0.43.0] - 2026-10-01
+
+### Added
+
+- **VS Code's Markdown preview themes ship in `themes\`** and render
+  with the editor's colors and font: `vscode-markdown.css` +
+  `vscode-highlight.css` (from the `markdown-language-features`
+  extension, MIT) are included, and the preview page defines the
+  `--markdown-*` / `--vscode-*` CSS variables they consume, mapped to
+  the editor theme (background/foreground, code-block background,
+  widget border, the text font stack with the CJK fallback). Dark and
+  light follow the editor automatically. Other/user themes ignore the
+  variables harmlessly.
+
 ## [0.42.1] - 2026-10-01
 
 ### Fixed
