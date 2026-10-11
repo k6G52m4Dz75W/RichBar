@@ -38,6 +38,16 @@ this code base:
   not appropriate. `themes\` now contains only our own
   `paper-serif.css` and the MIT-licensed `vscode-markdown.css`.
 
+## [0.44.2] - 2026-10-01
+
+### Fixed
+
+- **Choosing "Custom CSS..." did not open the file browser**: the combo
+  notification was compared against the full `wParam`, but a combobox's
+  `CBN_SELCHANGE` arrives in the HIGH word (the low word carries the
+  control id), so the handler never matched. It now compares
+  `LOWORD`/`HIWORD` separately.
+
 ## [0.44.1] - 2026-10-01
 
 ### Changed

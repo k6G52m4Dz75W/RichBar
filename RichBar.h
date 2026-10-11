@@ -4005,7 +4005,7 @@ public:
 				DisplayBar( true );
 			}
 		}
-		else if( wParam == IDC_CSS_COMBO && HIWORD( wParam ) == CBN_SELCHANGE ){
+		else if( LOWORD( wParam ) == IDC_CSS_COMBO && HIWORD( wParam ) == CBN_SELCHANGE ){
 			int nSel = (int)SendMessage( GetDlgItem( hDlg, IDC_CSS_COMBO ), CB_GETCURSEL, 0, 0 );
 			const int nCustom = (int)m_vPreviewThemes.size() + 1;
 			if( nSel == nCustom ){
