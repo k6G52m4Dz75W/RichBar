@@ -28,6 +28,18 @@ this code base:
   vanished theme falls back to no override); `PreviewCss` persists
   either form.
 
+## [0.46.0] - 2026-10-01
+
+### Changed
+
+- **marked.js updated to v18.1.0** (2026-10-05; from v18.0.14 — fixes a
+  regex backtracking hang on unicode whitespace in link destinations).
+  The distributed `marked.umd.min.js` now carries a provenance header
+  with the exact raw source URL, the jsDelivr CDN URL used, and the
+  update recipe (bump the version in the CDN URL and re-download), so
+  upstream updates are a two-minute job. `LICENSE.third-party` reflects
+  the new version.
+
 ## [0.45.0] - 2026-10-01
 
 ### Added
