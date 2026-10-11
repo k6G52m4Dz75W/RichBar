@@ -1,0 +1,44 @@
+/* RichBar Markdown preview user theme
+ *
+ * Location:  %APPDATA%\Emurasoft\EmEditor\RichBar\preview.css
+ *            (this file — rename/edit it, or delete it to use the
+ *            built-in theme alone)
+ *
+ * Rules here load AFTER the built-in theme, so they override it.
+ * Anything you leave out keeps the built-in behavior (which follows
+ * the editor's own colors and text font).
+ *
+ * The page body has id-less structure:
+ *   <body> → rendered HTML from your markdown (h1..h6, p, ul/ol/li,
+ *   blockquote, table, pre/code, img, a)
+ *
+ * Example: a serif, paper-like reading theme
+ */
+body {
+	font-family: Georgia, 'Times New Roman', 'Microsoft YaHei', serif;
+	background: #faf6ef;
+	color: #3b3228;
+	max-width: 46em;
+	margin: 3em auto;
+	padding: 0 1.5em;
+	line-height: 1.9;
+}
+
+h1, h2, h3 {
+	color: #7a5c3e;
+	border-bottom: 1px solid #e0d5c3;
+	padding-bottom: 0.2em;
+}
+
+blockquote {
+	background: #f3ecdf;
+	border-left: 4px solid #c9a86a;
+	font-style: italic;
+}
+
+a { color: #a05a2c; }
+
+code {
+	background: #efe7d8;
+	color: #8c4a1d;
+}
