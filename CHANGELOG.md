@@ -42,6 +42,24 @@ this code base:
   `WebBar.scrollTo` must not be used from macros (a failing scrollTo
   makes EmEditor open the macro source as a document tab).
 
+## [0.60.0] - 2026-10-01
+
+### Changed
+
+- **Live scroll sync rebuilt on the industry-standard proportional
+  mapping** (as used by VS Code / Typora / MarkText): the preview
+  page polls a tiny sync script (`RichBarSync.js`, cache-busted) and
+  positions itself at the received ratio of its OWN scrollable
+  height — so it adapts to any pane width/height and docking side
+  automatically. The plug-in writes that file whenever the editor
+  scroll ratio changes by >= 0.5% (plain file write, no macros).
+- The native `WebBar.scrollTo/scrollBy` calls were removed from the
+  sync path (they had unreliable semantics in the pane), along with
+  the end-anchor jumps they required. Ratio 0 and 1 reach the exact
+  top and bottom through the browser own clamping.
+- Also fixed a duplicated scroll-ratio emission in the generated
+  preview page.
+
 ## [0.56.1] - 2026-10-01
 
 ### Fixed
