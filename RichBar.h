@@ -467,8 +467,8 @@ public:
 	int m_nMacroRetries = 0;
 	bool m_bStartupSettled = false;	// pane open/close suppressed until the session restore finishes
 	bool m_bNewApi = false;
-	int m_nPreviewMaxPx = 0;	// probed preview scrollable height in px
-	int m_nLastSentTargetPx = -1;	// last px target sent to the preview		// cached: EmEditor >= 26.3.0 (document.Text macro, WebBar scroll)
+	int m_nLastEditorY = 0;		// last editor scroll line seen by the poll
+	int m_nPreviewLinePx = 26;	// preview line height in px (font px x 1.6)		// cached: EmEditor >= 26.3.0 (document.Text macro, WebBar scroll)
 	HWND m_hwndView;				// the EmEditor VIEW window (plug-in OnCommand contract)
 	bool m_bPanesRestored;		// startup pane restore done (first state-sync tick)
 	UINT m_nPreviewBarID;		// custom-bar id of the live preview pane
@@ -3103,64 +3103,37 @@ public:
 		FindClose( hFind );
 	}
 
+	// remember the preview line height (px) for the scroll sync
+	void SetPreviewLinePx( int nPx )
+	{
+		m_nPreviewLinePx = ( nPx > 8 ) ? ( nPx * 16 / 10 ) : 26;
+	}
+
 	void StartScrollerPoll()
 	{
-		m_nPreviewMaxPx = 0;	// re-probe after every open/render
-		m_nLastSentTargetPx = -1;
+		POINT_PTR pt = { 0, 0 };
+		if( m_hwndView && IsWindow( m_hwndView ) ){
+			Editor_GetScrollPos( m_hwndView, &pt );
+		}
+		m_nLastEditorY = (int)pt.y;	// no jump on open
 		if( m_hDlg )  SetTimer( m_hDlg, IDT_SCROLLER_POLL, 300, NULL );
 	}
 
-	// the 300ms poll: proportional sync — both panes to the same
-	// fraction of their scrollable range (adapts to pane size)
+	// the 300ms poll: editor scrolled? drive the Web bar natively
 	void OnScrollerPoll()
 	{
 		if( !IsOfficialPaneVisible() )  return;
 		if( !m_hwndView || !IsWindow( m_hwndView ) )  return;
 		POINT_PTR pt = { 0, 0 };
 		Editor_GetScrollPos( m_hwndView, &pt );
-		UINT_PTR nLines = Editor_GetLines( m_hwndView, TRUE );
-		SIZE_PTR sizePage = { 0, 0 };
-		Editor_GetPageSize( m_hwndView, &sizePage );
-		const int nScrollable = (int)nLines - (int)sizePage.cy;
-		if( nScrollable < 1 )  return;	// the editor cannot scroll
-		double dRatio = (double)pt.y / (double)nScrollable;
-		if( dRatio < 0 )  dRatio = 0;
-		if( dRatio > 1 )  dRatio = 1;
-		if( m_nPreviewMaxPx <= 0 ){
-			// probe the preview scrollable height once per render, and
-			// position it in the SAME macro (no bottom-flicker)
-			TCHAR szProbe[ 256 ];
-			wsprintf( szProbe, L"WebBar.scrollTo( 0, 99999999 ); var m = WebBar.scrollY; WebBar.scrollTo( 0, Math.round( %.4f * m ) ); return m;", dRatio );
-			RUN_MACRO_INFO rmi;
-			ZeroMemory( &rmi, sizeof( rmi ) );
-			rmi.cbSize = sizeof( rmi );
-			rmi.nFlags = RUN_TEXT;
-			std::wstring wsProbe = std::wstring( L"#language=\"V8\"\n" ) + szProbe;
-			rmi.pszText = wsProbe.c_str();
-			rmi.nDefMacroLang = MACRO_LANG_V8 | MACRO_SYNC_ONLY;
-			rmi.ptErrorPos.x = rmi.ptErrorPos.y = -1;
-			HRESULT hr = (HRESULT)SendMessage( m_hWnd, EE_RUN_MACRO, 0, (LPARAM)&rmi );
-			if( hr == S_OK && rmi.hstrResult ){
-				LPCWSTR pMax = (LPCWSTR)GlobalLock( rmi.hstrResult );
-				if( pMax ){
-					m_nPreviewMaxPx = _wtoi( pMax );
-					GlobalUnlock( rmi.hstrResult );
-					GlobalFree( rmi.hstrResult );
-					RbLogF( "scroll probe: max=%d ratio=%.4f", m_nPreviewMaxPx, dRatio );
-				}
-				else {
-					GlobalFree( rmi.hstrResult );
-				}
-			}
-		}
-		else {
-			const int nTarget = (int)( dRatio * m_nPreviewMaxPx );
-			if( nTarget == m_nLastSentTargetPx )  return;
-			m_nLastSentTargetPx = nTarget;
-			TCHAR szMacro[ 128 ];
-			wsprintf( szMacro, L"WebBar.scrollTo( 0, %d );", nTarget );
-			RunWebBarMacro( szMacro );
-		}
+		const int nY = (int)pt.y;
+		const int nDelta = nY - m_nLastEditorY;
+		if( nDelta == 0 )  return;
+		m_nLastEditorY = nY;
+		const int nPx = nDelta * m_nPreviewLinePx;
+		TCHAR szMacro[ 128 ];
+		wsprintf( szMacro, L"WebBar.scrollBy( 0, %d );", nPx );
+		RunWebBarMacro( szMacro );	// dropped frames are fine while scrolling
 	}
 	// JSON/JS string escape for embedding the markdown source into the
 	// preview page: < and > become \u003c/\u003e so a literal
@@ -3255,6 +3228,7 @@ public:
 				int nDpi = (int)Editor_DocInfo( m_hWnd, 0, EI_GET_DPI, 0 );
 				if( nDpi <= 0 )  nDpi = 96;
 				int nPx = MulDiv( nHeight, 96, nDpi );	// device px -> CSS px
+				SetPreviewLinePx( nPx );
 				if( nPx < 9 )  nPx = 9;
 				TCHAR szCss[ 256 ];
 				wsprintf( szCss, _T("body{font-family:'%s','Microsoft YaHei',Segoe UI,Arial,sans-serif;font-size:%dpx;"), (LPCWSTR)lfView.lfFaceName, (unsigned)nPx );

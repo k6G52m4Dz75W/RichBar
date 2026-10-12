@@ -15,6 +15,18 @@ this code base:
 | `0.9.0` – `0.17.x` | The HTML + Markdown dual-mode toolbar, heading towards `1.0.0`. |
 
 
+## [0.53.1] - 2026-10-01
+
+### Fixed
+
+- **Reverted 0.54.0** (proportional sync): its preview-height probe
+  macro returned a NUMBER (`return m`), which never populated the
+  macro result handle — the probe therefore never succeeded, and the
+  actual scroll call was gated behind it, so the preview froze
+  completely. 0.53.0's working scroll sync is restored; the
+  proportional model will return with a string result and a fallback
+  if the probe keeps failing.
+
 ## [0.54.0] - 2026-10-01
 
 ### Changed
