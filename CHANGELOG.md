@@ -29,6 +29,21 @@ this code base:
   probe succeeds the preview follows the editor to the same fraction
   of its scrollable range (adapts to pane size and docking side).
 
+## [0.56.0] - 2026-10-01
+
+### Fixed
+
+- **The scroll probe read a non-existent property** and **jumped the
+  preview to the bottom without ever reading the height back**: the
+  property is `WebBar.ScrollY` (capital S — the docs navigation had
+  it right; the probe used `scrollY`, so `m` was undefined and the
+  final reposition was a no-op, leaving the preview stuck at the
+  bottom of the jump). With `ScrollY`, the probe macro measures the
+  real scrollable height, positions the preview at the editor ratio
+  and returns the max as a string. Probing is disabled for the whole
+  session after 9 total failures (3 per render), degrading to the
+  relative-delta fallback.
+
 ## [0.53.1] - 2026-10-01
 
 ### Fixed

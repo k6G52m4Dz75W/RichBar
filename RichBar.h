@@ -3150,12 +3150,14 @@ public:
 			if( dRatio > 1 )  dRatio = 1;
 		}
 		if( m_nPreviewMaxPx <= 0 ){
+			static int s_nTotalProbeFails = 0;	// session-wide: 9 failures disable probing
+			if( s_nTotalProbeFails >= 9 )  m_nProbeFails = 3;
 			if( m_nProbeFails < 3 ){
 				// probe: jump to the end to read max, position to the ratio,
 				// return the max AS A STRING (a numeric return never fills
 				// hstrResult - the 0.54.0 deadlock)
 				TCHAR szProbe[ 256 ];
-				wsprintf( szProbe, L"WebBar.scrollTo( 0, 99999999 ); var m = WebBar.scrollY; WebBar.scrollTo( 0, Math.round( %.4f * m ) ); return String(m);", dRatio );
+				wsprintf( szProbe, L"WebBar.scrollTo( 0, 99999999 ); var m = WebBar.ScrollY; WebBar.scrollTo( 0, Math.round( %.4f * m ) ); return String(m);", dRatio );
 				RUN_MACRO_INFO rmi;
 				ZeroMemory( &rmi, sizeof( rmi ) );
 				rmi.cbSize = sizeof( rmi );
@@ -3180,6 +3182,9 @@ public:
 				}
 				else {
 					m_nProbeFails++;
+					if( ++s_nTotalProbeFails >= 9 ){
+						m_nProbeFails = 3;	// this render: delta fallback
+					}
 					RbLogF( "scroll probe failed hr=0x%08X (%d)", (unsigned)hr, m_nProbeFails );
 				}
 			}
