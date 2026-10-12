@@ -3141,7 +3141,7 @@ public:
 		if( m_dLastSentRatio >= 0 && dRatio == m_dLastSentRatio )  return;
 		m_dLastSentRatio = dRatio;
 		TCHAR szMacro[ 256 ];
-		wsprintf( szMacro, L"WebBar.scrollTo( 0, 99999999 ); var m = WebBar.ScrollY; WebBar.scrollTo( 0, Math.round( %.4f * m ) );", dRatio );
+		wsprintf( szMacro, L"WebBar.scrollTo( 0, 99999999 ); var m = WebBar.ScrollY; WebBar.scrollTo( 0, Math.round( %d * m ) / 10000 );", (int)( dRatio * 10000 ) );
 		RunWebBarMacro( szMacro );
 	}	// JSON/JS string escape for embedding the markdown source into the
 	// preview page: < and > become \u003c/\u003e so a literal
