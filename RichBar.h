@@ -3115,6 +3115,7 @@ public:
 		fwrite( szBody, sizeof( WCHAR ), wcslen( szBody ), f );
 		fclose( f );
 		m_dLastSentRatio = dRatio;
+		RbLogF( "scroll push: ratio=%.4f", dRatio );
 	}
 
 	void StartScrollerPoll()
@@ -3128,8 +3129,8 @@ public:
 	{
 		if( !IsOfficialPaneVisible() )  return;
 		POINT_PTR ptScroll = { 0, 0 };
-		Editor_GetScrollPos( m_hWnd, &ptScroll );
-		UINT_PTR nLines = Editor_GetLines( m_hWnd, TRUE );
+		Editor_GetScrollPos( m_hwndView, &ptScroll );	// the VIEW scrolls, not the frame
+		UINT_PTR nLines = Editor_GetLines( m_hwndView, TRUE );
 		if( nLines < 2 )  return;
 		double dRatio = (double)ptScroll.y / (double)( nLines - 1 );
 		if( dRatio < 0 )  dRatio = 0;
@@ -3174,8 +3175,8 @@ public:
 		double dScrollRatio = 0.0;
 		{
 			POINT_PTR ptScroll = { 0, 0 };
-			Editor_GetScrollPos( m_hWnd, &ptScroll );
-			UINT_PTR nLines = Editor_GetLines( m_hWnd, TRUE );	// logical lines
+			Editor_GetScrollPos( m_hwndView, &ptScroll );	// the VIEW scrolls, not the frame
+			UINT_PTR nLines = Editor_GetLines( m_hwndView, TRUE );	// logical lines
 			if( nLines > 1 ){
 				dScrollRatio = (double)ptScroll.y / (double)( nLines - 1 );
 					RbLogF( "scroll sync: y=%u lines=%u ratio=%.4f", (unsigned)ptScroll.y, (unsigned)nLines, dScrollRatio );
