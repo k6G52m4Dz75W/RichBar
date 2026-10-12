@@ -472,7 +472,7 @@ public:
 	int m_nEditorLineCssPx = 16;	// editor line height in CSS px (set at render)
 	int m_nLastSentTargetPx = -1;	// last px target sent to the preview
 	int m_nLastSentAnchor = -1;
-	double m_dLastSentRatio = -1.0;	// last editor ratio written to the sync file	// last end-anchor sent: 0 top, 2 bottom		// cached: EmEditor >= 26.3.0 (document.Text macro, WebBar scroll)
+	int m_nPreviewLineCssPx = 16;	// preview font size in CSS px (set at render)	// last end-anchor sent: 0 top, 2 bottom		// cached: EmEditor >= 26.3.0 (document.Text macro, WebBar scroll)
 	HWND m_hwndView;				// the EmEditor VIEW window (plug-in OnCommand contract)
 	bool m_bPanesRestored;		// startup pane restore done (first state-sync tick)
 	UINT m_nPreviewBarID;		// custom-bar id of the live preview pane
@@ -3114,7 +3114,7 @@ public:
 			Editor_GetScrollPos( m_hwndView, &pt );
 		}
 		m_nLastEditorY = (int)pt.y;
-		m_dLastSentRatio = -1.0;	// no jump on open
+	// no jump on open
 		if( m_hDlg )  SetTimer( m_hDlg, IDT_SCROLLER_POLL, 300, NULL );
 	}
 
@@ -3129,28 +3129,26 @@ public:
 		if( !m_hwndView || !IsWindow( m_hwndView ) )  return;
 		POINT_PTR pt = { 0, 0 };
 		Editor_GetScrollPos( m_hwndView, &pt );
-		UINT_PTR nLines = Editor_GetLines( m_hwndView, TRUE );
-		SIZE_PTR sizePage = { 0, 0 };
-		Editor_GetPageSize( m_hwndView, &sizePage );
-		const int nScrollable = (int)nLines - (int)sizePage.cy;
-		if( nScrollable < 1 )  return;
-		double dRatio = (double)pt.y / (double)nScrollable;
-		if( dRatio < 0 )  dRatio = 0;
-		if( dRatio > 1 )  dRatio = 1;
-		double dDiff = dRatio - m_dLastSentRatio;
-		if( dDiff < 0 )  dDiff = -dDiff;
-		if( dDiff < 0.005 )  return;
-		TCHAR szPath[ MAX_PATH ];
-		TCHAR szBody[ 64 ];
-		GetTempPath( MAX_PATH, szPath );
-		wcscat_s( szPath, MAX_PATH, L"RichBarSync.js" );
-		wsprintf( szBody, L"__rbSetRatio(%.4f);", dRatio );
-		FILE* f = _wfopen( szPath, L"wb" );
-		if( !f )  return;
-		fwrite( szBody, sizeof( WCHAR ), wcslen( szBody ), f );
-		fclose( f );
-		m_dLastSentRatio = dRatio;
-		RbLogF( "scroll sync: ratio=%.4f", dRatio );
+		const int nY = (int)pt.y;
+		const int nDelta = nY - m_nLastEditorY;
+		if( nDelta == 0 )  return;
+		m_nLastEditorY = nY;
+		// px model with the pane width ratio (user proposal): the same
+		// content wraps more in a narrower pane, so the preview scroll =
+		// editor scroll px x (editorW / previewW)
+		RECT rcView = { 0, 0, 0, 0 }, rcPrev = { 0, 0, 0, 0 };
+		GetClientRect( m_hwndView, &rcView );
+		int nWe = rcView.right - rcView.left;
+		int nWp = 0;
+		if( m_hwndPreviewHost && IsWindow( m_hwndPreviewHost ) ){
+			GetClientRect( m_hwndPreviewHost, &rcPrev );
+			nWp = rcPrev.right - rcPrev.left;
+		}
+		double dScale = ( nWe > 0 && nWp > 0 ) ? (double)nWe / (double)nWp : 1.0;
+		const int nPx = (int)( nDelta * m_nPreviewLineCssPx * 1.6 * dScale );
+		TCHAR szMacro[ 128 ];
+		wsprintf( szMacro, L"WebBar.scrollBy( 0, %d );", nPx );
+		RunWebBarMacro( szMacro );	// dropped frames are fine while scrolling
 	}	// JSON/JS string escape for embedding the markdown source into the
 	// preview page: < and > become \u003c/\u003e so a literal
 	// "</script>" inside the text cannot terminate the script tag
@@ -3243,7 +3241,8 @@ public:
 				else if( nHeight > 0 )  nHeight = MulDiv( nHeight, 4, 5 );	// cell height -> approx em
 				int nDpi = (int)Editor_DocInfo( m_hWnd, 0, EI_GET_DPI, 0 );
 				if( nDpi <= 0 )  nDpi = 96;
-				int nPx = MulDiv( nHeight, 96, nDpi );	// device px -> CSS px
+				int nPx = MulDiv( nHeight, 96, nDpi );
+				m_nPreviewLineCssPx = nPx;	// device px -> CSS px
 				m_nEditorLineCssPx = MulDiv( nHeight, 96, nDpi );	// editor line height, CSS px
 				if( nPx < 9 )  nPx = 9;
 				TCHAR szCss[ 256 ];

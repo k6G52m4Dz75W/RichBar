@@ -42,6 +42,20 @@ this code base:
   `WebBar.scrollTo` must not be used from macros (a failing scrollTo
   makes EmEditor open the macro source as a document tab).
 
+## [0.61.0] - 2026-10-01
+
+### Changed
+
+- **Live scroll sync simplified to direct px deltas with the pane
+  width ratio** (user model): the 300 ms poll converts the editor
+  scroll delta (lines) to preview px (preview font CSS px x 1.6
+  line-height) and feeds it straight to `WebBar.scrollBy`, scaled by
+  editor-pane-width / preview-pane-width — the same content wraps
+  more in a narrower pane, so the narrower side scrolls
+  proportionally more. The sync-file channel (page poller) is
+  removed; user-confirmed diagnostics: `scrollBy` units are pixels
+  and it is the only scroll primitive that moves the preview.
+
 ## [0.60.0] - 2026-10-01
 
 ### Changed
