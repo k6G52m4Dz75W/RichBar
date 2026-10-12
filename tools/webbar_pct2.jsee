@@ -1,0 +1,2 @@
+#language = "V8"
+WebBar.scrollBy( 0, 50 );

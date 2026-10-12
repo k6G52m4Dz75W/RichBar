@@ -468,7 +468,8 @@ public:
 	bool m_bStartupSettled = false;	// pane open/close suppressed until the session restore finishes
 	bool m_bNewApi = false;
 	int m_nLastEditorY = 0;		// last editor scroll line seen by the poll
-	int m_nPreviewLinePx = 26;	// preview line height in px (font px x 1.6)		// cached: EmEditor >= 26.3.0 (document.Text macro, WebBar scroll)
+	int m_nPreviewLinePx = 26;	// preview line height in px (font px x 1.6)
+	int m_nLastSentAnchor = -1;	// last end-anchor sent: 0 top, 2 bottom		// cached: EmEditor >= 26.3.0 (document.Text macro, WebBar scroll)
 	HWND m_hwndView;				// the EmEditor VIEW window (plug-in OnCommand contract)
 	bool m_bPanesRestored;		// startup pane restore done (first state-sync tick)
 	UINT m_nPreviewBarID;		// custom-bar id of the live preview pane
@@ -3127,13 +3128,35 @@ public:
 		POINT_PTR pt = { 0, 0 };
 		Editor_GetScrollPos( m_hwndView, &pt );
 		const int nY = (int)pt.y;
+		UINT_PTR nLines = Editor_GetLines( m_hwndView, TRUE );
 		const int nDelta = nY - m_nLastEditorY;
-		if( nDelta == 0 )  return;
 		m_nLastEditorY = nY;
-		const int nPx = nDelta * m_nPreviewLinePx;
+		SIZE_PTR sizePage = { 0, 0 };
+		Editor_GetPageSize( m_hwndView, &sizePage );
+		const int nScrollable = (int)nLines - (int)sizePage.cy;
 		TCHAR szMacro[ 128 ];
-		wsprintf( szMacro, L"WebBar.scrollBy( 0, %d );", nPx );
-		RunWebBarMacro( szMacro );	// dropped frames are fine while scrolling
+		if( nY >= nScrollable ){
+			// editor at its BOTTOM: pin the preview to its bottom (exact end)
+			if( m_nLastSentAnchor != 2 ){
+				wsprintf( szMacro, L"WebBar.scrollBy( 0, 99999999 );" );
+				RunWebBarMacro( szMacro );
+				m_nLastSentAnchor = 2;
+			}
+		}
+		else if( nY <= 0 ){
+			// editor at its TOP: pin the preview to its top
+			if( m_nLastSentAnchor != 0 ){
+				wsprintf( szMacro, L"WebBar.scrollBy( 0, -99999999 );" );
+				RunWebBarMacro( szMacro );
+				m_nLastSentAnchor = 0;
+			}
+		}
+		else {
+			if( nDelta == 0 )  return;
+			const int nPx = nDelta * m_nPreviewLinePx;
+			wsprintf( szMacro, L"WebBar.scrollBy( 0, %d );", nPx );
+			RunWebBarMacro( szMacro );	// dropped frames are fine while scrolling
+		}
 	}
 	// JSON/JS string escape for embedding the markdown source into the
 	// preview page: < and > become \u003c/\u003e so a literal

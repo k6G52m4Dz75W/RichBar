@@ -29,6 +29,19 @@ this code base:
   probe succeeds the preview follows the editor to the same fraction
   of its scrollable range (adapts to pane size and docking side).
 
+## [0.58.0] - 2026-10-01
+
+### Changed
+
+- **Scroll sync endpoints are now exact**: when the editor reaches
+  its very top or bottom, the preview is pinned to its own top/
+  bottom with a single clamped `WebBar.scrollBy` (the only scroll
+  primitive confirmed working in the pane). The middle still tracks
+  by line delta.
+- User-confirmed via diagnostics: `scrollBy` units are pixels, and
+  `WebBar.scrollTo` must not be used from macros (a failing scrollTo
+  makes EmEditor open the macro source as a document tab).
+
 ## [0.56.1] - 2026-10-01
 
 ### Fixed
