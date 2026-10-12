@@ -15,6 +15,19 @@ this code base:
 | `0.9.0` – `0.17.x` | The HTML + Markdown dual-mode toolbar, heading towards `1.0.0`. |
 
 
+## [0.54.0] - 2026-10-01
+
+### Changed
+
+- **Proportional live scroll sync**: the preview follows the editor to
+  the same FRACTION of its scrollable range — the editor ratio is
+  `scrollY / (totalLines − visibleLines)` (all three queried from the
+  view), and the preview is driven to `ratio × previewMax` with the
+  native `WebBar.scrollTo`. The preview scrollable height is probed
+  once per render inside the same macro (probe + reposition, no
+  flicker), so it adapts to any docking side and pane size. The
+  previous line-delta approximation (which drifted) is removed.
+
 ## [0.53.0] - 2026-10-01
 
 ### Changed
