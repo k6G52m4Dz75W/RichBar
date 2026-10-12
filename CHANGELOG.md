@@ -15,6 +15,20 @@ this code base:
 | `0.9.0` – `0.17.x` | The HTML + Markdown dual-mode toolbar, heading towards `1.0.0`. |
 
 
+## [0.55.0] - 2026-10-01
+
+### Changed
+
+- **Proportional scroll sync, attempt 2 (deadlock cured)**: the
+  preview-height probe macro now returns `String(m)` — the 0.54.0
+  probe returned a bare number which never populated the macro result
+  handle, and because the actual scroll was gated behind the probe the
+  preview froze completely. The probe is also limited to 3 attempts
+  per render; after that the poll degrades to the proven
+  relative-delta mode, so scrolling can never freeze again. When the
+  probe succeeds the preview follows the editor to the same fraction
+  of its scrollable range (adapts to pane size and docking side).
+
 ## [0.53.1] - 2026-10-01
 
 ### Fixed
