@@ -468,8 +468,7 @@ public:
 	bool m_bStartupSettled = false;	// pane open/close suppressed until the session restore finishes
 	bool m_bNewApi = false;
 	int m_nLastEditorY = 0;		// last editor scroll line seen by the poll
-	int m_nPreviewLinePx = 26;
-	int m_nCalibratedLinePx = 0;	// px per editor line from the page title (0 = not yet)	// preview line height in px (font px x 1.6)
+	int m_nPreviewLinePx = 26;	// preview line height in px (font px x 1.6)
 	int m_nLastSentAnchor = -1;	// last end-anchor sent: 0 top, 2 bottom		// cached: EmEditor >= 26.3.0 (document.Text macro, WebBar scroll)
 	HWND m_hwndView;				// the EmEditor VIEW window (plug-in OnCommand contract)
 	bool m_bPanesRestored;		// startup pane restore done (first state-sync tick)
@@ -3111,33 +3110,6 @@ public:
 		m_nPreviewLinePx = ( nPx > 8 ) ? ( nPx * 16 / 10 ) : 26;
 	}
 
-	// scan the bar window tree for the page-published "RB|<px>" title
-	static BOOL CALLBACK FindTitleProc( HWND hwnd, LPARAM lParam )
-	{
-		WCHAR szTitle[ 64 ];
-		int n = GetWindowText( hwnd, szTitle, 64 );
-		if( n >= 4 && wcsncmp( szTitle, L"RB|", 3 ) == 0 ){
-			*(int*)lParam = _wtoi( szTitle + 3 );
-			return FALSE;
-		}
-		return TRUE;
-	}
-
-	int GetPreviewMaxFromTitle()
-	{
-		int nMax = 0;
-		HWND hBar = m_hwndPreviewHost;
-		while( hBar && IsWindow( hBar ) ){
-			WCHAR szTitle[ 64 ];
-			int n = GetWindowText( hBar, szTitle, 64 );
-			if( n >= 4 && wcsncmp( szTitle, L"RB|", 3 ) == 0 ){
-				return _wtoi( szTitle + 3 );
-			}
-			hBar = GetParent( hBar );
-		}
-		EnumChildWindows( m_hWnd, FindTitleProc, (LPARAM)&nMax );
-		return nMax;
-	}
 	void StartScrollerPoll()
 	{
 		POINT_PTR pt = { 0, 0 };
@@ -3181,14 +3153,9 @@ public:
 		}
 		else {
 			if( nDelta == 0 )  return;
-			int nPxPerLine = m_nPreviewLinePx;
-			const int nPageMax = GetPreviewMaxFromTitle();
-			if( nPageMax > 0 && nScrollable > 0 ){
-				nPxPerLine = nPageMax / nScrollable;
-			}
-			const int nPx = nDelta * nPxPerLine;
+			const int nPx = nDelta * m_nPreviewLinePx;
 			wsprintf( szMacro, L"WebBar.scrollBy( 0, %d );", nPx );
-			RunWebBarMacro( szMacro );
+			RunWebBarMacro( szMacro );	// dropped frames are fine while scrolling
 		}
 	}
 	// JSON/JS string escape for embedding the markdown source into the
@@ -3449,8 +3416,6 @@ public:
 				sHtml += L"function __rbRestore(){if(typeof window.__scrollRatio==='number'){var h=document.body.scrollHeight-window.innerHeight;if(h>0){window.scrollTo(0,window.__scrollRatio*h);}}}";
 				sHtml += L"window.addEventListener('load',function(){__rbRestore();setTimeout(__rbRestore,100);setTimeout(__rbRestore,400);});";
 				sHtml += L"__rbRestore();";
-				sHtml += L"function __rbTitle(){try{document.title='RB|'+String(document.body.scrollHeight-window.innerHeight);}catch(e){}}";
-				sHtml += L"window.addEventListener('load',__rbTitle);window.addEventListener('resize',__rbTitle);setTimeout(__rbTitle,50);setTimeout(__rbTitle,500);";
 				sHtml += L"</script>";
 				sHtml += L"</body></html>";
 			}
