@@ -1,0 +1,18 @@
+#language = "V8"
+var msg = [];
+msg.push( "typeof WebBar = " + ( typeof WebBar ) );
+try { msg.push( "typeof WebBar.scrollTo = " + ( typeof WebBar.scrollTo ) ); } catch(e) { msg.push( "scrollTo err: " + e.message ); }
+try { msg.push( "typeof WebBar.scrollBy = " + ( typeof WebBar.scrollBy ) ); } catch(e) { msg.push( "scrollBy err: " + e.message ); }
+try { msg.push( "ScrollY = " + String( WebBar.ScrollY ) ); } catch(e) { msg.push( "ScrollY err: " + e.message ); }
+try { msg.push( "scrollY = " + String( WebBar.scrollY ) ); } catch(e) { msg.push( "scrollY err: " + e.message ); }
+try { msg.push( "ScrollX = " + String( WebBar.ScrollX ) ); } catch(e) { msg.push( "ScrollX err: " + e.message ); }
+try { msg.push( "Visible = " + String( WebBar.Visible ) ); } catch(e) { msg.push( "Visible err: " + e.message ); }
+try {
+	WebBar.scrollBy( 0, 200 );
+	msg.push( "scrollBy(0,200) executed OK" );
+	msg.push( "after: ScrollY = " + String( WebBar.ScrollY ) );
+	msg.push( "after: scrollY = " + String( WebBar.scrollY ) );
+} catch(e) { msg.push( "scrollBy err: " + e.message ); }
+OutputBar.visible = true;
+OutputBar.clear();
+OutputBar.write( msg.join( "\n" ) );

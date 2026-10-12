@@ -29,6 +29,19 @@ this code base:
   probe succeeds the preview follows the editor to the same fraction
   of its scrollable range (adapts to pane size and docking side).
 
+## [0.56.1] - 2026-10-01
+
+### Fixed
+
+- **Reverted the ScrollY probe** (0.56.0): with the corrected property
+  name the probe still displaced the preview content sideways and
+  scrolling did not resume. Controlled tests (scrollTo(0,300) /
+  scrollTo(300,0), position readbacks) show the WebBar scroll API in
+  EmEditor 26.3.0 is not functional against the preview pane. The
+  proven 0.53.1 relative-delta sync is restored; the proportional
+  model is deferred until the WebBar scroll API works (upstream
+  report material: the scrollby/scrollto doc pages are also swapped).
+
 ## [0.56.0] - 2026-10-01
 
 ### Fixed

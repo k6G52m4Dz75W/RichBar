@@ -1,0 +1,11 @@
+#language = "V8"
+var r = [];
+WebBar.scrollTo( 0, 300 );
+r.push( "scrollTo(0,300) -> scrollY=" + WebBar.scrollY + " scrollX=" + WebBar.scrollX );
+WebBar.scrollTo( 300, 0 );
+r.push( "scrollTo(300,0) -> scrollY=" + WebBar.scrollY + " scrollX=" + WebBar.scrollX );
+WebBar.scrollTo( 0, 0 );
+r.push( "reset -> scrollY=" + WebBar.scrollY + " scrollX=" + WebBar.scrollX );
+OutputBar.visible = true;
+OutputBar.clear();
+OutputBar.write( r.join( "\n" ) );

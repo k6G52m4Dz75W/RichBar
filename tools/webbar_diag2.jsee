@@ -1,0 +1,12 @@
+#language = "V8"
+WebBar.Visible = true;
+WebBar.SetFocus();
+WebBar.scrollBy( 0, 300 );
+var a = WebBar.scrollY;
+WebBar.scrollY = 600;
+var b = WebBar.scrollY;
+WebBar.scrollY = 1200;
+var c = WebBar.scrollY;
+OutputBar.visible = true;
+OutputBar.clear();
+OutputBar.write( "after scrollBy(0,300): " + a + "\nafter scrollY=600: " + b + "\nafter scrollY=1200: " + c );
