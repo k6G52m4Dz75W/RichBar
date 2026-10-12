@@ -469,6 +469,8 @@ public:
 	bool m_bNewApi = false;
 	int m_nLastEditorY = 0;		// last editor scroll line seen by the poll
 	int m_nPreviewLinePx = 26;	// preview line height in px (font px x 1.6)
+	int m_nEditorLineCssPx = 16;	// editor line height in CSS px (set at render)
+	int m_nLastSentTargetPx = -1;	// last px target sent to the preview
 	int m_nLastSentAnchor = -1;	// last end-anchor sent: 0 top, 2 bottom		// cached: EmEditor >= 26.3.0 (document.Text macro, WebBar scroll)
 	HWND m_hwndView;				// the EmEditor VIEW window (plug-in OnCommand contract)
 	bool m_bPanesRestored;		// startup pane restore done (first state-sync tick)
@@ -3104,12 +3106,6 @@ public:
 		FindClose( hFind );
 	}
 
-	// remember the preview line height (px) for the scroll sync
-	void SetPreviewLinePx( int nPx )
-	{
-		m_nPreviewLinePx = ( nPx > 8 ) ? ( nPx * 16 / 10 ) : 26;
-	}
-
 	void StartScrollerPoll()
 	{
 		POINT_PTR pt = { 0, 0 };
@@ -3152,10 +3148,20 @@ public:
 			}
 		}
 		else {
-			if( nDelta == 0 )  return;
-			const int nPx = nDelta * m_nPreviewLinePx;
-			wsprintf( szMacro, L"WebBar.scrollBy( 0, %d );", nPx );
-			RunWebBarMacro( szMacro );	// dropped frames are fine while scrolling
+			RECT rcView = { 0, 0, 0, 0 }, rcPrev = { 0, 0, 0, 0 };
+			GetClientRect( m_hwndView, &rcView );
+			int nWe = rcView.right - rcView.left;
+			int nWp = 0;
+			if( m_hwndPreviewHost && IsWindow( m_hwndPreviewHost ) ){
+				GetClientRect( m_hwndPreviewHost, &rcPrev );
+				nWp = rcPrev.right - rcPrev.left;
+			}
+			double dScale = ( nWe > 0 && nWp > 0 ) ? (double)nWe / (double)nWp : 1.0;
+			const int nTarget = (int)( nY * m_nEditorLineCssPx * dScale );
+			if( nTarget == m_nLastSentTargetPx )  return;
+			m_nLastSentTargetPx = nTarget;
+			wsprintf( szMacro, L"WebBar.scrollTo( 0, %d );", nTarget );
+			RunWebBarMacro( szMacro );
 		}
 	}
 	// JSON/JS string escape for embedding the markdown source into the
@@ -3251,7 +3257,7 @@ public:
 				int nDpi = (int)Editor_DocInfo( m_hWnd, 0, EI_GET_DPI, 0 );
 				if( nDpi <= 0 )  nDpi = 96;
 				int nPx = MulDiv( nHeight, 96, nDpi );	// device px -> CSS px
-				SetPreviewLinePx( nPx );
+				m_nEditorLineCssPx = MulDiv( nHeight, 96, nDpi );	// editor line height, CSS px
 				if( nPx < 9 )  nPx = 9;
 				TCHAR szCss[ 256 ];
 				wsprintf( szCss, _T("body{font-family:'%s','Microsoft YaHei',Segoe UI,Arial,sans-serif;font-size:%dpx;"), (LPCWSTR)lfView.lfFaceName, (unsigned)nPx );
