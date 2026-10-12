@@ -3409,7 +3409,7 @@ public:
 				sHtml += L"window.addEventListener('load',function(){__rbRestore();setTimeout(__rbRestore,100);setTimeout(__rbRestore,400);});";
 				sHtml += L"__rbRestore();";
 				sHtml += L"function __rbSetRatio(r){window.__scrollRatio=r;__rbRestore();}";
-				sHtml += L"window.__rbPoll=function(){var s=document.createElement('script');s.src='RichBarSync.js?cb='+Date.now();document.body.appendChild(s);};";
+				sHtml += L"window.__rbPoll=function(){var s=document.createElement('script');s.src='RichBarSync.js';document.body.appendChild(s);};";
 				sHtml += L"setInterval(window.__rbPoll,250);";
 				sHtml += L"</script>";
 				sHtml += L"</body></html>";
