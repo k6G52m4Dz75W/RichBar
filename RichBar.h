@@ -208,6 +208,7 @@ WCHAR OctToDec( LPWSTR& p )
 #define IDT_WEB_NAVIGATE		7
 #define IDT_WEBBAR_RETRY		8
 #define IDT_DOC_SYNC			9
+#define IDT_SCROLLER_POLL		11
 #define IDT_STARTUP_SETTLE		10
 // one-shot deferred design-view reconcile (m_hDlg): a 23255 posted during
 // the document-switch event lands before the switch settles and misapplies
@@ -465,7 +466,8 @@ public:
 	tstring m_sPendingMacro;	// WebBar macro awaiting retry (V8 engine not ready)
 	int m_nMacroRetries = 0;
 	bool m_bStartupSettled = false;	// pane open/close suppressed until the session restore finishes
-	bool m_bNewApi = false;		// cached: EmEditor >= 26.3.0 (document.Text macro, WebBar scroll)
+	bool m_bNewApi = false;
+	double m_dLastSentRatio = -1.0;	// last ratio pushed to RichBarSync.js		// cached: EmEditor >= 26.3.0 (document.Text macro, WebBar scroll)
 	HWND m_hwndView;				// the EmEditor VIEW window (plug-in OnCommand contract)
 	bool m_bPanesRestored;		// startup pane restore done (first state-sync tick)
 	UINT m_nPreviewBarID;		// custom-bar id of the live preview pane
@@ -1998,7 +2000,15 @@ public:
 				GlobalFree( rmi.hstrResult );
 			}
 			RbLogF( "document.Text failed hr=0x%08X - clipboard fallback", (unsigned)hr );
-			return false;	// do NOT touch the clipboard when the new API failed
+			RbLogF( "falling back to the clipboard read" );
+			if( hr == (HRESULT)0x2000000B && m_hDlg ){
+				// V8 cold-start: schedule ONE re-render attempt next second
+				static bool s_bRequeued = false;
+				if( !s_bRequeued ){
+					s_bRequeued = true;
+					SetTimer( m_hDlg, IDT_PREVIEW_REFRESH, 1200, NULL );
+				}
+			}
 			}
 		// whole-document read via SelectAll + Copy (single-shot; the per-line
 		// EE_GET_LINE loop proved display-indexed in wrapped documents).
@@ -3039,6 +3049,7 @@ public:
 		sMacro += _T("\" );");
 		RunWebBarMacroStaged( sMacro.c_str() );
 		RbLogF( "pane walk after open: visible=%d", (int)IsOfficialPaneVisible() );
+		StartScrollerPoll();
 	}
 
 	// the DLL folder + subpath helper (themes\xxx.css lives beside us)
@@ -3091,6 +3102,41 @@ public:
 		FindClose( hFind );
 	}
 
+	// write the scroll-ratio sync file consumed by the preview page
+	void WriteScrollerSync( double dRatio )
+	{
+		TCHAR szPath[ MAX_PATH ];
+		TCHAR szBody[ 64 ];
+		GetTempPath( MAX_PATH, szPath );
+		wcscat_s( szPath, MAX_PATH, L"RichBarSync.js" );
+		wsprintf( szBody, L"__rbSetRatio(%.4f);", dRatio );
+		FILE* f = _wfopen( szPath, L"wb" );
+		if( !f )  return;
+		fwrite( szBody, sizeof( WCHAR ), wcslen( szBody ), f );
+		fclose( f );
+		m_dLastSentRatio = dRatio;
+	}
+
+	void StartScrollerPoll()
+	{
+		m_dLastSentRatio = -1.0;	// force the first write
+		if( m_hDlg )  SetTimer( m_hDlg, IDT_SCROLLER_POLL, 300, NULL );
+	}
+
+	// the 300ms scroller poll: push ratio changes to the preview page
+	void OnScrollerPoll()
+	{
+		if( !IsOfficialPaneVisible() )  return;
+		POINT_PTR ptScroll = { 0, 0 };
+		Editor_GetScrollPos( m_hWnd, &ptScroll );
+		UINT_PTR nLines = Editor_GetLines( m_hWnd, TRUE );
+		if( nLines < 2 )  return;
+		double dRatio = (double)ptScroll.y / (double)( nLines - 1 );
+		if( dRatio < 0 )  dRatio = 0;
+		if( dRatio > 1 )  dRatio = 1;
+		if( dRatio == m_dLastSentRatio )  return;
+		WriteScrollerSync( dRatio );
+	}
 	// JSON/JS string escape for embedding the markdown source into the
 	// preview page: < and > become \u003c/\u003e so a literal
 	// "</script>" inside the text cannot terminate the script tag
@@ -3347,6 +3393,9 @@ public:
 				sHtml += L"function __rbRestore(){if(typeof window.__scrollRatio==='number'){var h=document.body.scrollHeight-window.innerHeight;if(h>0){window.scrollTo(0,window.__scrollRatio*h);}}}";
 				sHtml += L"window.addEventListener('load',function(){__rbRestore();setTimeout(__rbRestore,100);setTimeout(__rbRestore,400);});";
 				sHtml += L"__rbRestore();";
+				sHtml += L"function __rbSetRatio(r){window.__scrollRatio=r;__rbRestore();}";
+				sHtml += L"window.__rbPoll=function(){var s=document.createElement('script');s.src='RichBarSync.js';document.body.appendChild(s);};";
+				sHtml += L"setInterval(window.__rbPoll,250);";
 				sHtml += L"</script>";
 				sHtml += L"</body></html>";
 			}
@@ -5838,7 +5887,14 @@ INT_PTR CALLBACK NewProc( HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam )
 				}
 				return 0;
 			}
-			else if( wParam == IDT_DOC_SYNC ){
+			else if( wParam == IDT_SCROLLER_POLL ){
+			CMyFrame* pFrame = static_cast<CMyFrame*>(GetFrame( hwnd ));
+			if( pFrame ){
+				pFrame->OnScrollerPoll();
+			}
+			return 0;
+		}
+		else if( wParam == IDT_DOC_SYNC ){
 				KillTimer( hwnd, IDT_DOC_SYNC );
 				CMyFrame* pFrame = static_cast<CMyFrame*>(GetFrame( hwnd ));
 				if( pFrame ){
