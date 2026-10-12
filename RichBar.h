@@ -468,11 +468,9 @@ public:
 	bool m_bStartupSettled = false;	// pane open/close suppressed until the session restore finishes
 	bool m_bNewApi = false;
 	int m_nLastEditorY = 0;		// last editor scroll line seen by the poll
-	int m_nPreviewLinePx = 26;	// preview line height in px (font px x 1.6)
-	int m_nEditorLineCssPx = 16;	// editor line height in CSS px (set at render)
-	int m_nLastSentTargetPx = -1;	// last px target sent to the preview
-	int m_nLastSentAnchor = -1;
-	double m_dLastSentRatio = -1.0;	// last editor ratio written to the sync file	// last end-anchor sent: 0 top, 2 bottom		// cached: EmEditor >= 26.3.0 (document.Text macro, WebBar scroll)
+	int m_nPreviewLinePx = 26;
+	int m_nCalibratedLinePx = 0;	// px per editor line from the page title (0 = not yet)	// preview line height in px (font px x 1.6)
+	int m_nLastSentAnchor = -1;	// last end-anchor sent: 0 top, 2 bottom		// cached: EmEditor >= 26.3.0 (document.Text macro, WebBar scroll)
 	HWND m_hwndView;				// the EmEditor VIEW window (plug-in OnCommand contract)
 	bool m_bPanesRestored;		// startup pane restore done (first state-sync tick)
 	UINT m_nPreviewBarID;		// custom-bar id of the live preview pane
@@ -3107,51 +3105,93 @@ public:
 		FindClose( hFind );
 	}
 
+	// remember the preview line height (px) for the scroll sync
+	void SetPreviewLinePx( int nPx )
+	{
+		m_nPreviewLinePx = ( nPx > 8 ) ? ( nPx * 16 / 10 ) : 26;
+	}
+
+	// scan the bar window tree for the page-published "RB|<px>" title
+	static BOOL CALLBACK FindTitleProc( HWND hwnd, LPARAM lParam )
+	{
+		WCHAR szTitle[ 64 ];
+		int n = GetWindowText( hwnd, szTitle, 64 );
+		if( n >= 4 && wcsncmp( szTitle, L"RB|", 3 ) == 0 ){
+			*(int*)lParam = _wtoi( szTitle + 3 );
+			return FALSE;
+		}
+		return TRUE;
+	}
+
+	int GetPreviewMaxFromTitle()
+	{
+		int nMax = 0;
+		HWND hBar = m_hwndPreviewHost;
+		while( hBar && IsWindow( hBar ) ){
+			WCHAR szTitle[ 64 ];
+			int n = GetWindowText( hBar, szTitle, 64 );
+			if( n >= 4 && wcsncmp( szTitle, L"RB|", 3 ) == 0 ){
+				return _wtoi( szTitle + 3 );
+			}
+			hBar = GetParent( hBar );
+		}
+		EnumChildWindows( m_hWnd, FindTitleProc, (LPARAM)&nMax );
+		return nMax;
+	}
 	void StartScrollerPoll()
 	{
 		POINT_PTR pt = { 0, 0 };
 		if( m_hwndView && IsWindow( m_hwndView ) ){
 			Editor_GetScrollPos( m_hwndView, &pt );
 		}
-		m_nLastEditorY = (int)pt.y;
-		m_dLastSentRatio = -1.0;	// no jump on open
+		m_nLastEditorY = (int)pt.y;	// no jump on open
 		if( m_hDlg )  SetTimer( m_hDlg, IDT_SCROLLER_POLL, 300, NULL );
 	}
 
-	// the 300ms poll: proportional sync via the sync-file channel.
-	// editor ratio = scrollY / (totalLines - visibleLines); on change
-	// (>= 0.5%) it is written to RichBarSync.js and the preview page -
-	// which polls the file - positions itself by its own real metrics.
-	// Works for ANY pane geometry (width or height differences).
+	// the 300ms poll: editor scrolled? drive the Web bar natively
 	void OnScrollerPoll()
 	{
 		if( !IsOfficialPaneVisible() )  return;
 		if( !m_hwndView || !IsWindow( m_hwndView ) )  return;
 		POINT_PTR pt = { 0, 0 };
 		Editor_GetScrollPos( m_hwndView, &pt );
+		const int nY = (int)pt.y;
 		UINT_PTR nLines = Editor_GetLines( m_hwndView, TRUE );
+		const int nDelta = nY - m_nLastEditorY;
+		m_nLastEditorY = nY;
 		SIZE_PTR sizePage = { 0, 0 };
 		Editor_GetPageSize( m_hwndView, &sizePage );
 		const int nScrollable = (int)nLines - (int)sizePage.cy;
-		if( nScrollable < 1 )  return;
-		double dRatio = (double)pt.y / (double)nScrollable;
-		if( dRatio < 0 )  dRatio = 0;
-		if( dRatio > 1 )  dRatio = 1;
-		double dDiff = dRatio - m_dLastSentRatio;
-		if( dDiff < 0 )  dDiff = -dDiff;
-		if( dDiff < 0.005 )  return;
-		TCHAR szPath[ MAX_PATH ];
-		TCHAR szBody[ 64 ];
-		GetTempPath( MAX_PATH, szPath );
-		wcscat_s( szPath, MAX_PATH, L"RichBarSync.js" );
-		wsprintf( szBody, L"__rbSetRatio(%.4f);", dRatio );
-		FILE* f = _wfopen( szPath, L"wb" );
-		if( !f )  return;
-		fwrite( szBody, sizeof( WCHAR ), wcslen( szBody ), f );
-		fclose( f );
-		m_dLastSentRatio = dRatio;
-		RbLogF( "scroll sync: ratio=%.4f", dRatio );
-	}	// JSON/JS string escape for embedding the markdown source into the
+		TCHAR szMacro[ 128 ];
+		if( nY >= nScrollable ){
+			// editor at its BOTTOM: pin the preview to its bottom (exact end)
+			if( m_nLastSentAnchor != 2 ){
+				wsprintf( szMacro, L"WebBar.scrollBy( 0, 99999999 );" );
+				RunWebBarMacro( szMacro );
+				m_nLastSentAnchor = 2;
+			}
+		}
+		else if( nY <= 0 ){
+			// editor at its TOP: pin the preview to its top
+			if( m_nLastSentAnchor != 0 ){
+				wsprintf( szMacro, L"WebBar.scrollBy( 0, -99999999 );" );
+				RunWebBarMacro( szMacro );
+				m_nLastSentAnchor = 0;
+			}
+		}
+		else {
+			if( nDelta == 0 )  return;
+			int nPxPerLine = m_nPreviewLinePx;
+			const int nPageMax = GetPreviewMaxFromTitle();
+			if( nPageMax > 0 && nScrollable > 0 ){
+				nPxPerLine = nPageMax / nScrollable;
+			}
+			const int nPx = nDelta * nPxPerLine;
+			wsprintf( szMacro, L"WebBar.scrollBy( 0, %d );", nPx );
+			RunWebBarMacro( szMacro );
+		}
+	}
+	// JSON/JS string escape for embedding the markdown source into the
 	// preview page: < and > become \u003c/\u003e so a literal
 	// "</script>" inside the text cannot terminate the script tag
 	tstring JsEscape( const tstring& sIn )
@@ -3244,7 +3284,7 @@ public:
 				int nDpi = (int)Editor_DocInfo( m_hWnd, 0, EI_GET_DPI, 0 );
 				if( nDpi <= 0 )  nDpi = 96;
 				int nPx = MulDiv( nHeight, 96, nDpi );	// device px -> CSS px
-				m_nEditorLineCssPx = MulDiv( nHeight, 96, nDpi );	// editor line height, CSS px
+				SetPreviewLinePx( nPx );
 				if( nPx < 9 )  nPx = 9;
 				TCHAR szCss[ 256 ];
 				wsprintf( szCss, _T("body{font-family:'%s','Microsoft YaHei',Segoe UI,Arial,sans-serif;font-size:%dpx;"), (LPCWSTR)lfView.lfFaceName, (unsigned)nPx );
@@ -3404,13 +3444,13 @@ public:
 				tstring sRatio = szRatio;
 				sHtml += L"\";";
 				sHtml += L"window.__scrollRatio=" + sRatio + L";";
+				sHtml += L"window.__scrollRatio=" + sRatio + L";";
 				sHtml += L"document.getElementById('content').innerHTML=marked.parse(NormalizeSingleNewlines(window.__md),{breaks:true,gfm:true});";
 				sHtml += L"function __rbRestore(){if(typeof window.__scrollRatio==='number'){var h=document.body.scrollHeight-window.innerHeight;if(h>0){window.scrollTo(0,window.__scrollRatio*h);}}}";
 				sHtml += L"window.addEventListener('load',function(){__rbRestore();setTimeout(__rbRestore,100);setTimeout(__rbRestore,400);});";
 				sHtml += L"__rbRestore();";
-				sHtml += L"function __rbSetRatio(r){window.__scrollRatio=r;__rbRestore();}";
-				sHtml += L"window.__rbPoll=function(){var s=document.createElement('script');s.src='RichBarSync.js';document.body.appendChild(s);};";
-				sHtml += L"setInterval(window.__rbPoll,250);";
+				sHtml += L"function __rbTitle(){try{document.title='RB|'+String(document.body.scrollHeight-window.innerHeight);}catch(e){}}";
+				sHtml += L"window.addEventListener('load',__rbTitle);window.addEventListener('resize',__rbTitle);setTimeout(__rbTitle,50);setTimeout(__rbTitle,500);";
 				sHtml += L"</script>";
 				sHtml += L"</body></html>";
 			}
