@@ -467,7 +467,8 @@ public:
 	int m_nMacroRetries = 0;
 	bool m_bStartupSettled = false;	// pane open/close suppressed until the session restore finishes
 	bool m_bNewApi = false;
-	double m_dLastSentRatio = -1.0;	// last ratio pushed to RichBarSync.js		// cached: EmEditor >= 26.3.0 (document.Text macro, WebBar scroll)
+	int m_nLastEditorY = 0;		// last editor scroll line seen by the poll
+	int m_nPreviewLinePx = 26;	// preview line height in px (font px x 1.6)		// cached: EmEditor >= 26.3.0 (document.Text macro, WebBar scroll)
 	HWND m_hwndView;				// the EmEditor VIEW window (plug-in OnCommand contract)
 	bool m_bPanesRestored;		// startup pane restore done (first state-sync tick)
 	UINT m_nPreviewBarID;		// custom-bar id of the live preview pane
@@ -3102,41 +3103,37 @@ public:
 		FindClose( hFind );
 	}
 
-	// write the scroll-ratio sync file consumed by the preview page
-	void WriteScrollerSync( double dRatio )
+	// remember the preview line height (px) for the scroll sync
+	void SetPreviewLinePx( int nPx )
 	{
-		TCHAR szPath[ MAX_PATH ];
-		TCHAR szBody[ 64 ];
-		GetTempPath( MAX_PATH, szPath );
-		wcscat_s( szPath, MAX_PATH, L"RichBarSync.js" );
-		wsprintf( szBody, L"__rbSetRatio(%.4f);", dRatio );
-		FILE* f = _wfopen( szPath, L"wb" );
-		if( !f )  return;
-		fwrite( szBody, sizeof( WCHAR ), wcslen( szBody ), f );
-		fclose( f );
-		m_dLastSentRatio = dRatio;
-		RbLogF( "scroll push: ratio=%.4f", dRatio );
+		m_nPreviewLinePx = ( nPx > 8 ) ? ( nPx * 16 / 10 ) : 26;
 	}
 
 	void StartScrollerPoll()
 	{
-		m_dLastSentRatio = -1.0;	// force the first write
+		POINT_PTR pt = { 0, 0 };
+		if( m_hwndView && IsWindow( m_hwndView ) ){
+			Editor_GetScrollPos( m_hwndView, &pt );
+		}
+		m_nLastEditorY = (int)pt.y;	// no jump on open
 		if( m_hDlg )  SetTimer( m_hDlg, IDT_SCROLLER_POLL, 300, NULL );
 	}
 
-	// the 300ms scroller poll: push ratio changes to the preview page
+	// the 300ms poll: editor scrolled? drive the Web bar natively
 	void OnScrollerPoll()
 	{
 		if( !IsOfficialPaneVisible() )  return;
-		POINT_PTR ptScroll = { 0, 0 };
-		Editor_GetScrollPos( m_hwndView, &ptScroll );	// the VIEW scrolls, not the frame
-		UINT_PTR nLines = Editor_GetLines( m_hwndView, TRUE );
-		if( nLines < 2 )  return;
-		double dRatio = (double)ptScroll.y / (double)( nLines - 1 );
-		if( dRatio < 0 )  dRatio = 0;
-		if( dRatio > 1 )  dRatio = 1;
-		if( dRatio == m_dLastSentRatio )  return;
-		WriteScrollerSync( dRatio );
+		if( !m_hwndView || !IsWindow( m_hwndView ) )  return;
+		POINT_PTR pt = { 0, 0 };
+		Editor_GetScrollPos( m_hwndView, &pt );
+		const int nY = (int)pt.y;
+		const int nDelta = nY - m_nLastEditorY;
+		if( nDelta == 0 )  return;
+		m_nLastEditorY = nY;
+		const int nPx = nDelta * m_nPreviewLinePx;
+		TCHAR szMacro[ 128 ];
+		wsprintf( szMacro, L"WebBar.scrollBy( 0, %d );", nPx );
+		RunWebBarMacro( szMacro );	// dropped frames are fine while scrolling
 	}
 	// JSON/JS string escape for embedding the markdown source into the
 	// preview page: < and > become \u003c/\u003e so a literal
@@ -3231,6 +3228,7 @@ public:
 				int nDpi = (int)Editor_DocInfo( m_hWnd, 0, EI_GET_DPI, 0 );
 				if( nDpi <= 0 )  nDpi = 96;
 				int nPx = MulDiv( nHeight, 96, nDpi );	// device px -> CSS px
+				SetPreviewLinePx( nPx );
 				if( nPx < 9 )  nPx = 9;
 				TCHAR szCss[ 256 ];
 				wsprintf( szCss, _T("body{font-family:'%s','Microsoft YaHei',Segoe UI,Arial,sans-serif;font-size:%dpx;"), (LPCWSTR)lfView.lfFaceName, (unsigned)nPx );
@@ -3390,13 +3388,11 @@ public:
 				tstring sRatio = szRatio;
 				sHtml += L"\";";
 				sHtml += L"window.__scrollRatio=" + sRatio + L";";
+				sHtml += L"window.__scrollRatio=" + sRatio + L";";
 				sHtml += L"document.getElementById('content').innerHTML=marked.parse(NormalizeSingleNewlines(window.__md),{breaks:true,gfm:true});";
 				sHtml += L"function __rbRestore(){if(typeof window.__scrollRatio==='number'){var h=document.body.scrollHeight-window.innerHeight;if(h>0){window.scrollTo(0,window.__scrollRatio*h);}}}";
 				sHtml += L"window.addEventListener('load',function(){__rbRestore();setTimeout(__rbRestore,100);setTimeout(__rbRestore,400);});";
 				sHtml += L"__rbRestore();";
-				sHtml += L"function __rbSetRatio(r){window.__scrollRatio=r;__rbRestore();}";
-				sHtml += L"window.__rbPoll=function(){var s=document.createElement('script');s.src='RichBarSync.js?cb='+Date.now();document.body.appendChild(s);};";
-				sHtml += L"setInterval(window.__rbPoll,250);";
 				sHtml += L"</script>";
 				sHtml += L"</body></html>";
 			}
