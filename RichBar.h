@@ -470,6 +470,7 @@ public:
 	int m_nLastEditorY = 0;		// last editor scroll line seen by the poll
 	int m_nPreviewLinePx = 26;
 	int m_nLastSentLine = -1;	// last editor top line sent via the hash	// preview line height in px (font px x 1.6)
+	tstring m_sPreviewNavUrl;	// the exact URL the pane was opened with (with ?t=); poll sends append #L to THIS url — a different url (no query) would be a full page load instead of a fragment navigation
 	int m_nLastSentAnchor = -1;	// last end-anchor sent: 0 top, 2 bottom		// cached: EmEditor >= 26.3.0 (document.Text macro, WebBar scroll)
 	HWND m_hwndView;				// the EmEditor VIEW window (plug-in OnCommand contract)
 	bool m_bPanesRestored;		// startup pane restore done (first state-sync tick)
@@ -3047,6 +3048,7 @@ public:
 		TCHAR szTick[ 32 ];
 		wsprintf( szTick, _T("?t=%u"), GetTickCount() );
 		sUrl += szTick;
+		m_sPreviewNavUrl = sUrl;	// poll hash sends must reuse this exact url
 		tstring sMacro = _T("WebBar.Visible = true; WebBar.Open( \"");
 		sMacro += sUrl;
 		sMacro += _T("\" );");
@@ -3135,7 +3137,6 @@ public:
 		POINT_PTR ptLogic = { 0, 0 };
 		Editor_ViewToLogical( m_hwndView, &pt, &ptLogic );
 		const int nY = (int)ptLogic.y;
-		TCHAR szUrl[ MAX_PATH + 32 ];
 		// end detection in DISPLAY rows (pt is display): at bottom the first
 		// visible LOGICAL line is still ~40 lines above the end, and the page
 		// would interpolate at ~80% instead of its bottom branch. Send the
@@ -3173,16 +3174,21 @@ public:
 			}
 			nSend = nSend * 1000 + nPermille;
 		}
-	if( nSend == m_nLastSentLine )  return;
-	m_nLastSentLine = nSend;
-		GetTempPath( MAX_PATH, szUrl );
-		wcscat_s( szUrl, MAX_PATH + 32, L"RichBarPreview.html" );
-		for( LPTSTR q = szUrl; *q; q++ ){
-			if( *q == L'\\' )  *q = L'/';
-		}
-		TCHAR szMacro[ MAX_PATH + 64 ];
-		wsprintf( szMacro, L"WebBar.Open( \"file:///%s#L%d\" );", szUrl, nSend );
-		RunWebBarMacroStaged( szMacro );
+		if( nSend == m_nLastSentLine )  return;
+		m_nLastSentLine = nSend;
+		// append the fragment to the SAME url the pane was opened with:
+		// navigating to a url without the ?t= query would load the page
+		// again (full reload, the open-time flicker) instead of firing an
+		// in-page hashchange
+		if( m_sPreviewNavUrl.empty() )  return;
+		TCHAR szNum[ 16 ];
+		wsprintf( szNum, _T("%d"), nSend );
+		tstring sMacro = _T("WebBar.Open( \"");
+		sMacro += m_sPreviewNavUrl;
+		sMacro += _T("#L");
+		sMacro += szNum;
+		sMacro += _T("\" );");
+		RunWebBarMacroStaged( sMacro.c_str() );
 	}	// JSON/JS string escape for embedding the markdown source into the
 	// preview page: < and > become \u003c/\u003e so a literal
 	// "</script>" inside the text cannot terminate the script tag
