@@ -3131,7 +3131,10 @@ public:
 		if( !m_hwndView || !IsWindow( m_hwndView ) )  return;
 		POINT_PTR pt = { 0, 0 };
 		Editor_GetScrollPos( m_hwndView, &pt );
-		const int nY = (int)pt.y;	// editor top line
+		// pt.y is a DISPLAY row (wrapped); the page anchors use LOGICAL lines
+		POINT_PTR ptLogic = { 0, 0 };
+		Editor_ViewToLogical( m_hwndView, &pt, &ptLogic );
+		const int nY = (int)ptLogic.y;
 		if( nY == m_nLastSentLine )  return;
 		m_nLastSentLine = nY;
 		WCHAR szT[ 64 ]; HWND hT = m_hwndPreviewHost; GetWindowText( hT, szT, 64 );
