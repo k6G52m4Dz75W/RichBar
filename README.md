@@ -7,7 +7,7 @@ toolbar, forked from the official Emurasoft HTMLBar plug-in source
 (`19.5.0`). It is meant to replace the HTML/Markdown toolbar built into
 EmEditor v26 (closed source, with most tags hidden inside dropdown menus).
 
-Current release: **0.66.0 — 2026-10-25**.
+Current release: **0.66.1 — 2026-10-25**.
 
 ## Features
 
@@ -130,6 +130,9 @@ plug-in:
   VS Code / Typora approach) — wrapped paragraphs get sub-line
   precision, top and bottom align exactly, and all positioning rides
   URL fragments, so syncing never reloads the page.
+- **GitHub theme** — `github.css` — auto-generated from github.com's
+  live styles: the light palette on a light editor, dark on dark
+  (sindresorhus/github-markdown-css, MIT; provenance in the CSS header).
 - **marked.js v18** — the same rendering engine the official preview
   uses, at the latest version: full GFM (tables, fenced code, links,
   ordered/nested/task lists, strikethrough, autolinks).

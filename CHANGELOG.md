@@ -15,6 +15,25 @@ this code base:
 | `0.9.0` – `0.17.x` | The HTML + Markdown dual-mode toolbar, heading towards `1.0.0`. |
 
 
+## [0.66.1] - 2026-10-25
+
+### Added
+- **GitHub preview theme** (`themes/github.css`): the authentic github.com
+  markdown look, auto-generated from GitHub's live styles
+  (sindresorhus/github-markdown-css v5, MIT — GitHub itself publishes no
+  standalone theme file). The editor theme picks the palette: light editor
+  gets GitHub light, dark gets GitHub dark (`data-color-mode` stamped on
+  the page at render time; provenance recorded in the CSS header).
+
+### Fixed
+- **The shipped preview themes were silently inert since 0.44.0**: the
+  properties dialog resolved the selected theme file but only the default
+  `preview.css` was ever read and embedded — choosing vscode-markdown /
+  paper-serif / pandoc changed nothing (verified: a live page carried no
+  theme styles with PreviewCss=vscode-markdown in the registry). The
+  resolved file is now embedded through the same path for every selection,
+  read whole (fixed 8 KB cap, no UTF-8 sequence can be split by chunking).
+
 ## [0.66.0] - 2026-10-25 — Milestone: live scroll sync
 
 ### Added

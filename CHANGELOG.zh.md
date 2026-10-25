@@ -11,6 +11,24 @@
 | `0.9.0` – `0.17.x` | HTML + Markdown 双模式工具栏，向 `1.0.0` 迈进。 |
 
 
+## [0.66.1] - 2026-10-25
+
+### 新增
+- **GitHub 预览主题**（发行包 themes 目录的 `github.css`）：原汁原味的
+  github.com Markdown 外观，由 GitHub 线上样式自动生成
+  （sindresorhus/github-markdown-css v5，MIT 协议——GitHub 官方并不发布
+  独立主题文件）。编辑器主题决定配色：浅色编辑器配 GitHub 浅色，深色
+  配 GitHub 深色（渲染时在页面上写入 `data-color-mode`；来源与许可
+  记录在 CSS 文件头注释中）。
+
+### 修复
+- **发行包内的预览主题自 0.44.0 起一直静默失效**：属性对话框解析了所选
+  主题文件，但实际读取嵌入的只有默认 `preview.css`——选择
+  vscode-markdown / paper-serif / pandoc 毫无效果（实证：注册表
+  PreviewCss=vscode-markdown 时，实际页面中没有任何主题样式）。现在
+  所有选择都经同一路径嵌入，且整文件读取（修掉 8 KB 上限，分块读取
+  不会再截断 UTF-8 序列）。
+
 ## [0.66.0] - 2026-10-25 — 里程碑：实时滚动同步
 
 ### 新增

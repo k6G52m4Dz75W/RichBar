@@ -3283,7 +3283,11 @@ public:
 			LOGFONTW lfView;
 			ZeroMemory( &lfView, sizeof( lfView ) );
 			const bool bFont = hViewFont && GetObjectW( hViewFont, sizeof( lfView ), &lfView ) == sizeof( lfView ) && lfView.lfFaceName[ 0 ];
-			sHtml = L"<!DOCTYPE html><html><head><meta charset=\"utf-8\"><style>";
+			// data-color-mode carries the editor theme to themes that key
+			// off it (themes\github.css); other themes ignore the attribute
+			sHtml = bLight
+				? L"<!DOCTYPE html><html data-color-mode=\"light\"><head><meta charset=\"utf-8\"><style>"
+				: L"<!DOCTYPE html><html data-color-mode=\"dark\"><head><meta charset=\"utf-8\"><style>";
 			if( bFont ){
 				int nHeight = lfView.lfHeight;
 				if( nHeight < 0 )  nHeight = -nHeight;
@@ -3328,6 +3332,7 @@ public:
 			// them; absent file -> the built-in theme stands alone
 			{
 				TCHAR szCss[ MAX_PATH ];
+				bool bHaveCss = false;
 				// resolve the selection: bare NAME -> themes\<name>.css;
 				// absolute path -> as-is; empty -> the default preview.css
 				if( !m_sPreviewCss.empty() ){
@@ -3335,45 +3340,51 @@ public:
 						tstring sThemePath;
 						if( MakeThemePath( m_sPreviewCss, sThemePath ) ){
 							lstrcpyn( szCss, sThemePath.c_str(), MAX_PATH );
+							bHaveCss = true;
 						}
-						else {
-							szCss[ 0 ] = 0;	// theme vanished: no override
-						}
+						// else: theme vanished -> no override
 					}
 					else {
 						lstrcpyn( szCss, m_sPreviewCss.c_str(), MAX_PATH );
+						bHaveCss = true;
 					}
 				}
 				else if( SUCCEEDED( SHGetFolderPathW( NULL, CSIDL_APPDATA, NULL, 0, szCss ) ) ){
 					wcscat_s( szCss, MAX_PATH, L"\\Emurasoft\\EmEditor\\RichBar" );
 					SHCreateDirectoryExW( NULL, szCss, NULL );	// no-op if exists
 					wcscat_s( szCss, MAX_PATH, L"\\preview.css" );
+					bHaveCss = true;
+				}
+				// ONE shared embed for every source: 0.44.0 resolved the theme
+				// file but only preview.css was ever read - the shipped themes
+				// were silently inert. Whole-file read: sheets can exceed a
+				// fixed buffer, and chunked reads can split a UTF-8 sequence
+				// (fgetws would misread byte pairs entirely - the 0.42.0 bug)
+				if( bHaveCss ){
 					sHtml += L"<style>";
 					FILE* fCss = _wfopen( szCss, L"rb" );
 					if( fCss ){
-						// read BYTES and convert UTF-8 -> UTF-16 explicitly:
-						// fgetws would reinterpret each ANSI byte pair as a wide
-						// character, scrambling the whole sheet (0.42.0 bug)
-						CHAR szBuf[ 8192 ];
-						const int cb = (int)fread( szBuf, 1, sizeof( szBuf ) - 1, fCss );
+						std::string sBytes;
+						CHAR szBuf[ 16384 ];
+						int cb;
+						while( ( cb = (int)fread( szBuf, 1, sizeof( szBuf ), fCss ) ) > 0 ){
+							sBytes.append( szBuf, cb );
+						}
 						fclose( fCss );
-						if( cb > 0 ){
-							szBuf[ cb ] = 0;
-							int cw = MultiByteToWideChar( CP_UTF8, 0, szBuf, cb, NULL, 0 );
-							if( cw > 0 ){
-								std::vector<WCHAR> vW( cw + 1 );
-								MultiByteToWideChar( CP_UTF8, 0, szBuf, cb, &vW[ 0 ], cw );
-								vW[ cw ] = 0;
-								// escape & and < so raw CSS cannot close the tag
-								for( int k = 0; k < cw; k++ ){
-									WCHAR c = vW[ k ];
-									if( c == L'&' )  sHtml += L"&amp;";
-									else if( c == L'<' )  sHtml += L"&lt;";
-									else  sHtml += c;
-								}
+						int cw = MultiByteToWideChar( CP_UTF8, 0, sBytes.data(), (int)sBytes.size(), NULL, 0 );
+						if( cw > 0 ){
+							std::vector<WCHAR> vW( cw + 1 );
+							MultiByteToWideChar( CP_UTF8, 0, sBytes.data(), (int)sBytes.size(), &vW[ 0 ], cw );
+							vW[ cw ] = 0;
+							// escape & and < so raw CSS cannot close the tag
+							for( int k = 0; k < cw; k++ ){
+								WCHAR c = vW[ k ];
+								if( c == L'&' )  sHtml += L"&amp;";
+								else if( c == L'<' )  sHtml += L"&lt;";
+								else  sHtml += c;
 							}
 						}
-						RbLogF( "user css: %S (%d bytes)", szCss, cb );
+						RbLogF( "user css: %S (%d bytes)", szCss, (int)sBytes.size() );
 					}
 					else {
 						RbLogF( "user css: absent" );
