@@ -3133,7 +3133,9 @@ public:
 		Editor_GetScrollPos( m_hwndView, &pt );
 		const int nY = (int)pt.y;	// editor top line
 		if( nY == m_nLastSentLine )  return;
-		m_nLastSentLine = nY;
+		m_nLastSentLine = nY;
+		WCHAR szT[ 64 ]; HWND hT = m_hwndPreviewHost; GetWindowText( hT, szT, 64 );
+		RbLogF( "scrollmap check: sent L%d title=%S", nY, szT );
 		TCHAR szUrl[ MAX_PATH + 32 ];
 		GetTempPath( MAX_PATH, szUrl );
 		wcscat_s( szUrl, MAX_PATH + 32, L"RichBarPreview.html" );
@@ -3381,7 +3383,7 @@ public:
 				sHtml += L"<script src=\"" + sMarkedUrl + L"\"></script>";
 				sHtml += L"<script>";
 				sHtml += L"var __rbMap=[];";
-				sHtml += L"function __rbBuildMap(){__rbMap=[];var es=document.querySelectorAll('[data-source-line]');for(var i=0;i<es.length;i++){var r=es[i].getBoundingClientRect();__rbMap.push({l:parseInt(es[i].getAttribute('data-source-line')),y:r.top+window.scrollY});}}";
+				sHtml += L"function __rbBuildMap(){__rbMap=[];var es=document.querySelectorAll('[data-source-line]');for(var i=0;i<es.length;i++){var r=es[i].getBoundingClientRect();__rbMap.push({l:parseInt(es[i].getAttribute('data-source-line')),y:r.top+window.scrollY});}try{document.title='RB'+String(__rbMap.length)+'|'+String(__rbMap.length?__rbMap[0].l:-1)+'|'+String(__rbMap.length?__rbMap[__rbMap.length-1].l:-1);}catch(e){}}";
 				sHtml += L"function __rbScrollToLine(l){if(!__rbMap.length)__rbBuildMap();if(l<=__rbMap[0].l){window.scrollTo(0,__rbMap[0].y);return;}var n=__rbMap.length;if(l>=__rbMap[n-1].l){window.scrollTo(0,__rbMap[n-1].y);return;}var lo=0,hi=n-1;while(hi-lo>1){var mid=(lo+hi)>>1;if(__rbMap[mid].l<=l)lo=mid;else hi=mid;}var a=__rbMap[lo],b=__rbMap[hi];var t=a.y+(b.y-a.y)*(l-a.l)/(b.l-a.l);window.scrollTo(0,Math.max(0,t-8));}";
 				sHtml += L"window.addEventListener('hashchange',function(){var h=location.hash;if(h&&h.indexOf('#L')===0){var l=parseInt(h.slice(2));if(!isNaN(l))__rbScrollToLine(l);}});";
 				sHtml += L"window.addEventListener('load',function(){__rbBuildMap();var h=location.hash;if(h&&h.indexOf('#L')===0){var l=parseInt(h.slice(2));if(!isNaN(l))setTimeout(function(){__rbBuildMap();__rbScrollToLine(l);},80);}});";
