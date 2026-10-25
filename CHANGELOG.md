@@ -15,6 +15,16 @@ this code base:
 | `0.9.0` – `0.17.x` | The HTML + Markdown dual-mode toolbar, heading towards `1.0.0`. |
 
 
+## [0.66.8] - 2026-10-25
+
+### Changed
+- **ALL theme-persistence experiments reverted (0.66.3-0.66.7: file store,
+  registry mirror, write-side guard, OK-only write, resolve guards, readback
+  logging) — the mechanism is back to the original 0.42/0.44 flow verbatim:**
+  SaveProfile persists PreviewCss in its regular bundle, LoadProfile reads
+  it back, the properties OK re-renders an open preview immediately
+  (0.66.2 behavior kept). No guards, no extra channels.
+
 ## [0.66.7] - 2026-10-25
 
 ### Fixed
