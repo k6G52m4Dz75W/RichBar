@@ -15,6 +15,20 @@ this code base:
 | `0.9.0` – `0.17.x` | The HTML + Markdown dual-mode toolbar, heading towards `1.0.0`. |
 
 
+## [0.66.6] - 2026-10-25
+
+### Fixed
+- **ROOT CAUSE of the theme selection "not being remembered" (log-proven):
+  a STALE EmEditor process (old DLL still in memory across a deploy) had
+  loaded the once-corrupted PreviewCss value into its own state and kept
+  re-writing that garbage to the profile on every document switch — racing
+  the user's clean picks. The official channel itself is healthy: the same-
+  channel readback logged written='github'/readback='github'.** SaveProfile
+  now carries a WRITE-SIDE GUARD — only a selection that resolves to
+  themes/<name>.css or an existing custom path (or the empty built-in) is
+  ever persisted; in-memory garbage can no longer reach the profile no
+  matter which process generation writes it.
+
 ## [0.66.5] - 2026-10-25
 
 ### Changed

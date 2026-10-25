@@ -4421,7 +4421,18 @@ void LoadConfigArray( LPCTSTR pszKey, LPCTSTR pszSizeKey, vector<tstring>& arrCo
 				sOff += m_vPreviewOffDocs[ i ];
 			}
 			WriteProfileString( _T("PreviewDocsOff"), sOff.c_str() );
-			WriteProfileString( _T("PreviewCss"), m_sPreviewCss.c_str() );
+			// WRITE-SIDE GUARD: a stale frame (old DLL still in memory, its
+			// m_sPreviewCss loaded from a once-corrupted value) must never
+			// persist garbage — only a resolvable selection (or the empty
+			// built-in) may reach the profile
+			tstring sPersist = m_sPreviewCss;
+			if( !PreviewCssResolves( sPersist ) ){
+				if( !sPersist.empty() ){
+					RbLogF( "profile: PreviewCss '%S' unusable - persisting empty", sPersist.c_str() );
+				}
+				sPersist.clear();
+			}
+			WriteProfileString( _T("PreviewCss"), sPersist.c_str() );
 			{	// forensic: immediate readback through the SAME channel — a
 				// mismatch would mean EmEditor's value cache mangles the
 				// entry itself (the registry-side flush is upstream of that)
