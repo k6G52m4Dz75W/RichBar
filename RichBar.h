@@ -3103,63 +3103,51 @@ public:
 		return true;
 	}
 
-	// The theme selection's OWN store: the plugin profile lives inside
-	// EmEditor's registry cache and its REG_SZ values have been observed to
-	// corrupt across restarts (a picked theme came back as 3 PUA/mojibake
-	// chars), so this file is the authority; the registry is the fallback.
-	tstring PreviewThemeStorePath() const
+	// The plugin-profile value for the theme selection has been observed to
+	// corrupt or vanish across restarts — our write is verbatim correct and
+	// sibling string values in the SAME key survive (per-doc preview memory,
+	// CJK paths), so the damage happens inside EmEditor's own value
+	// cache/flush. Mirror the selection in OUR OWN registry key (plain
+	// Win32, no EmEditor cache involved) as the recovery source.
+	bool PreviewCssResolves( const tstring& sName )
 	{
-		TCHAR szAppData[ MAX_PATH ];
-		if( SUCCEEDED( SHGetFolderPathW( NULL, CSIDL_APPDATA, NULL, 0, szAppData ) ) ){
-			tstring sPath = szAppData;
-			sPath += _T("\\Emurasoft\\EmEditor\\RichBar\\theme.txt");
-			return sPath;
+		if( sName.empty() )  return false;
+		if( sName.find( _T('\\') ) != tstring::npos || sName.find( _T(':') ) != tstring::npos ){
+			return GetFileAttributes( sName.c_str() ) != INVALID_FILE_ATTRIBUTES;	// custom path
 		}
-		return tstring();
+		tstring sThemePath;
+		return MakeThemePath( sName, sThemePath );
 	}
-	void WritePreviewThemeStore()
+	tstring PreviewCssMirrorPath() const
 	{
-		const tstring sPath = PreviewThemeStorePath();
-		if( sPath.empty() )  return;
-		TCHAR szDir[ MAX_PATH ];
-		lstrcpyn( szDir, sPath.c_str(), MAX_PATH );
-		LPTSTR pSlash = _tcsrchr( szDir, _T('\\') );
-		if( pSlash )  *pSlash = 0;
-		SHCreateDirectoryExW( NULL, szDir, NULL );
-		FILE* f = _wfopen( sPath.c_str(), L"wb" );
-		if( !f ){
-			RbLogF( "theme store: WRITE FAILED" );
+		return _T("Software\\Emurasoft\\EmEditor\\RichBar");
+	}
+	void WritePreviewCssMirror()
+	{
+		HKEY hKey = NULL;
+		if( RegCreateKeyExW( HKEY_CURRENT_USER, PreviewCssMirrorPath().c_str(), 0, NULL, REG_OPTION_NON_VOLATILE, KEY_SET_VALUE, NULL, &hKey, NULL ) != ERROR_SUCCESS ){
+			RbLogF( "mirror: key create FAILED" );
 			return;
 		}
-		int cw = WideCharToMultiByte( CP_UTF8, 0, m_sPreviewCss.c_str(), -1, NULL, 0, NULL, NULL );
-		if( cw > 1 ){
-			std::vector<CHAR> vA( cw );
-			WideCharToMultiByte( CP_UTF8, 0, m_sPreviewCss.c_str(), -1, &vA[ 0 ], cw, NULL, NULL );
-			fwrite( &vA[ 0 ], 1, cw - 1, f );	// drop the terminator
-		}
-		fclose( f );
-		RbLogF( "theme store: written '%S'", m_sPreviewCss.c_str() );
+		const DWORD cb = (DWORD)( ( m_sPreviewCss.size() + 1 ) * sizeof( WCHAR ) );
+		LSTATUS st = RegSetValueExW( hKey, L"PreviewCss", 0, REG_SZ, (const BYTE*)m_sPreviewCss.c_str(), cb );
+		RegCloseKey( hKey );
+		RbLogF( "mirror: written '%S' (0x%08X)", m_sPreviewCss.c_str(), (unsigned)st );
 	}
-	bool ReadPreviewThemeStore( tstring& sOut )
+	bool ReadPreviewCssMirror( tstring& sOut )
 	{
-		const tstring sPath = PreviewThemeStorePath();
-		if( sPath.empty() )  return false;
-		FILE* f = _wfopen( sPath.c_str(), L"rb" );
-		if( !f )  return false;
-		std::vector<CHAR> vA;
-		CHAR szBuf[ 1024 ];
-		int cb;
-		while( ( cb = (int)fread( szBuf, 1, sizeof( szBuf ), f ) ) > 0 ){
-			vA.insert( vA.end(), szBuf, szBuf + cb );
+		HKEY hKey = NULL;
+		if( RegOpenKeyExW( HKEY_CURRENT_USER, PreviewCssMirrorPath().c_str(), 0, KEY_QUERY_VALUE, &hKey ) != ERROR_SUCCESS ){
+			return false;
 		}
-		fclose( f );
-		if( vA.empty() )  return false;
-		int cw = MultiByteToWideChar( CP_UTF8, 0, &vA[ 0 ], (int)vA.size(), NULL, 0 );
-		if( cw <= 0 )  return false;
-		std::vector<WCHAR> vW( cw + 1 );
-		MultiByteToWideChar( CP_UTF8, 0, &vA[ 0 ], (int)vA.size(), &vW[ 0 ], cw );
-		vW[ cw ] = 0;
-		sOut = &vW[ 0 ];
+		WCHAR szBuf[ MAX_PATH ];
+		DWORD cb = sizeof( szBuf ), dwType = 0;
+		const bool bOk = RegQueryValueExW( hKey, L"PreviewCss", NULL, &dwType, (BYTE*)szBuf, &cb ) == ERROR_SUCCESS
+			&& ( dwType == REG_SZ || dwType == REG_EXPAND_SZ ) && cb >= sizeof( WCHAR );
+		RegCloseKey( hKey );
+		if( !bOk )  return false;
+		szBuf[ MAX_PATH - 1 ] = 0;
+		sOut = szBuf;
 		return true;
 	}
 
@@ -4267,8 +4255,9 @@ public:
 			if( IsOfficialPaneVisible() && m_sPreviewCss != m_sPreviewCssAtDialogOpen ){
 				OpenWebBarPreview();
 			}
-			// the file store is the theme's authority (registry corruption)
-			WritePreviewThemeStore();
+			// mirror the selection outside EmEditor's value cache (its flush
+			// has been observed to corrupt this exact value)
+			WritePreviewCssMirror();
 		}
 		else if( LOWORD( wParam ) == IDC_CSS_COMBO && HIWORD( wParam ) == CBN_SELCHANGE ){
 			int nSel = (int)SendMessage( GetDlgItem( hDlg, IDC_CSS_COMBO ), CB_GETCURSEL, 0, 0 );
@@ -4406,19 +4395,18 @@ void LoadConfigArray( LPCTSTR pszKey, LPCTSTR pszSizeKey, vector<tstring>& arrCo
 			{				TCHAR szCssPath[ MAX_PATH ];
 				GetProfileString( _T("PreviewCss"), szCssPath, _countof( szCssPath ), _T("") );
 				m_sPreviewCss = szCssPath;
-				// the file store is the authority (the registry value has
-				// been observed to corrupt across restarts)
-				tstring sFile;
-				if( ReadPreviewThemeStore( sFile ) && sFile != m_sPreviewCss ){
-					RbLogF( "profile: PreviewCss registry='%S' file='%S' -> file wins", m_sPreviewCss.c_str(), sFile.c_str() );
-					m_sPreviewCss = sFile;
-				}
-				// a bare name that no longer resolves would silently kill
-				// the theme embed - fall back to the built-in theme
-				if( !m_sPreviewCss.empty() && m_sPreviewCss.find( _T('\\') ) == tstring::npos && m_sPreviewCss.find( _T(':') ) == tstring::npos ){
-					tstring sThemePath;
-					if( !MakeThemePath( m_sPreviewCss, sThemePath ) ){
-						RbLogF( "profile: PreviewCss '%S' does not resolve - cleared", m_sPreviewCss.c_str() );
+				// a bare name that no longer resolves would silently kill the
+				// theme embed. The plugin-profile value has been observed to
+				// corrupt/vanish across restarts (upstream value cache/flush) —
+				// fall back to our own registry mirror when it does.
+				if( !PreviewCssResolves( m_sPreviewCss ) ){
+					tstring sMirror;
+					if( ReadPreviewCssMirror( sMirror ) && PreviewCssResolves( sMirror ) ){
+						RbLogF( "profile: PreviewCss '%S' unusable -> mirror '%S' wins", m_sPreviewCss.c_str(), sMirror.c_str() );
+						m_sPreviewCss = sMirror;
+					}
+					else if( !m_sPreviewCss.empty() ){
+						RbLogF( "profile: PreviewCss '%S' unusable, no mirror - cleared", m_sPreviewCss.c_str() );
 						m_sPreviewCss.clear();
 					}
 				}
@@ -4482,6 +4470,13 @@ void LoadConfigArray( LPCTSTR pszKey, LPCTSTR pszSizeKey, vector<tstring>& arrCo
 			}
 			WriteProfileString( _T("PreviewDocsOff"), sOff.c_str() );
 			WriteProfileString( _T("PreviewCss"), m_sPreviewCss.c_str() );
+			{	// forensic: immediate readback through the SAME channel — a
+				// mismatch would mean EmEditor's value cache mangles the
+				// entry itself (the registry-side flush is upstream of that)
+				TCHAR szBack[ MAX_PATH ];
+				GetProfileString( _T("PreviewCss"), szBack, _countof( szBack ), _T("<absent>") );
+				RbLogF( "profile: PreviewCss written '%S' (%u chars), readback '%S'", m_sPreviewCss.c_str(), (unsigned)m_sPreviewCss.size(), szBack );
+			}
 		}
 		WriteProfileInt( _T("IconColorMode"), !!m_bCustomIconColor );
 		WriteProfileInt( _T("IconColorMode"), !!m_bCustomIconColor );

@@ -15,6 +15,21 @@ this code base:
 | `0.9.0` – `0.17.x` | The HTML + Markdown dual-mode toolbar, heading towards `1.0.0`. |
 
 
+## [0.66.4] - 2026-10-25
+
+### Fixed
+- **Theme selection still not remembered (0.66.3's private file store
+  REVERTED per user direction — the plugin profile remains the primary
+  storage).** Forensics: the PreviewCss value mutates and disappears in the
+  registry WHILE the session runs, with our write verbatim correct and
+  sibling string values (per-doc memory, CJK paths) intact — the damage
+  happens inside EmEditor's own value cache/flush, upstream of the plug-in.
+  Fix: the selection is MIRRORED into our own registry key
+  (HKCUSoftwareEmurasoftEmEditorRichBarPreviewCss, plain Win32,
+  outside EmEditor's cache) and load falls back to the mirror when the
+  profile value is absent/unusable; an immediate readback through the
+  plugin channel is logged with every save to pin down the faulty stage.
+
 ## [0.66.3] - 2026-10-25
 
 ### Fixed
