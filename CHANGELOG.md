@@ -15,6 +15,18 @@ this code base:
 | `0.9.0` – `0.17.x` | The HTML + Markdown dual-mode toolbar, heading towards `1.0.0`. |
 
 
+## [0.66.5] - 2026-10-25
+
+### Changed
+- **0.66.4's registry mirror REVERTED per user direction — the plug-in
+  profile (EmEditor's own storage API) remains the ONLY persistence for
+  the theme selection.** The polluted PreviewCss value and the mirror key
+  were deleted from the registry; a load-time resolve guard remains (an
+  unusable selection is cleared and logged instead of silently killing
+  the theme embed), and every save logs an immediate same-channel
+  readback (written X / readback Y) so the failing stage of the official
+  channel is identifiable from the log.
+
 ## [0.66.4] - 2026-10-25
 
 ### Fixed

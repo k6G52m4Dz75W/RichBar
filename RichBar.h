@@ -3103,12 +3103,8 @@ public:
 		return true;
 	}
 
-	// The plugin-profile value for the theme selection has been observed to
-	// corrupt or vanish across restarts — our write is verbatim correct and
-	// sibling string values in the SAME key survive (per-doc preview memory,
-	// CJK paths), so the damage happens inside EmEditor's own value
-	// cache/flush. Mirror the selection in OUR OWN registry key (plain
-	// Win32, no EmEditor cache involved) as the recovery source.
+	// a theme selection is usable when a bare name resolves to
+	// themes\<name>.css or a custom path exists on disk
 	bool PreviewCssResolves( const tstring& sName )
 	{
 		if( sName.empty() )  return false;
@@ -3117,38 +3113,6 @@ public:
 		}
 		tstring sThemePath;
 		return MakeThemePath( sName, sThemePath );
-	}
-	tstring PreviewCssMirrorPath() const
-	{
-		return _T("Software\\Emurasoft\\EmEditor\\RichBar");
-	}
-	void WritePreviewCssMirror()
-	{
-		HKEY hKey = NULL;
-		if( RegCreateKeyExW( HKEY_CURRENT_USER, PreviewCssMirrorPath().c_str(), 0, NULL, REG_OPTION_NON_VOLATILE, KEY_SET_VALUE, NULL, &hKey, NULL ) != ERROR_SUCCESS ){
-			RbLogF( "mirror: key create FAILED" );
-			return;
-		}
-		const DWORD cb = (DWORD)( ( m_sPreviewCss.size() + 1 ) * sizeof( WCHAR ) );
-		LSTATUS st = RegSetValueExW( hKey, L"PreviewCss", 0, REG_SZ, (const BYTE*)m_sPreviewCss.c_str(), cb );
-		RegCloseKey( hKey );
-		RbLogF( "mirror: written '%S' (0x%08X)", m_sPreviewCss.c_str(), (unsigned)st );
-	}
-	bool ReadPreviewCssMirror( tstring& sOut )
-	{
-		HKEY hKey = NULL;
-		if( RegOpenKeyExW( HKEY_CURRENT_USER, PreviewCssMirrorPath().c_str(), 0, KEY_QUERY_VALUE, &hKey ) != ERROR_SUCCESS ){
-			return false;
-		}
-		WCHAR szBuf[ MAX_PATH ];
-		DWORD cb = sizeof( szBuf ), dwType = 0;
-		const bool bOk = RegQueryValueExW( hKey, L"PreviewCss", NULL, &dwType, (BYTE*)szBuf, &cb ) == ERROR_SUCCESS
-			&& ( dwType == REG_SZ || dwType == REG_EXPAND_SZ ) && cb >= sizeof( WCHAR );
-		RegCloseKey( hKey );
-		if( !bOk )  return false;
-		szBuf[ MAX_PATH - 1 ] = 0;
-		sOut = szBuf;
-		return true;
 	}
 
 	// discover the built-in themes: basenames of themes\*.css
@@ -4255,9 +4219,6 @@ public:
 			if( IsOfficialPaneVisible() && m_sPreviewCss != m_sPreviewCssAtDialogOpen ){
 				OpenWebBarPreview();
 			}
-			// mirror the selection outside EmEditor's value cache (its flush
-			// has been observed to corrupt this exact value)
-			WritePreviewCssMirror();
 		}
 		else if( LOWORD( wParam ) == IDC_CSS_COMBO && HIWORD( wParam ) == CBN_SELCHANGE ){
 			int nSel = (int)SendMessage( GetDlgItem( hDlg, IDC_CSS_COMBO ), CB_GETCURSEL, 0, 0 );
@@ -4395,20 +4356,11 @@ void LoadConfigArray( LPCTSTR pszKey, LPCTSTR pszSizeKey, vector<tstring>& arrCo
 			{				TCHAR szCssPath[ MAX_PATH ];
 				GetProfileString( _T("PreviewCss"), szCssPath, _countof( szCssPath ), _T("") );
 				m_sPreviewCss = szCssPath;
-				// a bare name that no longer resolves would silently kill the
-				// theme embed. The plugin-profile value has been observed to
-				// corrupt/vanish across restarts (upstream value cache/flush) —
-				// fall back to our own registry mirror when it does.
+				// a bare name that no longer resolves would silently kill
+				// the theme embed — fall back to the built-in theme
 				if( !PreviewCssResolves( m_sPreviewCss ) ){
-					tstring sMirror;
-					if( ReadPreviewCssMirror( sMirror ) && PreviewCssResolves( sMirror ) ){
-						RbLogF( "profile: PreviewCss '%S' unusable -> mirror '%S' wins", m_sPreviewCss.c_str(), sMirror.c_str() );
-						m_sPreviewCss = sMirror;
-					}
-					else if( !m_sPreviewCss.empty() ){
-						RbLogF( "profile: PreviewCss '%S' unusable, no mirror - cleared", m_sPreviewCss.c_str() );
-						m_sPreviewCss.clear();
-					}
+					RbLogF( "profile: PreviewCss '%S' unusable - cleared", m_sPreviewCss.c_str() );
+					m_sPreviewCss.clear();
 				}
 			}
 			{
