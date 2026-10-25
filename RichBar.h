@@ -3150,6 +3150,23 @@ public:
 		else if( pt.y <= 0 ){
 			nSend = 0;	// top
 		}
+		// sub-line progress: which wrapped DISPLAY row of the paragraph is at the
+		// viewport top — the page aligns paragraph starts only, so a long
+		// paragraph would park at its first line while the editor sits deeper.
+		// fraction = display rows into the paragraph / paragraph display height.
+		if( nSend > 0 && nSend < (int)Editor_GetLines( m_hwndView, TRUE ) ){
+			POINT_PTR pvStart = { 0, 0 }, pvNext = { 0, 0 };
+			POINT_PTR plStart = { 0, nY }, plNext = { 0, nY + 1 };
+			Editor_LogicalToView( m_hwndView, &plStart, &pvStart );
+			Editor_LogicalToView( m_hwndView, &plNext, &pvNext );
+			int nParaRows = (int)pvNext.y - (int)pvStart.y;
+			if( nParaRows > 1 ){
+				int nInto = (int)pt.y - (int)pvStart.y;
+				if( nInto < 0 )  nInto = 0;
+				if( nInto > nParaRows )  nInto = nParaRows;
+				nSend = nSend * 1000 + ( nInto * 1000 ) / nParaRows;
+			}
+		}
 	if( nSend == m_nLastSentLine )  return;
 	m_nLastSentLine = nSend;
 		GetTempPath( MAX_PATH, szUrl );
@@ -3399,7 +3416,7 @@ public:
 				sHtml += L"<script>";
 				sHtml += L"var __rbMap=[];";
 				sHtml += L"function __rbBuildMap(){__rbMap=[];var es=document.querySelectorAll('[data-source-line]');for(var i=0;i<es.length;i++){var r=es[i].getBoundingClientRect();__rbMap.push({l:parseInt(es[i].getAttribute('data-source-line')),y:r.top+window.scrollY});}try{document.title='RB'+String(__rbMap.length)+'|'+String(__rbMap.length?__rbMap[0].l:-1)+'|'+String(__rbMap.length?__rbMap[__rbMap.length-1].l:-1);}catch(e){}}";
-				sHtml += L"function __rbScrollToLine(l){if(!__rbMap.length)__rbBuildMap();if(l<=__rbMap[0].l){window.scrollTo(0,0);return;}var n=__rbMap.length;if(l>=__rbMap[n-1].l){window.scrollTo(0,document.body.scrollHeight);return;}var lo=0,hi=n-1;while(hi-lo>1){var mid=(lo+hi)>>1;if(__rbMap[mid].l<=l)lo=mid;else hi=mid;}var a=__rbMap[lo],b=__rbMap[hi];var t=a.y+(b.y-a.y)*(l-a.l)/(b.l-a.l);window.scrollTo(0,Math.max(0,t-8));}";
+				sHtml += L"function __rbScrollToLine(v){var p=v%1000;var l=(v-p)/1000;if(!__rbMap.length)__rbBuildMap();if(l<=__rbMap[0].l){window.scrollTo(0,0);return;}var n=__rbMap.length;if(l>=__rbMap[n-1].l){window.scrollTo(0,document.body.scrollHeight);return;}var lo=0,hi=n-1;while(hi-lo>1){var mid=(lo+hi)>>1;if(__rbMap[mid].l<=l)lo=mid;else hi=mid;}var a=__rbMap[lo],b=__rbMap[hi];var t=a.y+(b.y-a.y)*((l-a.l)+(p/1000)*(b.l-a.l))/(b.l-a.l);window.scrollTo(0,Math.max(0,t-8));}";
 				sHtml += L"window.addEventListener('hashchange',function(){var h=location.hash;if(h&&h.indexOf('#L')===0){var l=parseInt(h.slice(2));if(!isNaN(l))__rbScrollToLine(l);}});";
 				sHtml += L"window.addEventListener('load',function(){__rbBuildMap();var h=location.hash;if(h&&h.indexOf('#L')===0){var l=parseInt(h.slice(2));if(!isNaN(l))setTimeout(function(){__rbBuildMap();__rbScrollToLine(l);},80);}});";
 				sHtml += L"var NL=String.fromCharCode(10);";
