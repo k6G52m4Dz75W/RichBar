@@ -15,6 +15,18 @@ this code base:
 | `0.9.0` – `0.17.x` | The HTML + Markdown dual-mode toolbar, heading towards `1.0.0`. |
 
 
+## [0.66.9] - 2026-10-25
+
+### Fixed
+- **Theme pick clobbered by other EmEditor windows (the real mechanism):
+  every window caches its own PreviewCss copy, and every document switch in
+  every window re-saves the whole profile — the last window to switch a
+  document wrote ITS stale copy over the latest pick (log: a window holding
+  the empty pre-pick state re-rendered built-in seconds after github
+  applied).** SaveProfile now re-reads the live value just before writing
+  (official API round-trip — windows forwarding each other's latest state),
+  and the properties OK lands the user's dialog selection last.
+
 ## [0.66.8] - 2026-10-25
 
 ### Changed

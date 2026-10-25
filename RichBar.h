@@ -4207,6 +4207,10 @@ public:
 			if( IsOfficialPaneVisible() && m_sPreviewCss != m_sPreviewCssAtDialogOpen ){
 				OpenWebBarPreview();
 			}
+			// land the user's pick LAST: SaveProfile above re-read the live
+			// value (other windows may have picked since our load) — this
+			// write applies OUR dialog's selection over it
+			WriteProfileString( _T("PreviewCss"), m_sPreviewCss.c_str() );
 		}
 		else if( LOWORD( wParam ) == IDC_CSS_COMBO && HIWORD( wParam ) == CBN_SELCHANGE ){
 			int nSel = (int)SendMessage( GetDlgItem( hDlg, IDC_CSS_COMBO ), CB_GETCURSEL, 0, 0 );
@@ -4403,6 +4407,14 @@ void LoadConfigArray( LPCTSTR pszKey, LPCTSTR pszSizeKey, vector<tstring>& arrCo
 				sOff += m_vPreviewOffDocs[ i ];
 			}
 			WriteProfileString( _T("PreviewDocsOff"), sOff.c_str() );
+			// MULTIPLE EmEditor windows each cache their own PreviewCss; a
+			// window saving other settings must not clobber the latest pick
+			// with its stale copy — refresh from the live profile first
+			{
+				TCHAR szLive[ MAX_PATH ];
+				GetProfileString( _T("PreviewCss"), szLive, _countof( szLive ), _T("") );
+				m_sPreviewCss = szLive;
+			}
 			WriteProfileString( _T("PreviewCss"), m_sPreviewCss.c_str() );
 		}
 		WriteProfileInt( _T("IconColorMode"), !!m_bCustomIconColor );
