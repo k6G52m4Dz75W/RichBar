@@ -4423,21 +4423,6 @@ void LoadConfigArray( LPCTSTR pszKey, LPCTSTR pszSizeKey, vector<tstring>& arrCo
 				sOff += m_vPreviewOffDocs[ i ];
 			}
 			WriteProfileString( _T("PreviewDocsOff"), sOff.c_str() );
-			// MULTIPLE EmEditor processes each cache their own PreviewCss
-			// (the editor AND the emedtray resident); a writer holding a
-			// stale copy must not clobber the latest pick — refresh from the
-			// live profile first, but only ADOPT a value that actually
-			// resolves (the resident's cache has carried empty/junk, and
-			// importing that would switch the preview to the built-in theme)
-			{
-				TCHAR szLive[ MAX_PATH ];
-				GetProfileString( _T("PreviewCss"), szLive, _countof( szLive ), _T("") );
-				const tstring sLive = szLive;
-				if( sLive != m_sPreviewCss && !ThemeSelectionUsable( m_sPreviewCss ) && ThemeSelectionUsable( sLive ) ){
-					RbLogF( "profile: PreviewCss '%S' unusable -> live '%S' adopted", m_sPreviewCss.c_str(), sLive.c_str() );
-					m_sPreviewCss = sLive;
-				}
-			}
 			WriteProfileString( _T("PreviewCss"), m_sPreviewCss.c_str() );
 		}
 		WriteProfileInt( _T("IconColorMode"), !!m_bCustomIconColor );

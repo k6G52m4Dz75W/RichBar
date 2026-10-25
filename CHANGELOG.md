@@ -15,6 +15,17 @@ this code base:
 | `0.9.0` – `0.17.x` | The HTML + Markdown dual-mode toolbar, heading towards `1.0.0`. |
 
 
+## [0.66.13] - 2026-10-26
+
+### Fixed
+- **Removed the 0.66.9 save-time refresh entirely (user diagnosis confirmed):
+  with no resident process running, the ONLY writer is the editor itself,
+  and the refresh was the contamination path — a transient empty read (e.g.
+  right after a registry cleanup done mid-session) got imported into memory
+  and persisted, switching the theme to built-in by itself.** The original
+  mechanism is restored one final time: the in-memory selection (loaded at
+  startup, changed only by the dialog) is written as-is.
+
 ## [0.66.12] - 2026-10-26
 
 ### Fixed
