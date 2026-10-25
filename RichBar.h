@@ -4219,6 +4219,20 @@ public:
 			if( IsOfficialPaneVisible() && m_sPreviewCss != m_sPreviewCssAtDialogOpen ){
 				OpenWebBarPreview();
 			}
+			// persist the theme HERE ONLY (explicit user action): the routine
+			// SaveProfile fires on every doc switch in every frame and would
+			// let a stale cached selection clobber this pick
+			if( !PreviewCssResolves( m_sPreviewCss ) ){
+				RbLogF( "profile: PreviewCss '%S' unusable - persisting empty", m_sPreviewCss.c_str() );
+				m_sPreviewCss.clear();
+			}
+			WriteProfileString( _T("PreviewCss"), m_sPreviewCss.c_str() );
+			{	// same-channel readback: written must equal readback, or the
+				// official channel itself is at fault
+				TCHAR szBack[ MAX_PATH ];
+				GetProfileString( _T("PreviewCss"), szBack, _countof( szBack ), _T("<absent>") );
+				RbLogF( "profile: PreviewCss written '%S' (%u chars), readback '%S'", m_sPreviewCss.c_str(), (unsigned)m_sPreviewCss.size(), szBack );
+			}
 		}
 		else if( LOWORD( wParam ) == IDC_CSS_COMBO && HIWORD( wParam ) == CBN_SELCHANGE ){
 			int nSel = (int)SendMessage( GetDlgItem( hDlg, IDC_CSS_COMBO ), CB_GETCURSEL, 0, 0 );
@@ -4421,18 +4435,10 @@ void LoadConfigArray( LPCTSTR pszKey, LPCTSTR pszSizeKey, vector<tstring>& arrCo
 				sOff += m_vPreviewOffDocs[ i ];
 			}
 			WriteProfileString( _T("PreviewDocsOff"), sOff.c_str() );
-			// WRITE-SIDE GUARD: a stale frame (old DLL still in memory, its
-			// m_sPreviewCss loaded from a once-corrupted value) must never
-			// persist garbage — only a resolvable selection (or the empty
-			// built-in) may reach the profile
-			tstring sPersist = m_sPreviewCss;
-			if( !PreviewCssResolves( sPersist ) ){
-				if( !sPersist.empty() ){
-					RbLogF( "profile: PreviewCss '%S' unusable - persisting empty", sPersist.c_str() );
-				}
-				sPersist.clear();
-			}
-			WriteProfileString( _T("PreviewCss"), sPersist.c_str() );
+			// PreviewCss is NOT persisted here: SaveProfile runs on every doc
+			// switch in EVERY frame/window, and a frame whose cached selection
+			// is older would clobber the user's pick (last-writer-wins). The
+			// theme is written exactly once, in OnPropCommand's OK handler.
 			{	// forensic: immediate readback through the SAME channel — a
 				// mismatch would mean EmEditor's value cache mangles the
 				// entry itself (the registry-side flush is upstream of that)

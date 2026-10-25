@@ -15,6 +15,17 @@ this code base:
 | `0.9.0` – `0.17.x` | The HTML + Markdown dual-mode toolbar, heading towards `1.0.0`. |
 
 
+## [0.66.7] - 2026-10-25
+
+### Fixed
+- **Theme pick clobbered by other windows (the real persistence bug):**
+  SaveProfile runs on every document switch in EVERY frame/window, and each
+  carries its own cached PreviewCss — the last frame to switch a document
+  overwrote the user's pick with its stale state (empty after a guard, or
+  garbage in pre-guard processes). PreviewCss is now persisted EXACTLY ONCE,
+  in the properties-dialog OK handler (with the resolve guard and the
+  same-channel readback log); routine saves no longer touch it.
+
 ## [0.66.6] - 2026-10-25
 
 ### Fixed
