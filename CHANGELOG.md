@@ -15,6 +15,18 @@ this code base:
 | `0.9.0` – `0.17.x` | The HTML + Markdown dual-mode toolbar, heading towards `1.0.0`. |
 
 
+## [0.65.12] - 2026-10-25
+
+### Fixed
+- **One visible extra refresh still remained right after the preview
+  loaded**: the poll's catch-up send raced the staged open retry (log:
+  a fragment send against the first, failed attempt's URL, then the retry's
+  own navigation). The pane now opens DIRECTLY at the editor's position —
+  the open URL carries the current `#L<line*1000+permille>` fragment, the
+  page positions itself before first paint (no post-load jump), and the
+  poll is seeded with the same value so its first tick sends nothing.
+  Opening a preview is now exactly one navigation.
+
 ## [0.65.11] - 2026-10-25
 
 ### Fixed

@@ -3049,6 +3049,15 @@ public:
 		wsprintf( szTick, _T("?t=%u"), GetTickCount() );
 		sUrl += szTick;
 		m_sPreviewNavUrl = sUrl;	// poll hash sends must reuse this exact url
+		// open DIRECTLY at the editor's position: the page reads the #L
+		// fragment right after load (and even before first paint), so the
+		// poll never needs a catch-up send — its first tick finds nothing
+		// changed and no second navigation ever races the open
+		const int nSync = ComputeScrollSyncValue();
+		m_nLastSentLine = nSync;
+		TCHAR szFrag[ 16 ];
+		wsprintf( szFrag, _T("#L%d"), nSync );
+		sUrl += szFrag;
 		tstring sMacro = _T("WebBar.Visible = true; WebBar.Open( \"");
 		sMacro += sUrl;
 		sMacro += _T("\" );");
@@ -3115,11 +3124,6 @@ public:
 
 	void StartScrollerPoll()
 	{
-		POINT_PTR pt = { 0, 0 };
-		if( m_hwndView && IsWindow( m_hwndView ) ){
-			Editor_GetScrollPos( m_hwndView, &pt );
-		}
-		m_nLastSentLine = -1;	// force the first poll to send the live position
 		if( m_hDlg )  SetTimer( m_hDlg, IDT_SCROLLER_POLL, 300, NULL );
 	}
 
@@ -3127,10 +3131,11 @@ public:
 	// to the page via a URL hash (#L<n>) — same-document navigation
 	// fires hashchange in-page without reloading; the page looks up
 	// its scrollmap (data-source-line anchors) and scrolls itself.
-	void OnScrollerPoll()
+	// the l*1000+permille sync value for the CURRENT view (0 = top,
+	// (lines+1)*1000 = bottom) — shared by the poll and the open navigation
+	int ComputeScrollSyncValue()
 	{
-		if( !IsOfficialPaneVisible() )  return;
-		if( !m_hwndView || !IsWindow( m_hwndView ) )  return;
+		if( !m_hwndView || !IsWindow( m_hwndView ) )  return 0;
 		POINT_PTR pt = { 0, 0 };
 		Editor_GetScrollPos( m_hwndView, &pt );
 		// pt.y is a DISPLAY row (wrapped); the page anchors use LOGICAL lines
@@ -3174,6 +3179,13 @@ public:
 			}
 			nSend = nSend * 1000 + nPermille;
 		}
+		return nSend;
+	}
+
+	void OnScrollerPoll()
+	{
+		if( !IsOfficialPaneVisible() )  return;
+		const int nSend = ComputeScrollSyncValue();
 		if( nSend == m_nLastSentLine )  return;
 		m_nLastSentLine = nSend;
 		// append the fragment to the SAME url the pane was opened with:
@@ -3434,6 +3446,9 @@ public:
 				sHtml += L"if(__rbTok){var __rd=new marked.Renderer();var __src=__nrm;";
 				sHtml += L"var Q=String.fromCharCode(34);var __cur=0;['heading','paragraph','code','blockquote','list','hr','table'].forEach(function(k){var o=__rd[k].bind(__rd);__rd[k]=function(){var args=[].slice.call(arguments);var tok=null;for(var j=0;j<args.length;j++){var a=args[j];if(a&&typeof a==='object'&&a.raw!==undefined){tok=a;break;}}var out=o.apply(null,args);var sl=0;if(tok&&tok.raw){var i=__src.indexOf(tok.raw,__cur);if(i<0){i=__src.indexOf(tok.raw);}if(i>=0){__cur=i+tok.raw.length;var nl=__src.slice(0,i).split(String.fromCharCode(10)).length-1;sl=window.__rbLineMap&&window.__rbLineMap[nl]!==undefined?window.__rbLineMap[nl]:nl;}}var m=out.match(/^<([a-z0-9]+)>/);if(m){return out.replace(/^<([a-z0-9]+)>/,'<'+m[1]+' data-source-line='+Q+sl+Q+'>');}return out;};});";
 				sHtml += L"document.getElementById('content').innerHTML=marked.parser(__rbTok,{renderer:__rd,gfm:true,breaks:true});}else{document.getElementById('content').innerHTML=marked.parse(NormalizeSingleNewlines(window.__md),{breaks:true,gfm:true});}";
+				// position BEFORE first paint: an 80ms-post-load scroll would
+				// show the top of the page for a frame and then jump
+				sHtml += L"(function(){var h=location.hash;if(h&&h.indexOf('#L')===0){var v=parseInt(h.slice(2));if(!isNaN(v)){__rbBuildMap();__rbScrollToLine(v);}}})();";
 				sHtml += L"</script>";
 				sHtml += L"</body></html>";
 			}
