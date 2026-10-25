@@ -3117,7 +3117,7 @@ public:
 		if( m_hwndView && IsWindow( m_hwndView ) ){
 			Editor_GetScrollPos( m_hwndView, &pt );
 		}
-		m_nLastSentLine = (int)pt.y;	// seed: no jump on open	// no jump on open
+		m_nLastSentLine = -1;	// force the first poll to send the live position
 		if( m_hDlg )  SetTimer( m_hDlg, IDT_SCROLLER_POLL, 300, NULL );
 	}
 
@@ -3145,7 +3145,9 @@ public:
 		Editor_GetPageSize( m_hwndView, &sizePg );
 		int nSend = nY;
 		if( (UINT_PTR)pt.y + 1 >= nDispTotal - (UINT_PTR)sizePg.cy ){
-			nSend = (int)Editor_GetLines( m_hwndView, TRUE ) + 1;	// bottom
+			// bottom must carry the same l*1000 encoding as mid-range values:
+			// a raw N+1 decodes as l=0,p=N+1 and snaps the page to its TOP
+			nSend = ( (int)Editor_GetLines( m_hwndView, TRUE ) + 1 ) * 1000;
 		}
 		else if( pt.y <= 0 ){
 			nSend = 0;	// top
@@ -3210,19 +3212,6 @@ public:
 		// upstream dark<->light stickiness - so the page matches the
 		// theme as of the render)
 		tstring sHtml;
-		// editor scroll ratio (0..1) for preview sync
-		double dScrollRatio = 0.0;
-		{
-			POINT_PTR ptScroll = { 0, 0 };
-			Editor_GetScrollPos( m_hwndView, &ptScroll );	// the VIEW scrolls, not the frame
-			UINT_PTR nLines = Editor_GetLines( m_hwndView, TRUE );	// logical lines
-			if( nLines > 1 ){
-				dScrollRatio = (double)ptScroll.y / (double)( nLines - 1 );
-					RbLogF( "scroll sync: y=%u lines=%u ratio=%.4f", (unsigned)ptScroll.y, (unsigned)nLines, dScrollRatio );
-				if( dScrollRatio < 0 )  dScrollRatio = 0;
-				if( dScrollRatio > 1 )  dScrollRatio = 1;
-			}
-		}
 		if( m_iMode == MODE_MD ){
 			// markdown: convert the buffer per line, themed like the view
 			// left = editor, right = preview: identical colors via the official
@@ -3415,7 +3404,7 @@ public:
 				sHtml += L"<script src=\"" + sMarkedUrl + L"\"></script>";
 				sHtml += L"<script>";
 				sHtml += L"var __rbMap=[];";
-				sHtml += L"function __rbBuildMap(){__rbMap=[];var es=document.querySelectorAll('[data-source-line]');for(var i=0;i<es.length;i++){var r=es[i].getBoundingClientRect();__rbMap.push({l:parseInt(es[i].getAttribute('data-source-line')),y:r.top+window.scrollY});}try{document.title='RB'+String(__rbMap.length)+'|'+String(__rbMap.length?__rbMap[0].l:-1)+'|'+String(__rbMap.length?__rbMap[__rbMap.length-1].l:-1);}catch(e){}}";
+				sHtml += L"function __rbBuildMap(){__rbMap=[];var es=document.querySelectorAll('[data-source-line]');for(var i=0;i<es.length;i++){var l=parseInt(es[i].getAttribute('data-source-line'));if(isNaN(l))continue;if(!__rbMap.length||l>__rbMap[__rbMap.length-1].l){var r=es[i].getBoundingClientRect();__rbMap.push({l:l,y:r.top+window.scrollY});}}try{document.title='RB'+String(__rbMap.length)+'|'+String(__rbMap.length?__rbMap[0].l:-1)+'|'+String(__rbMap.length?__rbMap[__rbMap.length-1].l:-1);}catch(e){}}";
 				sHtml += L"function __rbScrollToLine(v){var p=v%1000;var l=(v-p)/1000;if(!__rbMap.length)__rbBuildMap();if(l<=__rbMap[0].l){window.scrollTo(0,0);return;}var n=__rbMap.length;if(l>=__rbMap[n-1].l){window.scrollTo(0,document.body.scrollHeight);return;}var lo=0,hi=n-1;while(hi-lo>1){var mid=(lo+hi)>>1;if(__rbMap[mid].l<=l)lo=mid;else hi=mid;}var a=__rbMap[lo],b=__rbMap[hi];var t=a.y+(b.y-a.y)*((l-a.l)+(p/1000)*(b.l-a.l))/(b.l-a.l);window.scrollTo(0,Math.max(0,t-8));}";
 				sHtml += L"window.addEventListener('hashchange',function(){var h=location.hash;if(h&&h.indexOf('#L')===0){var l=parseInt(h.slice(2));if(!isNaN(l))__rbScrollToLine(l);}});";
 				sHtml += L"window.addEventListener('load',function(){__rbBuildMap();var h=location.hash;if(h&&h.indexOf('#L')===0){var l=parseInt(h.slice(2));if(!isNaN(l))setTimeout(function(){__rbBuildMap();__rbScrollToLine(l);},80);}});";
@@ -3430,19 +3419,11 @@ public:
 				sHtml += L"function NormalizeSingleNewlines(s){window.__rbLineMap=[];var L=s.split(NL),o=[];for(var i=0;i<L.length;i++){var t=L[i],keep=false;if(i>0){var pr=L[i-1];if(isQuote.test(t)||isTable.test(t)||isHr.test(t)||isHead.test(t)||isCode.test(t)||isList.test(t)||isCode.test(pr)||isList.test(pr)||isTable.test(pr)||isHr.test(pr)||isSetextH.test(pr)){keep=true;}}if(!keep){o.push('');window.__rbLineMap.push(i);}o.push(t);window.__rbLineMap.push(i);}return o.join(NL);}";
 				sHtml += L"window.__md=\"";
 				sHtml += JsEscape( sText );
-				TCHAR szRatio[ 64 ];
-				StringPrintf( szRatio, _countof( szRatio ), _T("%.4f"), dScrollRatio );
-				tstring sRatio = szRatio;
 				sHtml += L"\";";
-				sHtml += L"window.__scrollRatio=" + sRatio + L";";
-				sHtml += L"window.__scrollRatio=" + sRatio + L";";
 				sHtml += L"var __rbTok=null;try{var __nrm=NormalizeSingleNewlines(window.__md);__rbTok=marked.lexer(__nrm);}catch(e){__rbTok=null;}";
 				sHtml += L"if(__rbTok){var __rd=new marked.Renderer();var __src=__nrm;";
 				sHtml += L"var Q=String.fromCharCode(34);var __cur=0;['heading','paragraph','code','blockquote','list','hr','table'].forEach(function(k){var o=__rd[k].bind(__rd);__rd[k]=function(){var args=[].slice.call(arguments);var tok=null;for(var j=0;j<args.length;j++){var a=args[j];if(a&&typeof a==='object'&&a.raw!==undefined){tok=a;break;}}var out=o.apply(null,args);var sl=0;if(tok&&tok.raw){var i=__src.indexOf(tok.raw,__cur);if(i<0){i=__src.indexOf(tok.raw);}if(i>=0){__cur=i+tok.raw.length;var nl=__src.slice(0,i).split(String.fromCharCode(10)).length-1;sl=window.__rbLineMap&&window.__rbLineMap[nl]!==undefined?window.__rbLineMap[nl]:nl;}}var m=out.match(/^<([a-z0-9]+)>/);if(m){return out.replace(/^<([a-z0-9]+)>/,'<'+m[1]+' data-source-line='+Q+sl+Q+'>');}return out;};});";
 				sHtml += L"document.getElementById('content').innerHTML=marked.parser(__rbTok,{renderer:__rd,gfm:true,breaks:true});}else{document.getElementById('content').innerHTML=marked.parse(NormalizeSingleNewlines(window.__md),{breaks:true,gfm:true});}";
-				sHtml += L"function __rbRestore(){if(typeof window.__scrollRatio==='number'){var h=document.body.scrollHeight-window.innerHeight;if(h>0){window.scrollTo(0,window.__scrollRatio*h);}}}";
-				sHtml += L"window.addEventListener('load',function(){__rbRestore();setTimeout(__rbRestore,100);setTimeout(__rbRestore,400);});";
-				sHtml += L"__rbRestore();";
 				sHtml += L"</script>";
 				sHtml += L"</body></html>";
 			}

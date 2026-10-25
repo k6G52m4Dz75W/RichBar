@@ -15,6 +15,23 @@ this code base:
 | `0.9.0` – `0.17.x` | The HTML + Markdown dual-mode toolbar, heading towards `1.0.0`. |
 
 
+## [0.65.9] - 2026-10-25
+
+### Fixed
+- **Preview snapped back to the top when the editor reached the bottom** — the
+  bottom endpoint was sent as a raw line number while the page decodes
+  `#L<n>` hashes as `line*1000 + permille`; a raw N+1 decoded to line 0.
+  The endpoint now carries the same encoding (`(N+1)*1000`).
+- Removed the legacy `__rbRestore` ratio restore (0.58-era): its timers
+  re-fired 100/400 ms after load and overrode the hash positioning, and its
+  ratio mixed display rows with logical lines.
+- The scrollmap now skips non-monotonic `data-source-line` anchors so the
+  binary search stays valid.
+- The first poll always sends the live position after the preview opens.
+- Verified against a real 200-line CJK novel: 183 anchors (0→198), editor
+  mid-range maps to the matching preview position (L100 → ~46%), ends clamp
+  correctly.
+
 ## [0.55.0] - 2026-10-01
 
 ### Changed
