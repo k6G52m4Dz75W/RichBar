@@ -1,0 +1,22 @@
+#language = "V8"
+var r = [];
+r.push( "=== WebBar scroll diagnostics ===" );
+r.push( "typeof ScrollY = " + ( typeof WebBar.ScrollY ) );
+r.push( "typeof scrollY = " + ( typeof WebBar.scrollY ) );
+r.push( "ScrollY value = " + String( WebBar.ScrollY ) );
+r.push( "scrollY value = " + String( WebBar.scrollY ) );
+WebBar.scrollTo( 0, 99999999 );
+r.push( "after scrollTo(0,99999999):" );
+r.push( "  ScrollY = " + String( WebBar.ScrollY ) );
+r.push( "  scrollY = " + String( WebBar.scrollY ) );
+WebBar.scrollTo( 0, 0 );
+r.push( "after scrollTo(0,0):" );
+r.push( "  ScrollY = " + String( WebBar.ScrollY ) );
+r.push( "  scrollY = " + String( WebBar.scrollY ) );
+WebBar.scrollBy( 0, 500 );
+r.push( "after scrollBy(0,500):" );
+r.push( "  ScrollY = " + String( WebBar.ScrollY ) );
+r.push( "  scrollY = " + String( WebBar.scrollY ) );
+OutputBar.visible = true;
+OutputBar.clear();
+OutputBar.write( r.join( "\n" ) );
