@@ -3103,6 +3103,18 @@ public:
 		return true;
 	}
 
+	// a theme selection is usable when a bare name resolves to
+	// themes\<name>.css or a custom path exists on disk
+	bool ThemeSelectionUsable( const tstring& sName )
+	{
+		if( sName.empty() )  return false;
+		if( sName.find( _T('\\') ) != tstring::npos || sName.find( _T(':') ) != tstring::npos ){
+			return GetFileAttributes( sName.c_str() ) != INVALID_FILE_ATTRIBUTES;	// custom path
+		}
+		tstring sThemePath;
+		return MakeThemePath( sName, sThemePath );
+	}
+
 	// discover the built-in themes: basenames of themes\*.css
 	void LoadPreviewThemes()
 	{
@@ -4153,7 +4165,7 @@ public:
 		if( !f )  return;
 		SYSTEMTIME st;
 		GetLocalTime( &st );
-		fprintf( f, "[%02d:%02d:%02d] ", st.wHour, st.wMinute, st.wSecond );
+		fprintf( f, "[%02d:%02d:%02d #%lu] ", st.wHour, st.wMinute, st.wSecond, (unsigned long)GetCurrentProcessId() );
 		va_list args;
 		va_start( args, pszFmt );
 		vfprintf( f, pszFmt, args );
@@ -4206,13 +4218,15 @@ public:
 			}
 			// a CHANGED theme must reach an open preview immediately:
 			// re-render (one navigation — this also re-arms the poll timer)
-			if( IsOfficialPaneVisible() && m_sPreviewCss != m_sPreviewCssAtDialogOpen ){
+			const bool bThemeChanged = ( m_sPreviewCss != m_sPreviewCssAtDialogOpen );
+			if( bThemeChanged && IsOfficialPaneVisible() ){
 				OpenWebBarPreview();
 			}
-			// land the user's pick LAST: SaveProfile above re-read the live
-			// value (other windows may have picked since our load) — this
-			// write applies OUR dialog's selection over it
-			WriteProfileString( _T("PreviewCss"), m_sPreviewCss.c_str() );
+			// land the user's pick LAST (SaveProfile above re-read the live
+			// value); an UNCHANGED ok writes and renders nothing
+			if( bThemeChanged ){
+				WriteProfileString( _T("PreviewCss"), m_sPreviewCss.c_str() );
+			}
 		}
 		else if( LOWORD( wParam ) == IDC_CSS_COMBO && HIWORD( wParam ) == CBN_SELCHANGE ){
 			int nSel = (int)SendMessage( GetDlgItem( hDlg, IDC_CSS_COMBO ), CB_GETCURSEL, 0, 0 );
@@ -4409,13 +4423,20 @@ void LoadConfigArray( LPCTSTR pszKey, LPCTSTR pszSizeKey, vector<tstring>& arrCo
 				sOff += m_vPreviewOffDocs[ i ];
 			}
 			WriteProfileString( _T("PreviewDocsOff"), sOff.c_str() );
-			// MULTIPLE EmEditor windows each cache their own PreviewCss; a
-			// window saving other settings must not clobber the latest pick
-			// with its stale copy — refresh from the live profile first
+			// MULTIPLE EmEditor processes each cache their own PreviewCss
+			// (the editor AND the emedtray resident); a writer holding a
+			// stale copy must not clobber the latest pick — refresh from the
+			// live profile first, but only ADOPT a value that actually
+			// resolves (the resident's cache has carried empty/junk, and
+			// importing that would switch the preview to the built-in theme)
 			{
 				TCHAR szLive[ MAX_PATH ];
 				GetProfileString( _T("PreviewCss"), szLive, _countof( szLive ), _T("") );
-				m_sPreviewCss = szLive;
+				const tstring sLive = szLive;
+				if( sLive != m_sPreviewCss && !ThemeSelectionUsable( m_sPreviewCss ) && ThemeSelectionUsable( sLive ) ){
+					RbLogF( "profile: PreviewCss '%S' unusable -> live '%S' adopted", m_sPreviewCss.c_str(), sLive.c_str() );
+					m_sPreviewCss = sLive;
+				}
 			}
 			WriteProfileString( _T("PreviewCss"), m_sPreviewCss.c_str() );
 		}

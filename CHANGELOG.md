@@ -15,6 +15,19 @@ this code base:
 | `0.9.0` – `0.17.x` | The HTML + Markdown dual-mode toolbar, heading towards `1.0.0`. |
 
 
+## [0.66.12] - 2026-10-26
+
+### Fixed
+- **Properties OK no longer double-applies**: the theme is re-rendered and
+  written ONLY when the selection actually changed in the dialog; an
+  unchanged OK is a pure no-op (no re-render, no profile write).
+- The save-time live refresh only ADOPTS a value that resolves to a real
+  theme — the resident emedtray process periodically re-flushes its own
+  (stale/empty) cache copy into the profile, and importing that copy had
+  been switching the preview back to the built-in theme mid-session.
+- rb_debug.log lines now carry the writer's process id (the editor and
+  the resident write the same log).
+
 ## [0.66.11] - 2026-10-25
 
 ### Fixed
