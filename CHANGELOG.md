@@ -19,10 +19,10 @@ this code base:
 
 ### Fixed
 - **Preview visibly reloaded several times right after opening**: the poll
-  sent hash navigations to a URL WITHOUT the open-time  cache-buster
+  sent hash navigations to a URL WITHOUT the open-time `?t=` cache-buster
   query, so the first sync was a full page load instead of an in-page
   fragment navigation. The pane's open URL is now stored and every poll
-  send appends  to that exact URL — opening fires one load, and
+  send appends `#L<n>` to that exact URL — opening fires one load, and
   the first position sync costs no reload (same for every auto-refresh).
 
 ## [0.65.10] - 2026-10-25
