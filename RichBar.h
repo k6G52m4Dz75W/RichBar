@@ -471,6 +471,7 @@ public:
 	int m_nPreviewLinePx = 26;
 	int m_nLastSentLine = -1;	// last editor top line sent via the hash	// preview line height in px (font px x 1.6)
 	tstring m_sPreviewNavUrl;	// the exact URL the pane was opened with (with ?t=); poll sends append #L to THIS url — a different url (no query) would be a full page load instead of a fragment navigation
+	DWORD m_dwPreviewOpenTick = 0;	// GetTickCount of the last open; auto-refresh stands down briefly so the open's own clipboard churn / a pending change cannot re-open the pane a second time
 	int m_nLastSentAnchor = -1;	// last end-anchor sent: 0 top, 2 bottom		// cached: EmEditor >= 26.3.0 (document.Text macro, WebBar scroll)
 	HWND m_hwndView;				// the EmEditor VIEW window (plug-in OnCommand contract)
 	bool m_bPanesRestored;		// startup pane restore done (first state-sync tick)
@@ -2983,6 +2984,14 @@ public:
 		if( !IsOfficialPaneVisible() ){
 			return;
 		}
+		// the open itself churns the selection (clipboard read) and a pending
+		// change can mature right after the pane appears - either would
+		// re-open the pane with a NEW ?t= one second after it loaded
+		// (the visible "refreshes again after load")
+		if( m_dwPreviewOpenTick != 0 && GetTickCount() - m_dwPreviewOpenTick < 1500 ){
+			RbLogF( "auto-refresh: within open quiet window - skipped" );
+			return;
+		}
 		OpenWebBarPreview();
 	}
 
@@ -3036,6 +3045,7 @@ public:
 	// makes every URL unique so the browser cannot show a cached page
 	void OpenWebBarPreview()
 	{
+		m_dwPreviewOpenTick = GetTickCount();
 		WritePreviewHtml();
 		TCHAR szPath[ MAX_PATH ];
 		GetTempPath( MAX_PATH, szPath );

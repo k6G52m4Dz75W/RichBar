@@ -15,6 +15,17 @@ this code base:
 | `0.9.0` – `0.17.x` | The HTML + Markdown dual-mode toolbar, heading towards `1.0.0`. |
 
 
+## [0.65.13] - 2026-10-25
+
+### Fixed
+- **The pane still reloaded once right after a cold-start open** (log
+  20:33:50-51): the macro-level staged retry opened the pane at t+1s, and
+  the pending EVENT_CHANGE debounce (armed by the open's own clipboard-read
+  selection churn or by typing just before the click) matured right after
+  the pane became visible - re-opening it with a NEW ?t= one second after
+  it loaded. OnPreviewAutoRefresh now stands down for 1.5 s after any open
+  (quiet window, logged when it skips).
+
 ## [0.65.12] - 2026-10-25
 
 ### Fixed
