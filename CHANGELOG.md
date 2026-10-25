@@ -15,6 +15,20 @@ this code base:
 | `0.9.0` – `0.17.x` | The HTML + Markdown dual-mode toolbar, heading towards `1.0.0`. |
 
 
+## [0.66.3] - 2026-10-25
+
+### Fixed
+- **The preview theme selection was not remembered across restarts**: the
+  registry value came back as 3 mojibake characters (a PUA codepoint,
+  'j', U+01F6) — the write path is verbatim correct and string values in
+  the same key (per-doc preview memory, CJK paths) stay intact, so the
+  corruption happens inside EmEditor's own plugin-profile cache/flush
+  (upstream, opaque). The selection now has its OWN store —
+  %APPDATA%EmurasoftEmEditorRichBar	heme.txt (UTF-8, written on
+  OK, authoritative on load; the registry demoted to fallback) — and a
+  loaded bare name that no longer resolves to themes/<name>.css is cleared
+  (logged) instead of silently killing the theme embed.
+
 ## [0.66.2] - 2026-10-25
 
 ### Fixed

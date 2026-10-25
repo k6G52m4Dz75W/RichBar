@@ -3103,6 +3103,66 @@ public:
 		return true;
 	}
 
+	// The theme selection's OWN store: the plugin profile lives inside
+	// EmEditor's registry cache and its REG_SZ values have been observed to
+	// corrupt across restarts (a picked theme came back as 3 PUA/mojibake
+	// chars), so this file is the authority; the registry is the fallback.
+	tstring PreviewThemeStorePath() const
+	{
+		TCHAR szAppData[ MAX_PATH ];
+		if( SUCCEEDED( SHGetFolderPathW( NULL, CSIDL_APPDATA, NULL, 0, szAppData ) ) ){
+			tstring sPath = szAppData;
+			sPath += _T("\\Emurasoft\\EmEditor\\RichBar\\theme.txt");
+			return sPath;
+		}
+		return tstring();
+	}
+	void WritePreviewThemeStore()
+	{
+		const tstring sPath = PreviewThemeStorePath();
+		if( sPath.empty() )  return;
+		TCHAR szDir[ MAX_PATH ];
+		lstrcpyn( szDir, sPath.c_str(), MAX_PATH );
+		LPTSTR pSlash = _tcsrchr( szDir, _T('\\') );
+		if( pSlash )  *pSlash = 0;
+		SHCreateDirectoryExW( NULL, szDir, NULL );
+		FILE* f = _wfopen( sPath.c_str(), L"wb" );
+		if( !f ){
+			RbLogF( "theme store: WRITE FAILED" );
+			return;
+		}
+		int cw = WideCharToMultiByte( CP_UTF8, 0, m_sPreviewCss.c_str(), -1, NULL, 0, NULL, NULL );
+		if( cw > 1 ){
+			std::vector<CHAR> vA( cw );
+			WideCharToMultiByte( CP_UTF8, 0, m_sPreviewCss.c_str(), -1, &vA[ 0 ], cw, NULL, NULL );
+			fwrite( &vA[ 0 ], 1, cw - 1, f );	// drop the terminator
+		}
+		fclose( f );
+		RbLogF( "theme store: written '%S'", m_sPreviewCss.c_str() );
+	}
+	bool ReadPreviewThemeStore( tstring& sOut )
+	{
+		const tstring sPath = PreviewThemeStorePath();
+		if( sPath.empty() )  return false;
+		FILE* f = _wfopen( sPath.c_str(), L"rb" );
+		if( !f )  return false;
+		std::vector<CHAR> vA;
+		CHAR szBuf[ 1024 ];
+		int cb;
+		while( ( cb = (int)fread( szBuf, 1, sizeof( szBuf ), f ) ) > 0 ){
+			vA.insert( vA.end(), szBuf, szBuf + cb );
+		}
+		fclose( f );
+		if( vA.empty() )  return false;
+		int cw = MultiByteToWideChar( CP_UTF8, 0, &vA[ 0 ], (int)vA.size(), NULL, 0 );
+		if( cw <= 0 )  return false;
+		std::vector<WCHAR> vW( cw + 1 );
+		MultiByteToWideChar( CP_UTF8, 0, &vA[ 0 ], (int)vA.size(), &vW[ 0 ], cw );
+		vW[ cw ] = 0;
+		sOut = &vW[ 0 ];
+		return true;
+	}
+
 	// discover the built-in themes: basenames of themes\*.css
 	void LoadPreviewThemes()
 	{
@@ -4207,6 +4267,8 @@ public:
 			if( IsOfficialPaneVisible() && m_sPreviewCss != m_sPreviewCssAtDialogOpen ){
 				OpenWebBarPreview();
 			}
+			// the file store is the theme's authority (registry corruption)
+			WritePreviewThemeStore();
 		}
 		else if( LOWORD( wParam ) == IDC_CSS_COMBO && HIWORD( wParam ) == CBN_SELCHANGE ){
 			int nSel = (int)SendMessage( GetDlgItem( hDlg, IDC_CSS_COMBO ), CB_GETCURSEL, 0, 0 );
@@ -4344,6 +4406,22 @@ void LoadConfigArray( LPCTSTR pszKey, LPCTSTR pszSizeKey, vector<tstring>& arrCo
 			{				TCHAR szCssPath[ MAX_PATH ];
 				GetProfileString( _T("PreviewCss"), szCssPath, _countof( szCssPath ), _T("") );
 				m_sPreviewCss = szCssPath;
+				// the file store is the authority (the registry value has
+				// been observed to corrupt across restarts)
+				tstring sFile;
+				if( ReadPreviewThemeStore( sFile ) && sFile != m_sPreviewCss ){
+					RbLogF( "profile: PreviewCss registry='%S' file='%S' -> file wins", m_sPreviewCss.c_str(), sFile.c_str() );
+					m_sPreviewCss = sFile;
+				}
+				// a bare name that no longer resolves would silently kill
+				// the theme embed - fall back to the built-in theme
+				if( !m_sPreviewCss.empty() && m_sPreviewCss.find( _T('\\') ) == tstring::npos && m_sPreviewCss.find( _T(':') ) == tstring::npos ){
+					tstring sThemePath;
+					if( !MakeThemePath( m_sPreviewCss, sThemePath ) ){
+						RbLogF( "profile: PreviewCss '%S' does not resolve - cleared", m_sPreviewCss.c_str() );
+						m_sPreviewCss.clear();
+					}
+				}
 			}
 			{
 				// per-document preview memory (path keys AND untitled title
