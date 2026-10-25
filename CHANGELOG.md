@@ -15,6 +15,16 @@ this code base:
 | `0.9.0` – `0.17.x` | The HTML + Markdown dual-mode toolbar, heading towards `1.0.0`. |
 
 
+## [0.65.10] - 2026-10-25
+
+### Fixed
+- **Preview kept snapping to its top mid-scroll (worse than 0.65.8, log-proven)**:
+  the sub-line permille encoding was applied only when the top logical line
+  wrapped (nParaRows > 1). Over short lines (headings, dialogue) the sender
+  emitted a RAW line number, which the page decodes as line 0 -> top. The
+  sender now ALWAYS encodes non-endpoint values as line*1000+permille
+  (permille = 0 when the top line does not wrap).
+
 ## [0.65.9] - 2026-10-25
 
 ### Fixed

@@ -3152,22 +3152,26 @@ public:
 		else if( pt.y <= 0 ){
 			nSend = 0;	// top
 		}
-		// sub-line progress: which wrapped DISPLAY row of the paragraph is at the
-		// viewport top — the page aligns paragraph starts only, so a long
-		// paragraph would park at its first line while the editor sits deeper.
-		// fraction = display rows into the paragraph / paragraph display height.
-		if( nSend > 0 && nSend < (int)Editor_GetLines( m_hwndView, TRUE ) ){
-			POINT_PTR pvStart = { 0, 0 }, pvNext = { 0, 0 };
-			POINT_PTR plStart = { 0, nY }, plNext = { 0, nY + 1 };
-			Editor_LogicalToView( m_hwndView, &plStart, &pvStart );
-			Editor_LogicalToView( m_hwndView, &plNext, &pvNext );
-			int nParaRows = (int)pvNext.y - (int)pvStart.y;
-			if( nParaRows > 1 ){
-				int nInto = (int)pt.y - (int)pvStart.y;
-				if( nInto < 0 )  nInto = 0;
-				if( nInto > nParaRows )  nInto = nParaRows;
-				nSend = nSend * 1000 + ( nInto * 1000 ) / nParaRows;
+		else{
+			// EVERY non-end value must carry the l*1000 encoding: a raw l
+			// decodes as l=0,p=l and the page snaps to its top (log-proven:
+			// short top lines skipped the permille path and alternated the
+			// two formats). The permille is 0 when the top line does not wrap.
+			int nPermille = 0;
+			if( nSend < (int)Editor_GetLines( m_hwndView, TRUE ) ){
+				POINT_PTR pvStart = { 0, 0 }, pvNext = { 0, 0 };
+				POINT_PTR plStart = { 0, nY }, plNext = { 0, nY + 1 };
+				Editor_LogicalToView( m_hwndView, &plStart, &pvStart );
+				Editor_LogicalToView( m_hwndView, &plNext, &pvNext );
+				int nParaRows = (int)pvNext.y - (int)pvStart.y;
+				if( nParaRows > 1 ){
+					int nInto = (int)pt.y - (int)pvStart.y;
+					if( nInto < 0 )  nInto = 0;
+					if( nInto > nParaRows )  nInto = nParaRows;
+					nPermille = ( nInto * 1000 ) / nParaRows;
+				}
 			}
+			nSend = nSend * 1000 + nPermille;
 		}
 	if( nSend == m_nLastSentLine )  return;
 	m_nLastSentLine = nSend;
