@@ -4192,7 +4192,9 @@ public:
 					m_AutoConfigArray.push_back( szName );
 				}
 			}
+			const tstring sPicked = m_sPreviewCss;	// the user's selection; SaveProfile re-reads the live value, ours wins below
 			SaveProfile();
+			m_sPreviewCss = sPicked;
 			EndDialog( hDlg, IDOK );
 
 			// the icon color changed: the bar must be re-created so the

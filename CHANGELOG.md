@@ -15,6 +15,15 @@ this code base:
 | `0.9.0` – `0.17.x` | The HTML + Markdown dual-mode toolbar, heading towards `1.0.0`. |
 
 
+## [0.66.10] - 2026-10-25
+
+### Fixed
+- **0.66.9's refresh-before-save clobbered the dialog pick itself: choosing
+  pandoc re-read the live value (github) over the selection, so nothing
+  changed and no re-render fired.** The OK handler now remembers the
+  selection across SaveProfile's refresh and lands it (registry + open
+  preview re-render) after the save.
+
 ## [0.66.9] - 2026-10-25
 
 ### Fixed
