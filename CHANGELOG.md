@@ -15,6 +15,18 @@ this code base:
 | `0.9.0` – `0.17.x` | The HTML + Markdown dual-mode toolbar, heading towards `1.0.0`. |
 
 
+## [0.66.11] - 2026-10-25
+
+### Fixed
+- **Scroll sync went dead after toolbar reshuffles (the theme-switch era
+  regression):** EmEditor reshuffles toolbars constantly (each properties
+  OK, each ui-changed event closes ours), and the poll re-arm ran only when
+  the pane walk reported visible — but that walk transiently fails during
+  exactly those reshuffles, so one unlucky arm left the poll timer dead
+  (log: zero sync sends across whole sessions). DisplayBar now ALWAYS re-arms
+  the poll on recreation; OnScrollerPoll's per-tick pane check already
+  makes an armed-but-closed poll a no-op.
+
 ## [0.66.10] - 2026-10-25
 
 ### Fixed

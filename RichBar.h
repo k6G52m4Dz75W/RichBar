@@ -1704,11 +1704,11 @@ public:
 			}
 			m_hDlg = hDlg;
 			// a recreated toolbar invalidates the scroll-sync poll timer
-			// (it was set on the OLD dialog handle) — re-arm it, or sync
-			// dies until the preview is toggled (the theme-switch report)
-			if( IsOfficialPaneVisible() ){
-				StartScrollerPoll();
-			}
+			// (it was set on the OLD dialog handle) — ALWAYS re-arm here:
+			// the pane walk is flaky during toolbar reshuffles, and a
+			// conditional arm skipped on one bad walk left the poll dead
+			// forever (OnScrollerPoll itself checks pane visibility per tick)
+			StartScrollerPoll();
 
 			int nDPI = (int)Editor_DocInfo( m_hWnd, 0, EI_GET_DPI, 0 );
 			int cxButtonSize = MulDiv( m_bLargeToolbar ? 24 : 16, nDPI, DEFAULT_DPI );
