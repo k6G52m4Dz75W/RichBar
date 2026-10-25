@@ -3135,18 +3135,30 @@ public:
 		POINT_PTR ptLogic = { 0, 0 };
 		Editor_ViewToLogical( m_hwndView, &pt, &ptLogic );
 		const int nY = (int)ptLogic.y;
-		if( nY == m_nLastSentLine )  return;
-		m_nLastSentLine = nY;
-		WCHAR szT[ 64 ]; HWND hT = m_hwndPreviewHost; GetWindowText( hT, szT, 64 );
-		RbLogF( "scrollmap check: sent L%d title=%S", nY, szT );
 		TCHAR szUrl[ MAX_PATH + 32 ];
+		// end detection in DISPLAY rows (pt is display): at bottom the first
+		// visible LOGICAL line is still ~40 lines above the end, and the page
+		// would interpolate at ~80% instead of its bottom branch. Send the
+		// logical line count (beyond the last anchor) to force the page ends.
+		UINT_PTR nDispTotal = Editor_GetLines( m_hwndView, FALSE );
+		SIZE_PTR sizePg = { 0, 0 };
+		Editor_GetPageSize( m_hwndView, &sizePg );
+		int nSend = nY;
+		if( (UINT_PTR)pt.y + 1 >= nDispTotal - (UINT_PTR)sizePg.cy ){
+			nSend = (int)Editor_GetLines( m_hwndView, TRUE ) + 1;	// bottom
+		}
+		else if( pt.y <= 0 ){
+			nSend = 0;	// top
+		}
+	if( nSend == m_nLastSentLine )  return;
+	m_nLastSentLine = nSend;
 		GetTempPath( MAX_PATH, szUrl );
 		wcscat_s( szUrl, MAX_PATH + 32, L"RichBarPreview.html" );
 		for( LPTSTR q = szUrl; *q; q++ ){
 			if( *q == L'\\' )  *q = L'/';
 		}
 		TCHAR szMacro[ MAX_PATH + 64 ];
-		wsprintf( szMacro, L"WebBar.Open( \"file:///%s#L%d\" );", szUrl, nY );
+		wsprintf( szMacro, L"WebBar.Open( \"file:///%s#L%d\" );", szUrl, nSend );
 		RunWebBarMacroStaged( szMacro );
 	}	// JSON/JS string escape for embedding the markdown source into the
 	// preview page: < and > become \u003c/\u003e so a literal
