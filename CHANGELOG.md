@@ -15,6 +15,19 @@ this code base:
 | `0.9.0` – `0.17.x` | The HTML + Markdown dual-mode toolbar, heading towards `1.0.0`. |
 
 
+## [0.66.2] - 2026-10-25
+
+### Fixed
+- **Scroll sync died after changing settings in the properties dialog**: the
+  icon-color branch re-creates the whole toolbar, and the scroll-sync poll
+  timer was set on the OLD toolbar dialog handle - silently dead until the
+  preview was toggled (log: zero sync sends between the properties OK and
+  the preview toggle). DisplayBar now re-arms the poll on a recreated bar.
+- **A changed preview theme now applies immediately**: the theme selection
+  only touched the profile - the pane kept the old page (and theme) until
+  the next re-render. OK now re-renders an open preview when the selection
+  changed (one navigation).
+
 ## [0.66.1] - 2026-10-25
 
 ### Added

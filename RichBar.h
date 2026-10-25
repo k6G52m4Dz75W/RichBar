@@ -463,6 +463,7 @@ public:
 	TCHAR m_szPreviewConfig[ MAX_CONFIG_NAME ];
 	tstring m_sPreviewUrl;		// staged preview URL
 	tstring m_sPreviewCss;		// user-selected preview CSS file (empty = default location)
+	tstring m_sPreviewCssAtDialogOpen;	// selection when the properties dialog opened
 	tstring m_sPendingMacro;	// WebBar macro awaiting retry (V8 engine not ready)
 	int m_nMacroRetries = 0;
 	bool m_bStartupSettled = false;	// pane open/close suppressed until the session restore finishes
@@ -1702,6 +1703,12 @@ public:
 				return;
 			}
 			m_hDlg = hDlg;
+			// a recreated toolbar invalidates the scroll-sync poll timer
+			// (it was set on the OLD dialog handle) — re-arm it, or sync
+			// dies until the preview is toggled (the theme-switch report)
+			if( IsOfficialPaneVisible() ){
+				StartScrollerPoll();
+			}
 
 			int nDPI = (int)Editor_DocInfo( m_hWnd, 0, EI_GET_DPI, 0 );
 			int cxButtonSize = MulDiv( m_bLargeToolbar ? 24 : 16, nDPI, DEFAULT_DPI );
@@ -3915,6 +3922,7 @@ public:
 
 	BOOL SetProperties( HWND hDlg )
 	{
+		m_sPreviewCssAtDialogOpen = m_sPreviewCss;	// detect a theme change on OK
 		DialogBox( EEGetLocaleInstanceHandle(), MAKEINTRESOURCE( IDD_PROP ), hDlg, PropDlg );
 		return TRUE;
 	}
@@ -4193,6 +4201,11 @@ public:
 				Editor_ToolbarClose( m_hWnd, m_nClientID );
 				CustomBarClosed();
 				DisplayBar( true );
+			}
+			// a CHANGED theme must reach an open preview immediately:
+			// re-render (one navigation — this also re-arms the poll timer)
+			if( IsOfficialPaneVisible() && m_sPreviewCss != m_sPreviewCssAtDialogOpen ){
+				OpenWebBarPreview();
 			}
 		}
 		else if( LOWORD( wParam ) == IDC_CSS_COMBO && HIWORD( wParam ) == CBN_SELCHANGE ){
