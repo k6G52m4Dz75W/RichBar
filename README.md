@@ -7,7 +7,7 @@ toolbar, forked from the official Emurasoft HTMLBar plug-in source
 (`19.5.0`). It is meant to replace the HTML/Markdown toolbar built into
 EmEditor v26 (closed source, with most tags hidden inside dropdown menus).
 
-Current release: **0.50.0 — 2026-10-01**.
+Current release: **0.66.0 — 2026-10-25**.
 
 ## Features
 
@@ -124,6 +124,12 @@ plug-in:
   snapshot taken when it opened) and its refresh re-reads that stale
   source; RichBar re-renders the live buffer on every refresh/keystroke
   pause.
+- **Live scroll sync (anchored)**: the preview follows the editor
+  line-by-line as you scroll. Every rendered block carries its source
+  line and the preview positions itself by anchor interpolation (the
+  VS Code / Typora approach) — wrapped paragraphs get sub-line
+  precision, top and bottom align exactly, and all positioning rides
+  URL fragments, so syncing never reloads the page.
 - **marked.js v18** — the same rendering engine the official preview
   uses, at the latest version: full GFM (tables, fenced code, links,
   ordered/nested/task lists, strikethrough, autolinks).

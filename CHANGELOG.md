@@ -15,6 +15,40 @@ this code base:
 | `0.9.0` – `0.17.x` | The HTML + Markdown dual-mode toolbar, heading towards `1.0.0`. |
 
 
+## [0.66.0] - 2026-10-25 — Milestone: live scroll sync
+
+### Added
+- **Live scroll synchronization between the editor and the Markdown
+  preview** — scroll the editor and the preview follows line-by-line
+  (user-verified milestone):
+  - every rendered block is tagged with its source line
+    (`data-source-line` via the marked lexer + a forward-cursor
+    renderer); the page builds a scrollmap and positions itself by
+    binary search + interpolation — the VS Code / Typora anchor
+    approach;
+  - the editor's top line travels in the pane URL's `#L` fragment as
+    `line*1000+permille` — display rows are converted to logical lines
+    (`Editor_ViewToLogical`), wrapped paragraphs carry sub-line
+    precision (`Editor_LogicalToView`), and the endpoints share the
+    same encoding;
+  - positioning rides fragment navigations only: the pane opens
+    DIRECTLY at the editor's position (the page positions itself before
+    first paint), poll sends reuse the open URL, and auto-refresh
+    stands down for 1.5 s after an open — opening and scrolling each
+    cost exactly one navigation, zero reloads;
+  - verified against a real 200-line CJK novel: 183 monotone anchors,
+    proportional mid-range mapping, exact top/bottom alignment.
+
+### Fixed (the 0.65.x hardening this milestone shipped — details in the
+### 0.65.9–0.65.13 entries below)
+- Raw endpoint / short-line sends decoded as line 0 and snapped the
+  preview to its top (user-confirmed twice).
+- The 0.58-era `__rbRestore` ratio machinery overrode hash positioning
+  after load.
+- Non-monotonic anchors broke the scrollmap binary search.
+- Opening the preview reloaded the page two or three times (poll/open
+  race, then the auto-refresh double-fire after the cold-start retry).
+
 ## [0.65.13] - 2026-10-25
 
 ### Fixed
