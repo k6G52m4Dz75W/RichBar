@@ -41,6 +41,20 @@ const prefix = ( inner, mode ) => inner
 css = prefix( dark.inner, 'dark' ) + '\n' + prefix( light.inner, 'light' ) + '\n' + css;
 css = css.split( '.markdown-body' ).join( 'body' );
 
+// layout shim: GitHub zeroes .markdown-body's margin (github.com's centered
+// container owns the spacing) — reproduce that container here
+css += [
+	'',
+	'/* RichBar layout shim (github.com renders .markdown-body inside a centered,',
+	'   width-capped container — this is that container) */',
+	'body {',
+	'  margin: 0 auto;',
+	'  padding: 24px 32px;',
+	'  max-width: 768px;',
+	'}',
+	'',
+].join( '\n' );
+
 const header = `/* github.css — GitHub Markdown preview theme for RichBar.
 
    Source: sindresorhus/github-markdown-css v5 (npm: github-markdown-css),
@@ -56,7 +70,10 @@ const header = `/* github.css — GitHub Markdown preview theme for RichBar.
      the editor theme, so the preview follows the editor, not the OS
    - the .markdown-body scope is renamed to body (the preview page has no
      wrapper element)
-*/
+   - the "RichBar layout shim" rule at the end restores the page container:
+     GitHub's stylesheet zeroes its own margin because github.com provides
+     the spacing (a centered max-width column) — this theme reproduces that
+ */
 `;
 
 fs.writeFileSync( OUT, header + css, 'utf8' );

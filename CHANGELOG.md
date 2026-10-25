@@ -46,6 +46,9 @@ this code base:
   theme styles with PreviewCss=vscode-markdown in the registry). The
   resolved file is now embedded through the same path for every selection,
   read whole (fixed 8 KB cap, no UTF-8 sequence can be split by chunking).
+- The GitHub theme ships a layout shim: GitHub's stylesheet zeroes its own
+  margin (github.com's centered container owns the spacing) — the theme now
+  reproduces that container (centered, max-width 768px, padded).
 
 ## [0.66.0] - 2026-10-25 — Milestone: live scroll sync
 
