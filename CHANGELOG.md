@@ -15,6 +15,23 @@ this code base:
 | `0.9.0` – `0.17.x` | The HTML + Markdown dual-mode toolbar, heading towards `1.0.0`. |
 
 
+## [0.66.14] - 2026-10-26
+
+### Fixed
+- **Scroll sync died whenever EmEditor reshuffled toolbars (theme-switch
+  report, log-proven): the poll timer was hosted on the toolbar dialog,
+  which EmEditor destroys on every reshuffle while the preview pane stays
+  open — the timer died with it and sync stopped until the preview was
+  toggled.** The poll is now a NULL-window CALLBACK timer (id = the frame
+  pointer): it survives every toolbar recreation, is killed only on frame
+  close, and needs no re-arming dance at all.
+- **The properties-dialog flow no longer refreshes twice**: closing the
+  outer plugin dialog fires a document sync whose pane walk transiently
+  fails during the reshuffle, and the sync re-opened the preview on that
+  one bad walk (a visible full re-render). The reopen is now confirmed:
+  150 ms later the walk is re-checked and the pane reopens only when it is
+  really closed (and never within 1.5 s of the previous open).
+
 ## [0.66.13] - 2026-10-26
 
 ### Fixed

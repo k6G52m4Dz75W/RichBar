@@ -208,8 +208,10 @@ WCHAR OctToDec( LPWSTR& p )
 #define IDT_WEB_NAVIGATE		7
 #define IDT_WEBBAR_RETRY		8
 #define IDT_DOC_SYNC			9
-#define IDT_SCROLLER_POLL		11
 #define IDT_STARTUP_SETTLE		10
+// one-shot pane-reopen confirm (m_hDlg): the pane walk transiently fails
+// during toolbar reshuffles — re-check before reopening the preview
+#define IDT_PANE_REOPEN			12
 // one-shot deferred design-view reconcile (m_hDlg): a 23255 posted during
 // the document-switch event lands before the switch settles and misapplies
 // runtime-drawn glyphs appended to every toolbar image list
@@ -379,6 +381,15 @@ static struct CDefCmdMd {
 };
 
 
+class CMyFrame;
+
+// scroll-sync poll: a NULL-window CALLBACK timer — it must NOT live on the
+// toolbar dialog, which EmEditor destroys on every toolbar reshuffle
+// (properties OK etc.) while the preview pane stays open; that killed the
+// poll and sync died until the preview was toggled (the 0.66.x reports).
+// The timer id IS the frame pointer, so the proc dispatches per frame.
+VOID CALLBACK ScrollerPollProc( HWND, UINT, UINT_PTR, DWORD );
+
 class CMyFrame : public CETLFrame<CMyFrame>
 {
 public:
@@ -473,6 +484,7 @@ public:
 	int m_nLastSentLine = -1;	// last editor top line sent via the hash	// preview line height in px (font px x 1.6)
 	tstring m_sPreviewNavUrl;	// the exact URL the pane was opened with (with ?t=); poll sends append #L to THIS url — a different url (no query) would be a full page load instead of a fragment navigation
 	DWORD m_dwPreviewOpenTick = 0;	// GetTickCount of the last open; auto-refresh stands down briefly so the open's own clipboard churn / a pending change cannot re-open the pane a second time
+	UINT_PTR m_nScrollerTimer = 0;	// NULL-window poll timer id (survives toolbar reshuffles; 0 = not armed)
 	int m_nLastSentAnchor = -1;	// last end-anchor sent: 0 top, 2 bottom		// cached: EmEditor >= 26.3.0 (document.Text macro, WebBar scroll)
 	HWND m_hwndView;				// the EmEditor VIEW window (plug-in OnCommand contract)
 	bool m_bPanesRestored;		// startup pane restore done (first state-sync tick)
@@ -1703,12 +1715,6 @@ public:
 				return;
 			}
 			m_hDlg = hDlg;
-			// a recreated toolbar invalidates the scroll-sync poll timer
-			// (it was set on the OLD dialog handle) — ALWAYS re-arm here:
-			// the pane walk is flaky during toolbar reshuffles, and a
-			// conditional arm skipped on one bad walk left the poll dead
-			// forever (OnScrollerPoll itself checks pane visibility per tick)
-			StartScrollerPoll();
 
 			int nDPI = (int)Editor_DocInfo( m_hWnd, 0, EI_GET_DPI, 0 );
 			int cxButtonSize = MulDiv( m_bLargeToolbar ? 24 : 16, nDPI, DEFAULT_DPI );
@@ -3031,10 +3037,32 @@ public:
 			return;	// restore window: the pane is never opened/closed by us
 		}
 		if( bWant && !bPane ){
-			OpenWebBarPreview();
+			// deferred confirm: the pane walk transiently fails during
+			// toolbar reshuffles (dialog close etc.) — reopening on one bad
+			// walk produced a visible extra refresh; re-check in 150 ms and
+			// open only when the pane is REALLY closed
+			if( m_hDlg )  SetTimer( m_hDlg, IDT_PANE_REOPEN, 150, NULL );
 		}
 		else if( !bWant && bPane ){
 			RunWebBarMacroStaged( _T("WebBar.Visible = false;") );
+		}
+	}
+
+	// the deferred pane-reopen confirm: reopen only when the pane is still
+	// really closed (and outside the open quiet window)
+	void OnPaneReopenTimer()
+	{
+		if( IsOfficialPaneVisible() )  return;	// the walk recovered: no reopen
+		if( m_dwPreviewOpenTick != 0 && GetTickCount() - m_dwPreviewOpenTick < 1500 ){
+			return;	// just (re)opened: the stale walk must not double-open
+		}
+		tstring sKey = CurrentDocKey();
+		bool bWant = false;
+		if( sKey.find( _T('\\') ) != tstring::npos ){
+			GetPreviewDocState( sKey, bWant );	// absent = off
+		}
+		if( bWant ){
+			OpenWebBarPreview();
 		}
 	}
 
@@ -3153,7 +3181,17 @@ public:
 
 	void StartScrollerPoll()
 	{
-		if( m_hDlg )  SetTimer( m_hDlg, IDT_SCROLLER_POLL, 300, NULL );
+		// NULL-window callback timer: independent of the toolbar dialog
+		// (id = this pointer; created once, survives every reshuffle)
+		if( m_nScrollerTimer != 0 )  return;
+		m_nScrollerTimer = SetTimer( NULL, (UINT_PTR)this, 300, ScrollerPollProc );
+	}
+	void StopScrollerPoll()
+	{
+		if( m_nScrollerTimer != 0 ){
+			KillTimer( NULL, m_nScrollerTimer );
+			m_nScrollerTimer = 0;
+		}
 	}
 
 	// the 300ms poll: anchor-based sync. The editor top line is sent
@@ -3780,6 +3818,7 @@ public:
 			// crashed (nEvent=0x20000, twice). Release local state only;
 			// EmEditor destroys every bar itself
 			PreviewBarGone();
+			StopScrollerPoll();	// the NULL-window poll timer must not outlive the frame
 			m_pWV2Env = NULL;	// session-lifetime; the process is going away
 			CustomBarClosed();
 		}
@@ -5994,14 +6033,15 @@ INT_PTR CALLBACK NewProc( HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam )
 				}
 				return 0;
 			}
-			else if( wParam == IDT_SCROLLER_POLL ){
-			CMyFrame* pFrame = static_cast<CMyFrame*>(GetFrame( hwnd ));
-			if( pFrame ){
-				pFrame->OnScrollerPoll();
+			else if( wParam == IDT_PANE_REOPEN ){
+				KillTimer( hwnd, IDT_PANE_REOPEN );
+				CMyFrame* pFrame = static_cast<CMyFrame*>(GetFrame( hwnd ));
+				if( pFrame ){
+					pFrame->OnPaneReopenTimer();
+				}
+				return 0;
 			}
-			return 0;
-		}
-		else if( wParam == IDT_DOC_SYNC ){
+			else if( wParam == IDT_DOC_SYNC ){
 				KillTimer( hwnd, IDT_DOC_SYNC );
 				CMyFrame* pFrame = static_cast<CMyFrame*>(GetFrame( hwnd ));
 				if( pFrame ){
@@ -6061,6 +6101,13 @@ INT_PTR CALLBACK TableDlg( HWND hwnd, UINT msg, WPARAM wParam, LPARAM /*lParam*/
 		break;
 	}
 	return (BOOL)nResult;
+}
+
+// the scroll-sync poll tick: idEvent IS the CMyFrame pointer (see
+// StartScrollerPoll) — per-frame dispatch with no globals
+VOID CALLBACK ScrollerPollProc( HWND, UINT, UINT_PTR idEvent, DWORD )
+{
+	( (CMyFrame*)idEvent )->OnScrollerPoll();
 }
 
 INT_PTR CALLBACK PropDlg( HWND hwnd, UINT msg, WPARAM wParam, LPARAM /*lParam*/ )
