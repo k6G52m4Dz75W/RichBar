@@ -15,6 +15,20 @@ this code base:
 | `0.9.0` – `0.17.x` | The HTML + Markdown dual-mode toolbar, heading towards `1.0.0`. |
 
 
+## [0.66.16] - 2026-10-26
+
+### Fixed
+- **The pane walk was the single point of failure for BOTH reports**: after
+  EmEditor reshuffles toolbars (properties OK etc.) the walk reports the
+  open pane as CLOSED and keeps lying — the poll took it as gospel and
+  stopped sending (sync dead), and the pane-reopen confirm trusted it and
+  re-rendered anyway (the second refresh).** The preview pane now has OUR
+  OWN model (open at OpenWebBarPreview, closed only when we hide it): the
+  poll gates on the model (a hash send to a hidden bar is invisible anyway),
+  the reopen requires BOTH the walk AND the model to say closed, and every
+  walk state-flip is logged (with the frame window's validity) so the lying
+  direction is pinned from the next log.
+
 ## [0.66.15] - 2026-10-26
 
 ### Added

@@ -485,6 +485,7 @@ public:
 	tstring m_sPreviewNavUrl;	// the exact URL the pane was opened with (with ?t=); poll sends append #L to THIS url — a different url (no query) would be a full page load instead of a fragment navigation
 	DWORD m_dwPreviewOpenTick = 0;	// GetTickCount of the last open; auto-refresh stands down briefly so the open's own clipboard churn / a pending change cannot re-open the pane a second time
 	UINT_PTR m_nScrollerTimer = 0;	// NULL-window poll timer id (survives toolbar reshuffles; 0 = not armed)
+	bool m_bPaneOpenModel = false;	// OUR model of the preview pane: true from OpenWebBarPreview until WE hide it. The pane walk lies during toolbar reshuffles (it gates nothing critical anymore)
 	int m_nLastSentAnchor = -1;	// last end-anchor sent: 0 top, 2 bottom		// cached: EmEditor >= 26.3.0 (document.Text macro, WebBar scroll)
 	HWND m_hwndView;				// the EmEditor VIEW window (plug-in OnCommand contract)
 	bool m_bPanesRestored;		// startup pane restore done (first state-sync tick)
@@ -2702,6 +2703,17 @@ public:
 	{
 		HWND hwndPane = NULL;
 		EnumChildWindows( m_hWnd, FindOfficialPaneProc, (LPARAM)&hwndPane );
+		const bool bVisible = ( hwndPane != NULL );
+		// state-change forensic: the walk has been observed to flip during
+		// toolbar reshuffles and stay wrong — log every flip with the frame
+		// window's validity so the next log pins the lying direction
+		static bool s_bLast = false;
+		static bool s_bInit = false;
+		if( !s_bInit || s_bLast != bVisible ){
+			s_bInit = true;
+			s_bLast = bVisible;
+			RbLogF( "pane walk: -> %d (frame window valid=%d)", (int)bVisible, (int)( m_hWnd && IsWindow( m_hWnd ) ) );
+		}
 		// log the pane's real window class once: pins the actual name
 		static bool s_bWalkLogged = false;
 		if( hwndPane && !s_bWalkLogged ){
@@ -2710,7 +2722,7 @@ public:
 			GetClassNameW( hwndPane, szCls, _countof( szCls ) );
 			RbLogF( "pane walk: hit class %S", szCls );
 		}
-		return hwndPane != NULL;
+		return bVisible;
 	}
 
 	void SyncPreviewToPane()
@@ -3036,23 +3048,25 @@ public:
 		if( !m_bStartupSettled ){
 			return;	// restore window: the pane is never opened/closed by us
 		}
-		if( bWant && !bPane ){
+		if( bWant && !bPane && !m_bPaneOpenModel ){
 			// deferred confirm: the pane walk transiently fails during
 			// toolbar reshuffles (dialog close etc.) — reopening on one bad
 			// walk produced a visible extra refresh; re-check in 150 ms and
-			// open only when the pane is REALLY closed
+			// open only when the pane is REALLY closed. The model veto:
+			// when WE know the pane is open, a walk saying "closed" is a lie.
 			if( m_hDlg )  SetTimer( m_hDlg, IDT_PANE_REOPEN, 150, NULL );
 		}
 		else if( !bWant && bPane ){
+			m_bPaneOpenModel = false;
 			RunWebBarMacroStaged( _T("WebBar.Visible = false;") );
 		}
 	}
 
-	// the deferred pane-reopen confirm: reopen only when the pane is still
-	// really closed (and outside the open quiet window)
+	// the deferred pane-reopen confirm: reopen only when the pane is really
+	// closed (both the walk AND our model agree) and outside the quiet window
 	void OnPaneReopenTimer()
 	{
-		if( IsOfficialPaneVisible() )  return;	// the walk recovered: no reopen
+		if( IsOfficialPaneVisible() || m_bPaneOpenModel )  return;	// walk recovered, or the model knows better
 		if( m_dwPreviewOpenTick != 0 && GetTickCount() - m_dwPreviewOpenTick < 1500 ){
 			return;	// just (re)opened: the stale walk must not double-open
 		}
@@ -3080,6 +3094,7 @@ public:
 	// makes every URL unique so the browser cannot show a cached page
 	void OpenWebBarPreview()
 	{
+		m_bPaneOpenModel = true;
 		m_dwPreviewOpenTick = GetTickCount();
 		WritePreviewHtml();
 		TCHAR szPath[ MAX_PATH ];
@@ -3251,7 +3266,10 @@ public:
 
 	void OnScrollerPoll()
 	{
-		if( !IsOfficialPaneVisible() )  return;
+		// our own model, not the pane walk: the walk lies during toolbar
+		// reshuffles and starved the poll to death (the sync-dead reports);
+		// a hash send to a hidden bar is an invisible no-op anyway
+		if( !m_bPaneOpenModel )  return;
 		const int nSend = ComputeScrollSyncValue();
 		if( nSend == m_nLastSentLine )  return;
 		m_nLastSentLine = nSend;
@@ -5000,6 +5018,7 @@ void OnDlgCommand( WPARAM wParam )
 					OpenWebBarPreview();
 				}
 				else {
+					m_bPaneOpenModel = false;
 					RunWebBarMacroStaged( _T("WebBar.Visible = false;") );
 				}
 			}
