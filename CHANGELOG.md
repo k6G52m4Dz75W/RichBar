@@ -15,6 +15,13 @@ this code base:
 | `0.9.0` – `0.17.x` | The HTML + Markdown dual-mode toolbar, heading towards `1.0.0`. |
 
 
+## [0.66.15] - 2026-10-26
+
+### Added
+- The plug-in logs its own FileVersion (and pid) at startup, so the log
+  states definitively which build every session ran — the recurring
+  'tested the old build' ambiguity is over.
+
 ## [0.66.14] - 2026-10-26
 
 ### Fixed

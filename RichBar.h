@@ -3798,10 +3798,29 @@ public:
 		return TRUE;
 	}
 
+	// startup fingerprint: which build is actually running in THIS process
+	// (the stale-DLL trap made "did the fix even run?" unanswerable from logs)
+#pragma comment( lib, "version.lib" )
+	void LogOwnVersion()
+	{
+		TCHAR szPath[ MAX_PATH ];
+		if( GetModuleFileName( EEGetInstanceHandle(), szPath, MAX_PATH ) == 0 )  return;
+		const DWORD cb = GetFileVersionInfoSize( szPath, NULL );
+		if( cb == 0 )  return;
+		std::vector<BYTE> vData( cb );
+		if( !GetFileVersionInfo( szPath, 0, cb, &vData[ 0 ] ) )  return;
+		LPWSTR pszVer = NULL;
+		UINT nLen = 0;
+		if( VerQueryValue( &vData[ 0 ], L"\\StringFileInfo\\040904b0\\FileVersion", (LPVOID*)&pszVer, &nLen ) && pszVer ){
+			RbLogF( "plugin version: %S (pid %lu)", pszVer, (unsigned long)GetCurrentProcessId() );
+		}
+	}
+
 	void OnEvents( HWND hwndView, UINT nEvent, LPARAM lParam )
 	{
 		m_hwndView = hwndView;
 		if( nEvent & EVENT_CREATE_FRAME ){
+			LogOwnVersion();
 			LoadProfile();
 			TCHAR szConfigName[ MAX_CONFIG_NAME ] = { 0 };
 			Editor_GetConfigW( m_hWnd, szConfigName );
